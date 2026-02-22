@@ -1,0 +1,1 @@
+## The typing here is weak, if anyone wants to do it, I'm waiting for a pull request.

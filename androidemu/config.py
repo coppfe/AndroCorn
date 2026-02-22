@@ -1,0 +1,124 @@
+BRIDGE_MEMORY_BASE = 0x01000000
+BRIDGE_MEMORY_SIZE = 0x00200000
+
+TLS_BASE = 0x02000000
+TLS_SIZE = 0x10000
+
+STACK_ADDR = 0x10000000
+STACK_SIZE = 1024 * 1024 * 8 # 8MB
+
+SOINFO_START_BASE = 0x20000000
+SOINFO_SIZE = 0x01000000
+SOINFO_POOL_SIZE = 0x01000000
+
+BASE_ADDR = 0x40000000
+
+STOP_MEMORY_BASE = 0x03000000
+STOP_MEMORY_SIZE = 0x00001000
+
+MAP_ALLOC_BASE = 0x70000000
+MAP_ALLOC_SIZE = 0xB0000000 - MAP_ALLOC_BASE
+
+JMETHOD_ID_BASE = 0xD2000000
+JFIELD_ID_BASE = 0xE2000000
+
+PAGE_SIZE = 0x1000
+
+POOL_SIZE = 1024*1024*64 # 64MB. Increase this value and MAP_ALLOC_SIZE if you run out of memory
+
+WRITE_FSTAT_TIMES = True
+
+PT_NULL   = 0
+PT_LOAD   = 1
+PT_DYNAMIC =2
+PT_INTERP  =3
+PT_NOTE    =4
+PT_SHLIB   =5
+PT_PHDR    =6
+PT_TLS     =7
+
+DT_NULL	=0
+DT_NEEDED	=1
+DT_PLTRELSZ	=2
+DT_PLTGOT	=3
+DT_HASH		=4
+DT_STRTAB	=5
+DT_SYMTAB	=6
+DT_RELA		=7
+DT_RELASZ	=8
+DT_RELAENT	=9
+DT_STRSZ	=10
+DT_SYMENT	=11
+DT_INIT =0x0c
+DT_INIT_ARRAY =0x19
+DT_FINI_ARRAY =0x1a
+DT_INIT_ARRAYSZ =0x1b
+DT_FINI_ARRAYSZ =0x1c
+DT_SONAME	=14
+DT_RPATH 	=15
+DT_SYMBOLIC	=16
+DT_REL	    =17
+DT_RELSZ	=18
+DT_RELENT	=19
+DT_PLTREL	=20
+DT_DEBUG	=21
+DT_TEXTREL	=22
+DT_JMPREL	=23
+
+DT_RELR = 36
+DT_RELRSZ = 35
+DT_RELRENT = 37
+DT_VERNEED = 0x6ffffffe
+DT_VERNEEDNUM = 0x6fffffff
+DT_VERSYM = 0x6ffffff0
+DT_VERDEF = 0x6ffffffc
+DT_VERDEFNUM = 0x6ffffffd
+DT_FLAGS_1 = 0x6ffffffb
+
+DT_GNU_HASH = 0x6ffffef5
+DT_LOPROC	=0x70000000
+DT_HIPROC	=0x7fffffff
+DT_RELCOUNT	=0x6ffffffa
+
+# new standard
+DT_ANDROID_REL = 0x6000000f
+DT_ANDROID_RELSZ = 0x60000010
+DT_ANDROID_RELA = 0x60000011
+DT_ANDROID_RELASZ = 0x60000012
+
+DT_FLAGS	=0x1e
+
+SHN_UNDEF	=0
+SHN_LORESERVE	=0xff00
+SHN_LOPROC	=0xff00
+SHN_HIPROC	=0xff1f
+SHN_ABS	=0xfff1
+SHN_COMMON	=0xfff2
+SHN_HIRESERVE	=0xffff
+SHN_MIPS_ACCOMON	=0xff00
+
+STB_LOCAL = 0
+STB_GLOBAL =1
+STB_WEAK   =2
+STT_NOTYPE  =0
+STT_OBJECT  =1
+STT_FUNC    =2
+STT_SECTION =3
+STT_FILE    =4
+
+
+class Config:
+
+    def __init__(self, cfg_path):
+        json = {"__pkg_name": "com.netease.cloudmusic", "pkg_name": "com.ss.android.ugc.aweme", "pid": 4386, "uid": 10023, "android_id": "39cc04a2ae83db0b", "ip": "192.168.31.52", "mac": [204, 250, 166, 0, 138, 169]}
+        self.__configs = json
+        #
+
+    #
+
+    def get(self, key, def_val=None):
+        if (key in self.__configs):
+            return self.__configs[key]
+        return def_val
+    #
+#

@@ -1,0 +1,3 @@
+system libs collected from Xiaomi N2G47H (https://github.com/growtopiajaw/android_dump_xiaomi_rolex)
+
+libc++_shared collected from apk's
