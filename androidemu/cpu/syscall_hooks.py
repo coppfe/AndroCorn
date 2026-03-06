@@ -337,8 +337,8 @@ class SyscallHooks:
                 (usec, sec) = math.modf(timestamp)
                 usec = abs(int(usec * 100000))
 
-                uc.mem_write(tv + 0, int(0x77777777).to_bytes(ptr_sz, byteorder='little'))
-                uc.mem_write(tv + ptr_sz, int(0x12345).to_bytes(ptr_sz, byteorder='little'))
+                uc.mem_write(tv + 0, int(sec).to_bytes(ptr_sz, byteorder='little'))
+                uc.mem_write(tv + ptr_sz, int(usec).to_bytes(ptr_sz, byteorder='little'))
 
         if tz != 0:
             #timezone结构体不64还是32都是两个4字节成员
