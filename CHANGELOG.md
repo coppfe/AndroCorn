@@ -25,7 +25,7 @@ def malloc(uc, size):
 - JNI Type Hints (not fully implemented yet)
 
 ## Updated
-    - Improved performance
-    - Improved VFS generator (50/50)
-    - Improved device configuration (not real good)
-    - Fixed file syscalls
+- Improved performance
+- Improved VFS generator (50/50)
+- Improved device configuration (not real good)
+- Fixed file syscalls
