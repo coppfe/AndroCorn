@@ -1,4 +1,5 @@
 import logging
+import struct
 
 from ..hooker import Hooker
 from .classes.constructor import Constructor
@@ -12,12 +13,13 @@ from .reference_table import ReferenceTable
 from .classes.string import String
 from .classes.array import Array
 from .constant_values import JAVA_NULL
-from ..utils import memory_helpers
+from ..utils.memory import memory_helpers
 from unicorn import *
-from ..utils import debug_utils
 from ..const import emu_const
 
-from typing import TYPE_CHECKING
+from ..highlevel.libc import LibC
+
+from typing import TYPE_CHECKING, List, Dict
 
 if TYPE_CHECKING:
     from ..emulator import Emulator
@@ -27,8 +29,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-#TODO: type hints
-
 # This class attempts to mimic the JNINativeInterface table.
 class JNIEnv:
     """
@@ -37,11 +37,16 @@ class JNIEnv:
     """
     JNI_OK = 0
     def __init__(self, emu: 'Emulator', class_loader: 'JavaClassLoader', hooker: 'Hooker'):
+
         self._emu: 'Emulator' = emu
         self._class_loader: 'JavaClassLoader' = class_loader
+
         self._locals: 'ReferenceTable' = ReferenceTable(start=1, max_entries=2048)
         self._globals: 'ReferenceTable' = ReferenceTable(start=4096, max_entries=512000)
-        arch = emu.get_arch()
+
+        self.__libc: 'LibC' = LibC(emu)
+
+        arch = emu.arch
         if (arch == emu_const.ARCH_ARM32):
             self.__read_args = self.__read_args32
             self.__read_args_v = self.__read_args_v32
@@ -50,7 +55,6 @@ class JNIEnv:
             self.__read_args_v = self.__read_args_v64
         else:
             raise NotImplementedError("unsupport arch %d"%arch)
-        #
 
         (self.address_ptr, self.address) = hooker.write_function_table({
             4: self.get_version,
@@ -284,7 +288,7 @@ class JNIEnv:
             232: self.get_object_ref_type
         })
 
-    def get_reference(self, idx):
+    def get_reference(self, idx) -> jobject:
         if idx == 0:
             return None
 
@@ -296,43 +300,43 @@ class JNIEnv:
 
         raise RuntimeError('Invalid get_reference(%d)' % idx)
 
-    def add_local_reference(self, obj):
+    def add_local_reference(self, obj) -> int:
         if not isinstance(obj, jobject):
             raise ValueError('Expected a jobject.')
 
         index = self._locals.add(obj)
         return index
 
-    def set_local_reference(self, idx, newobj):
+    def set_local_reference(self, idx, newobj) -> None:
         if not isinstance(newobj, jobject):
             raise ValueError('Expected a jobject.')
 
         self._locals.set(idx, newobj)
 
-    def get_local_reference(self, idx):
+    def get_local_reference(self, idx) -> jobject:
         r = self._locals.get(idx)
         return r
 
-    def delete_local_reference(self, obj):
+    def delete_local_reference(self, obj) -> None:
         if not isinstance(obj, jobject):
             raise ValueError('Expected a jobject.')
 
         self._locals.remove(obj)
 
-    def clear_locals(self):
+    def clear_locals(self) -> None:
         self._locals.clear()
 
-    def add_global_reference(self, obj):
+    def add_global_reference(self, obj) -> int:
         if not isinstance(obj, jobject):
             raise ValueError('Expected a jobject.')
 
         return self._globals.add(obj)
 
-    def get_global_reference(self, idx):
+    def get_global_reference(self, idx) -> jobject:
         return self._globals.get(idx)
     #
 
-    def delete_global_reference(self, obj):
+    def delete_global_reference(self, obj) -> None:
         if not isinstance(obj, jobject):
             raise ValueError('Expected a jobject.')
         #
@@ -340,7 +344,7 @@ class JNIEnv:
     #
 
     #args is a tuple or list
-    def __read_args32(self, mu, args, args_type_list):
+    def __read_args32(self, mu, args, args_type_list) -> List:
         #在这里处理八个字节参数问题，
         #1.第一个参数为jlong jdouble 直接跳过列表第一个成员，因为第一个成员刚好是call_xxx的第三个参数，根据调用约定，如果这个参数是8个字节，则直接跳过R3寄存器使用栈
         #2.jlong或者jdouble需要两个arg成一个参数，对应用层透明
@@ -389,7 +393,7 @@ class JNIEnv:
         return result
     #
 
-    def __read_args64(self, mu, args, args_type_list):
+    def __read_args64(self, mu, args, args_type_list) -> List:
         #64w位情况简单得多，因为寄存器的大小为8字节，因此jlong，jdouble直接一个寄存器能装下，直接读即可
         if args_type_list is None:
             return []
@@ -421,7 +425,7 @@ class JNIEnv:
     #
 
 
-    def __read_args_v32(self, mu: 'Uc', args_ptr, args_type_list):
+    def __read_args_v32(self, mu: 'Uc', args_ptr, args_type_list) -> List:
         result = []
         if args_type_list is None:
             return result
@@ -454,13 +458,11 @@ class JNIEnv:
         return result
     #
 
-    def __read_args_v64(self, mu: 'Uc', args_ptr, args_type_list):
+    def __read_args_v64(self, mu: 'Uc', args_ptr, args_type_list) -> List:
         result = []
         if args_type_list is None:
             return result
-        
-        import struct
-        
+            
         # void *__stack;   (0x0)
         # void *__gr_top;  (0x8)
         # void *__vr_top;  (0x10)
@@ -520,7 +522,7 @@ class JNIEnv:
         return result
 
     #arg_type = 0 tuple or list, 1 arg_v, 2 array
-    def __read_args_common(self, mu: 'Uc', args, args_type_list, arg_type):
+    def __read_args_common(self, mu: 'Uc', args, args_type_list, arg_type) -> List:
         if (arg_type == 0):
             args_items = args
             return self.__read_args(mu, args_items, args_type_list)
@@ -533,7 +535,7 @@ class JNIEnv:
     #
 
     @staticmethod
-    def jobject_to_pyobject(obj: jobject):
+    def jobject_to_pyobject(obj: jobject) -> object:
         if(isinstance(obj, jobject)):
             return obj.value
         else:
@@ -571,7 +573,7 @@ class JNIEnv:
     #
 
     @native_method
-    def from_reflected_method(self, mu, env) -> int:
+    def from_reflected_method(self, mu: 'Uc', env) -> int:
         raise NotImplementedError()
 
     @native_method
@@ -579,7 +581,7 @@ class JNIEnv:
         raise NotImplementedError()
 
     @native_method
-    def to_reflected_method(self, mu, env, class_idx, method_id, is_static) -> int:
+    def to_reflected_method(self, mu: 'Uc', env, class_idx, method_id, is_static) -> int:
         """
         Converts a method ID derived from cls to a java.lang.reflect.Method or java.lang.reflect.Constructor object.
         isStatic must be set to JNI_TRUE if the method ID refers to a static field, and JNI_FALSE otherwise.
@@ -612,7 +614,7 @@ class JNIEnv:
     #
 
     @native_method
-    def get_superclass(self, mu, env, clazz_idx) -> int:
+    def get_superclass(self, mu: 'Uc', env, clazz_idx) -> int:
         jclazz = self.get_reference(clazz_idx)
         if not isinstance(jclazz, jclass):
             raise ValueError(f'Expected a jclass on {clazz_idx}.')
@@ -631,7 +633,7 @@ class JNIEnv:
         return self.add_local_reference(jclass(clazz_super_object))
 
     @native_method
-    def is_assignable_from(self, mu, env, clazz_idx1, clazz_idx2) -> int:
+    def is_assignable_from(self, mu: 'Uc', env, clazz_idx1, clazz_idx2) -> int:
         jclazz1: 'jclass' = self.get_reference(clazz_idx1)
         jclazz2: 'jclass' = self.get_reference(clazz_idx2)
 
@@ -701,7 +703,7 @@ class JNIEnv:
         raise NotImplementedError()
 
     @native_method
-    def new_global_ref(self, mu, env, jobj):
+    def new_global_ref(self, mu: 'Uc', env, jobj):
         """
         Creates a new global reference to the object referred to by the obj argument. The obj argument may be a
         global or local reference. Global references must be explicitly disposed of by calling DeleteGlobalRef().
@@ -720,7 +722,7 @@ class JNIEnv:
         return index
 
     @native_method
-    def delete_global_ref(self, mu, env, idx):
+    def delete_global_ref(self, mu: 'Uc', env, idx):
         """
         Deletes the global reference pointed to by globalRef.
         """
@@ -732,7 +734,7 @@ class JNIEnv:
         self.delete_global_reference(obj)
 
     @native_method
-    def delete_local_ref(self, mu, env, idx):
+    def delete_local_ref(self, mu: 'Uc', env, idx):
         """
         Deletes the local reference pointed to by localRef.
         """
@@ -744,7 +746,7 @@ class JNIEnv:
         self.delete_local_reference(obj)
 
     @native_method
-    def is_same_object(self, mu, env, ref1, ref2):
+    def is_same_object(self, mu: 'Uc', env, ref1, ref2):
         """
         Returns JNI_TRUE if ref1 and ref2 refer to the same Java object, or are both NULL; otherwise, returns JNI_FALSE.
         """
@@ -764,7 +766,7 @@ class JNIEnv:
         return JNI_FALSE
 
     @native_method
-    def new_local_ref(self, mu, env, ref):
+    def new_local_ref(self, mu: 'Uc', env, ref):
         """
         Creates a new local reference that refers to the same object as ref.
         The given ref may be a global or local reference. Returns NULL if ref refers to null.
@@ -789,7 +791,7 @@ class JNIEnv:
         raise NotImplementedError()
     #
 
-    def __new_object(self, mu, env, clazz_idx, method_id, args, args_type):
+    def __new_object(self, mu: 'Uc', env, clazz_idx, method_id, args, args_type):
         # Get class reference.
         jclazz = self.get_reference(clazz_idx)
         if not isinstance(jclazz, jclass):
@@ -819,12 +821,12 @@ class JNIEnv:
 
     #FIXME*args 无法确定参数个数，强行读取四个参数，未完善。
     @native_method
-    def new_object(self, mu, env, clazz_idx, method_id, arg1, arg2, arg3, arg4):
+    def new_object(self, mu: 'Uc', env, clazz_idx, method_id, arg1, arg2, arg3, arg4):
         return self.__new_object(mu, env, clazz_idx, method_id, (arg1, arg2, arg3, arg4), 0)
     #
 
     @native_method
-    def new_object_v(self, mu, env, clazz_idx, method_id, args_v):
+    def new_object_v(self, mu: 'Uc', env, clazz_idx, method_id, args_v):
         return self.__new_object(mu, env, clazz_idx, method_id, args_v, 1)
     #
 
@@ -833,7 +835,7 @@ class JNIEnv:
         raise NotImplementedError()
 
     @native_method
-    def get_object_class(self, mu, env, obj_idx):
+    def get_object_class(self, mu: 'Uc', env, obj_idx):
 
         obj = self.get_reference(obj_idx)
         if (obj == None):
@@ -849,7 +851,7 @@ class JNIEnv:
     #
 
     @native_method
-    def is_instance_of(self, mu, env, obj_idx, class_idx):
+    def is_instance_of(self, mu: 'Uc', env, obj_idx, class_idx):
         """
         Tests whether an object is an instance of a class.
         Returns JNI_TRUE if obj can be cast to clazz; otherwise, returns JNI_FALSE. A NULL object can be cast to any class.
@@ -873,7 +875,7 @@ class JNIEnv:
     #
 
     @native_method
-    def get_method_id(self, mu, env, clazz_idx, name_ptr, sig_ptr):
+    def get_method_id(self, mu: 'Uc', env, clazz_idx, name_ptr, sig_ptr):
         """
         Returns the method ID for an instance (nonstatic) method of a class or interface. The method may be defined
         in one of the clazz’s superclasses and inherited by clazz. The method is determined by its name and signature.
@@ -898,14 +900,17 @@ class JNIEnv:
         return method.jvm_id
     #
 
-    def __call_xxx_method(self, mu, env, obj_idx, method_id, args, args_type, is_wide=False):
+    def __call_xxx_method(self, mu: 'Uc', env, obj_idx, method_id, args, args_type, is_wide=False):
         obj = self.get_reference(obj_idx)
 
         if not isinstance(obj, jobject):
             raise ValueError('Expected a jobject.')
+        
         pyobj = JNIEnv.jobject_to_pyobject(obj)
 
-        method = pyobj.__class__.find_method_by_id(method_id)
+        clazz: 'JavaClassDef' = pyobj.__class__
+
+        method = clazz.find_method_by_id(method_id)
         if method is None:
             # TODO: Proper Java error?
             raise RuntimeError("Could not find method %d in object %s by id." % (method_id, pyobj.jvm_name))
@@ -918,7 +923,7 @@ class JNIEnv:
         name = method.name
         #因为要支持多态,通过method_id找到的方法可能是基类的方法,不可以直接调用,需要获取签名和名字,通过子类的find_method才可以找到真正的实现方法.
 
-        real_method = pyobj.__class__.find_method(name, sig)
+        real_method = clazz.find_method(name, sig)
         v = real_method.func(pyobj, self._emu, *constructor_args)
 
         if (not is_wide):
@@ -931,12 +936,12 @@ class JNIEnv:
     #
 
     @native_method
-    def call_object_method(self, mu, env, obj_idx, method_id, arg1, arg2, arg3, arg4):
+    def call_object_method(self, mu: 'Uc', env, obj_idx, method_id, arg1, arg2, arg3, arg4):
         return self.__call_xxx_method(mu, env, obj_idx, method_id, (arg1, arg2, arg3, arg4), 0)
     #
 
     @native_method
-    def call_object_method_v(self, mu, env, obj_idx, method_id, args):
+    def call_object_method_v(self, mu: 'Uc', env, obj_idx, method_id, args):
         return self.__call_xxx_method(mu, env, obj_idx, method_id, args, 1)
     #
 
@@ -945,12 +950,12 @@ class JNIEnv:
         raise NotImplementedError()
 
     @native_method
-    def call_boolean_method(self, mu, env, obj_idx, method_id, arg1, arg2, arg3, arg4):
+    def call_boolean_method(self, mu: 'Uc', env, obj_idx, method_id, arg1, arg2, arg3, arg4):
         return self.__call_xxx_method(mu, env, obj_idx, method_id, (arg1, arg2, arg3, arg4), 0)
     #
 
     @native_method
-    def call_boolean_method_v(self, mu, env, obj_idx, method_id, args):
+    def call_boolean_method_v(self, mu: 'Uc', env, obj_idx, method_id, args):
         return self.__call_xxx_method(mu, env, obj_idx, method_id, args, 1)
     #
 
@@ -1409,14 +1414,14 @@ class JNIEnv:
         constructor_args = self.__read_args_common(mu, args, method.args_list, args_type)
 
         v = method.func(self._emu, *constructor_args)
-        #FIXME python的double怎么办？？？
-        if (not is_wide):
+        if not is_wide:
             return v
         else:
-            rhigh = v >> 32
-            rlow = v & 0x0FFFFFFFF
+            raw_bits = struct.unpack('<Q', struct.pack('<d', v))[0]
+            
+            rhigh = raw_bits >> 32
+            rlow = raw_bits & 0xFFFFFFFF
             return (rlow, rhigh)
-        #
     #
 
     @native_method
@@ -1748,32 +1753,31 @@ class JNIEnv:
     #
 
     @native_method
-    def get_string_utf_chars(self, mu, env, string, is_copy_ptr):
+    def get_string_utf_chars(self, mu: 'Uc', env, string, is_copy_ptr):
         str_ref = self.get_reference(string)
-        str_obj = str_ref.value
-        if (str_obj == JAVA_NULL):
+        if not str_ref or str_ref.value == JAVA_NULL:
             return JAVA_NULL
-        #
-        str_val = str_obj.get_py_string()
-        #FIXME use malloc
-        str_ptr = self._emu.memory.map(0, len(str_val)+1, UC_PROT_READ | UC_PROT_WRITE)
+            
+        str_val = str_ref.value.get_py_string()
+        utf8_bytes = str_val.encode('utf-8') + b'\x00'
+        
+
+        str_ptr = self.__libc.malloc(len(utf8_bytes))
+        
+        mu.mem_write(str_ptr, utf8_bytes)
+
         if is_copy_ptr != 0:
-            #TODO 观察行为,真机总是返回true,但是根据文档,返回false应该也没问题
-            #https://stackoverflow.com/questions/30992989/is-iscopy-field-always-necessary-in-android
-            mu.mem_write(is_copy_ptr, int(0).to_bytes(1, byteorder='little'))
-        #
-        memory_helpers.write_utf8(mu, str_ptr, str_val)
+            mu.mem_write(is_copy_ptr, b'\x01') 
 
         return str_ptr
-    #
 
     @native_method
     def release_string_utf_chars(self, mu, env, string, utf8_ptr):
-        pystr = memory_helpers.read_utf8(mu, utf8_ptr)
+        # pystr = memory_helpers.read_utf8(mu, utf8_ptr)
+
         if (utf8_ptr != 0):
-            self._emu.memory.unmap(utf8_ptr, len(pystr)+1)
-        #
-    #
+            self.__libc.free(utf8_ptr)
+            # self._emu.memory.unmap(utf8_ptr, len(pystr)+1)
 
     @native_method
     def get_array_length(self, mu, env, array):
@@ -1882,23 +1886,22 @@ class JNIEnv:
         raise NotImplementedError()
 
     @native_method
-    def get_byte_array_elements(self, mu, env, array_idx, is_copy_ptr):
+    def get_byte_array_elements(self, mu: 'Uc', env, array_idx, is_copy_ptr):
         if is_copy_ptr != 0:
             raise NotImplementedError()
-        #
+
         obj = self.get_reference(array_idx)
-        pyobj = JNIEnv.jobject_to_pyobject(obj)
+        pyobj: 'Array' = JNIEnv.jobject_to_pyobject(obj)
         items = pyobj.get_py_items()
         items_len = len(items)
-        extra_n = 4
-        #FIXME use malloc
-        buf = self._emu.memory.map(0, extra_n+items_len, UC_PROT_READ | UC_PROT_WRITE)
-        #协议约定前四个字节必定是长度
-        mu.mem_write(buf, items_len.to_bytes(extra_n, 'little'))
+        extra_n = 8
+
+        buf = self.__libc.malloc(extra_n + items_len)
+
+        mu.mem_write(buf, items_len.to_bytes(4, 'little'))
         b = bytes(items)
         mu.mem_write(buf+extra_n, b)
-        return buf+extra_n
-    #
+        return buf + extra_n
 
 
     @native_method
@@ -1933,13 +1936,14 @@ class JNIEnv:
     def release_byte_array_elements(self, mu, env,array_idx, elems, mode):
         if (elems == JAVA_NULL):
             return
-        #
-        #前四个字节必为长度
-        true_buf = elems - 4
-        b = mu.mem_read(true_buf, 4)
-        elems_sz =  int.from_bytes(b, byteorder='little', signed = False)
-        self._emu.memory.unmap(true_buf, elems_sz+4)
-    #
+
+        true_buf = elems - 8
+        self.__libc.free(true_buf)
+        
+        # b = mu.mem_read(true_buf, 4)
+        # elems_sz =  int.from_bytes(b, byteorder='little', signed = False)
+        # self._emu.memory.unmap(true_buf, elems_sz+4)
+
 
     @native_method
     def release_char_array_elements(self, mu, env):
@@ -2053,7 +2057,7 @@ class JNIEnv:
         class_obj = clazz.value
 
         pyclazz = class_obj.get_py_clazz()
-        ptr_sz = self._emu.get_ptr_size()
+        ptr_sz = self._emu.ptr_size
 
         for i in range(0, methods_count):
             ptr_name = memory_helpers.read_ptr_sz(mu, (i * 3*ptr_sz) + methods, ptr_sz)

@@ -44,7 +44,7 @@ def dump_memory(emu: "Emulator", fd: io.TextIOWrapper, min_addr=0, max_addr=0xFF
 def dump_registers(emu: "Emulator", fd: io.TextIOWrapper = None):
     regs = ""
     mu = emu.mu
-    if (emu.get_arch() == emu_const.ARCH_ARM32):
+    if (emu.arch == emu_const.ARCH_ARM32):
         r0 = mu.reg_read(UC_ARM_REG_R0)
         r1 = mu.reg_read(UC_ARM_REG_R1)
         r2 = mu.reg_read(UC_ARM_REG_R2)
@@ -121,7 +121,7 @@ DUMP_REG_READ=1
 DUMP_REG_WRITE=2
 def dump_code(emu: "Emulator", address: int, size: int, fd: io.TextIOWrapper, dump_reg_type=DUMP_REG_READ):  
     mu = emu.mu
-    if (emu.get_arch() == emu_const.ARCH_ARM32):
+    if (emu.arch == emu_const.ARCH_ARM32):
         #判断是否arm，用不同的decoder
         cpsr = mu.reg_read(UC_ARM_REG_CPSR)
         if (cpsr & (1<<5)):
@@ -152,8 +152,8 @@ def dump_code(emu: "Emulator", address: int, size: int, fd: io.TextIOWrapper, du
 
         instruction_str = ''.join('{:02X} '.format(x) for x in i.bytes)
         tid = ""
-        if (emu.get_muti_task_support()):
-            sch = emu.get_schduler()
+        if (emu.muti_task):
+            sch = emu.scheduler
             tid = "%d:"%sch.get_current_tid()
         line = "%s(%20s[0x%08X])[%-12s]0x%08X:\t%s\t%s"%(tid, name, base, instruction_str, addr-base, i.mnemonic.upper(), i.op_str.upper())
         if (funName != None):
@@ -180,13 +180,13 @@ def dump_code(emu: "Emulator", address: int, size: int, fd: io.TextIOWrapper, du
 def dump_stack(emu: "Emulator", fd: io.TextIOWrapper, max_deep=512):
     mu = emu.mu
     sp = 0
-    if (emu.get_arch() == emu_const.ARCH_ARM32()):
+    if (emu.arch == emu_const.ARCH_ARM32()):
         sp =  mu.reg_read(UC_ARM_REG_SP)
     else:
         sp = mu.reg_read(UC_ARM64_REG_SP)
     stop = sp + max_deep
     fd.wirte("stack dumps:\n")
-    ptr_sz = emu.get_ptr_size()
+    ptr_sz = emu.ptr_size
     for ptr in range(sp, stop, ptr_sz):
         valb = mu.mem_read(ptr, ptr_sz)
         val = int.from_bytes(valb, byteorder='little', signed=False)

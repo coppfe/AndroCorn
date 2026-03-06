@@ -1,14 +1,22 @@
 import os
 import logging
 import unicorn
+
 from unicorn import UC_PROT_READ, UC_PROT_WRITE, UC_PROT_ALL, UC_ERR_MAP
-from ..utils.misc_utils import page_end, page_start
+from typing import List, Tuple, TYPE_CHECKING
+
+from ..misc_utils import page_end, page_start
+
+if TYPE_CHECKING:
+    import io
+    from unicorn import Uc
+    from ...objects.virtual_file import VirtualFile
 
 PAGE_SIZE = 0x1000
 
 class MemoryMap:
-    def __init__(self, mu, alloc_min_addr, alloc_max_addr):
-        self.__mu = mu
+    def __init__(self, mu: 'Uc', alloc_min_addr, alloc_max_addr):
+        self.__mu: 'Uc' = mu
         self._alloc_min_addr = alloc_min_addr
         self._alloc_max_addr = alloc_max_addr
         self.__file_map_addr = {} # {addr: (end, offset, vf)}
@@ -32,9 +40,6 @@ class MemoryMap:
         return data
 
     def __find_free_region(self, size):
-        """
-        Ищет свободную дырку нужного размера.
-        """
         regions = sorted(self.__mu.mem_regions())
         
         candidate = self._alloc_min_addr
@@ -54,7 +59,7 @@ class MemoryMap:
             
         return candidate
 
-    def map(self, address, size, prot=UC_PROT_READ | UC_PROT_WRITE, vf=None, offset=0):
+    def map(self, address, size, prot=UC_PROT_READ | UC_PROT_WRITE, vf: 'VirtualFile' = None, offset=0):
         if size <= 0:
             raise ValueError("Size must be > 0")
 
@@ -119,7 +124,10 @@ class MemoryMap:
         except unicorn.UcError:
             return -1
             
-    def dump_maps(self, stream):
+    def dump_maps(self, stream: 'io.StringIO'):
         regions = sorted(self.__mu.mem_regions())
         for start, end, prot in regions:
             stream.write(f"{start:08x}-{end+1:08x} {prot}\n")
+    
+    def get_regions(self) -> List[Tuple[int, int, int]]:
+        return self.__mu.mem_regions()

@@ -2,11 +2,12 @@ import logging
 import os
 
 from unicorn.arm_const import *
-from ....utils.struct_writer import StructWriter
+from ....utils.memory.struct_writer import StructWriter
 from ....const import linux
 from .dtv_builder import DTVBuilderARM32
 from .pthread_builder import PThreadBuilderARM32
 from ..tls_modules import TLSModuleLoader
+from ....data.mem_map import PAGE_SIZE
 
 from ..tls_bionic import BionicTLS
 
@@ -31,7 +32,6 @@ class BionicTLS_ARM32(BionicTLS):
         self.at_rand = b"\42" * 16
         
     def mem_reserve(self, size: int, align: int = 0x10) -> int:
-        from ....config import PAGE_SIZE
         base = (self.counter_memory + (align - 1)) & ~(align - 1)
         end = base + size
         map_start = base & ~(PAGE_SIZE - 1)
@@ -163,12 +163,6 @@ class BionicTLS_ARM32(BionicTLS):
         return kab_base
 
     def _write_ptr(self, addr, val):
-        """
-        Пишет указатель или данные в память ARM32 (Unicorn).
-        
-        - addr: адрес в эмулированной памяти
-        - val: int (указатель), bytes (данные)
-        """
         if isinstance(val, int):
             self.mu.mem_write(addr, val.to_bytes(4, 'little'))
         elif isinstance(val, bytes):

@@ -6,7 +6,7 @@ import os
 from typing import List, TYPE_CHECKING
 
 from . import elf_reader
-from ..utils import memory_helpers
+from ..utils.memory import memory_helpers
 from ..const.emu_const import *
 
 if TYPE_CHECKING:
@@ -22,8 +22,8 @@ logging.getLogger(__name__)
 class SoinfoWriter:
     def __init__(self, emu: 'Emulator'):
         self.emu: 'Emulator' = emu
-        self.is_64bit = (emu.get_arch() == ARCH_ARM64)
-        self.ptr_sz = self.emu.get_ptr_size()
+        self.is_64bit = (emu.arch == ARCH_ARM64)
+        self.ptr_sz = self.emu.ptr_size
         self.ptr_fmt = "<Q" if self.is_64bit else "<I"
 
     def write_soinfo(self, module: 'Module', reader: 'ELFReader') -> int:

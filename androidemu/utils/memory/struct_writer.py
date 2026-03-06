@@ -1,23 +1,24 @@
-import struct
 from unicorn.arm_const import *
 from unicorn.arm64_const import *
 from . import memory_helpers
 
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from ...emulator import Emulator
+
 class StructWriter:
-    def __init__(self, emu, base_addr):
+    def __init__(self, emu: 'Emulator', base_addr):
         self.__emu = emu
         self.__base = base_addr
         self.__current = base_addr
-        self.__ptr_sz = emu.get_ptr_size()
+        self.__ptr_sz = emu.ptr_size
 
     def reserve(self, nptr):
-        """Резервирует место под N указателей и возвращает адрес начала"""
         addr = self.__current
         self.__current += nptr * self.__ptr_sz
         return addr
 
     def reserve_bytes(self, nbytes):
-        """Резервирует N байт"""
         addr = self.__current
         self.__current += nbytes
         return addr

@@ -13,7 +13,7 @@ class TestLibCppSharedCall(unittest.TestCase):
 
     def test_cpp_string_constructor_with_data(self):
         emulator = self.emulator
-        vfs_path = emulator.get_vfs_root()
+        vfs_path = emulator.vfs_root
 
         libc = emulator.load_library(f"{vfs_path}/system/lib/libc.so", do_init=True)
         libcpp = emulator.load_library(f"{vfs_path}/system/lib/libc++_shared.so", do_init=True)
@@ -54,13 +54,13 @@ class TestLibCppSharedCall(unittest.TestCase):
 
 if __name__ == "__main__":
     import logging
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.DEBUG)
     unittest.main()
 
-# INFO:root:process pid:11904
+# INFO:root:process pid:12402
 # INFO:root:[+] Detected Android property service (/dev/__properties__)
 # INFO:root:[+] Initializing from build.prop
-# INFO:androidemu.internal.linker:[Linker] Request to load: vfs/system/lib/libc.so (do_init=True) (main=False)
+# INFO:androidemu.internal.linker:[Linker] Request to load: system/lib/libc.so (do_init=True) (main=False)
 # INFO:androidemu.internal.linker:=== [Linker Phase 1] Loading Dependencies ===
 # INFO:androidemu.internal.linker:=== [Linker Phase 2] TLS Bootstrap ===
 # INFO:androidemu.internal.bionic.arm32.tls_bootstrap:[TLS-7.1-ARM32] Bootstrapping Legacy Layout
@@ -74,44 +74,16 @@ if __name__ == "__main__":
 # INFO:root:open [vfs//dev/__properties__][0xa8000] return fd 3
 # INFO:root:open [vfs//sys/devices/system/cpu/online][0xa0000] return fd 3
 # WARNING:androidemu.native.sym_hooks.libdl_sym:[!] dlopen: library 'libnetd_client.so' NOT FOUND
-# INFO:root:11904 futex_wake unblock nobody waiting in futex ptr 0x40087018
+# INFO:androidemu.internal.linker:[Linker] Request to load: libc.so (do_init=False) (main=False)
+# INFO:androidemu.internal.linker:[Linker] Request to load: vfs/system/lib/libc.so (do_init=True) (main=False)
 # INFO:androidemu.internal.linker:[Linker] Request to load: vfs/system/lib/libc++_shared.so (do_init=True) (main=False)
 # INFO:androidemu.internal.linker:  [Init] libc++_shared.so
-# INFO:root:11904 futex_wake unblock nobody waiting in futex ptr 0x40129654
-# INFO:root:11904 futex_wake unblock nobody waiting in futex ptr 0x40129654
-# INFO:root:11904 futex_wake unblock nobody waiting in futex ptr 0x40129654
-# INFO:root:11904 futex_wake unblock nobody waiting in futex ptr 0x40129654
-# INFO:root:11904 futex_wake unblock nobody waiting in futex ptr 0x40129654
-# INFO:root:11904 futex_wake unblock nobody waiting in futex ptr 0x40129654
-# INFO:root:11904 futex_wake unblock nobody waiting in futex ptr 0x40129654
-# INFO:root:11904 futex_wake unblock nobody waiting in futex ptr 0x40129654
-# INFO:root:11904 futex_wake unblock nobody waiting in futex ptr 0x40129654
-# INFO:root:11904 futex_wake unblock nobody waiting in futex ptr 0x40129654
-# INFO:root:11904 futex_wake unblock nobody waiting in futex ptr 0x40129654
-# INFO:root:11904 futex_wake unblock nobody waiting in futex ptr 0x40129654
-# INFO:root:11904 futex_wake unblock nobody waiting in futex ptr 0x40129654
-# INFO:root:11904 futex_wake unblock nobody waiting in futex ptr 0x40129654
-# INFO:root:11904 futex_wake unblock nobody waiting in futex ptr 0x40129654
-# INFO:root:11904 futex_wake unblock nobody waiting in futex ptr 0x40129654
-# INFO:root:11904 futex_wake unblock nobody waiting in futex ptr 0x40129654
-# INFO:root:11904 futex_wake unblock nobody waiting in futex ptr 0x40129654
-# INFO:root:11904 futex_wake unblock nobody waiting in futex ptr 0x40129654
-# INFO:root:11904 futex_wake unblock nobody waiting in futex ptr 0x40129654
-# INFO:root:11904 futex_wake unblock nobody waiting in futex ptr 0x40129654
-# INFO:root:11904 futex_wake unblock nobody waiting in futex ptr 0x40129654
-# INFO:root:11904 futex_wake unblock nobody waiting in futex ptr 0x40129654
-# INFO:root:11904 futex_wake unblock nobody waiting in futex ptr 0x40129654
-# INFO:root:11904 futex_wake unblock nobody waiting in futex ptr 0x40129654
-# INFO:root:11904 futex_wake unblock nobody waiting in futex ptr 0x40129654
-# INFO:root:11904 futex_wake unblock nobody waiting in futex ptr 0x40129654
-# INFO:root:11904 futex_wake unblock nobody waiting in futex ptr 0x40129654
-# INFO:root:11904 futex_wake unblock nobody waiting in futex ptr 0x40129900
 # [*] Calling C++ constructor with short string...
 # [*] Heap detected (Long String)
 # [*] Calculated data pointer: 0x70a0d020
-# [*] Success! Read: AndroCorn2026
+# [*] Success! Read: AndroidCorn2026
 # .
 # ----------------------------------------------------------------------
-# Ran 1 test in 0.140s
+# Ran 1 test in 0.279s
 
 # OK

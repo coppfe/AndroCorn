@@ -1,5 +1,5 @@
 import logging
-from ....config import STACK_ADDR, STACK_SIZE
+from ....data.mem_map import STACK_ADDR, STACK_SIZE
 from ..pthread_builder import PThreadBuilder
 
 from typing import TYPE_CHECKING
@@ -10,10 +10,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 class PThreadBuilderARM64(PThreadBuilder):
-    """
-    Реализация pthread_internal_t для ARM64 (Modern Android 9+ Layout).
-    Смещения и структура адаптированы под 64-бит.
-    """
 
     def __init__(self, emu: 'Emulator', state: 'BionicTLS'):
         super().__init__(emu, state)

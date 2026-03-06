@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 class DTVBuilderARM64(DTVBuilder):
     """
-    Layout (64-бит):
+    Layout (64-bit):
       [0] Generation
       [1] Module Count
       [2] Module 1 Ptr

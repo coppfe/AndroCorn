@@ -1,14 +1,17 @@
 import struct
 from unicorn.arm_const import *
 from unicorn.arm64_const import *
-from ..const import emu_const
+from ...const import emu_const
 from . import memory_helpers
 
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from ...emulator import Emulator
 
 class StackHelper():
-    def __init__(self, emu):
-        self.__emu = emu
-        arch = emu.get_arch()
+    def __init__(self, emu: 'Emulator'):
+        self.__emu: 'Emulator' = emu
+        arch = emu.arch
         if arch == emu_const.ARCH_ARM32:
             sp_reg = UC_ARM_REG_SP
         #
@@ -21,12 +24,12 @@ class StackHelper():
     #
 
     def reserve(self, nptr):
-        self.__sp -= nptr * self.__emu.get_ptr_size()
+        self.__sp -= nptr * self.__emu.ptr_size
         return self.__sp
     #
 
     def write_val(self, value):
-        ptr_sz = self.__emu.get_ptr_size()
+        ptr_sz = self.__emu.ptr_size
         self.__sp -= ptr_sz
         memory_helpers.write_ptrs_sz(self.__emu.mu, self.__sp, value, ptr_sz)
         return self.__sp
@@ -42,9 +45,9 @@ class StackHelper():
 
     def commit(self):
         #对齐sp
-        if(self.__emu.get_arch() == emu_const.ARCH_ARM32):
+        if(self.__emu.arch == emu_const.ARCH_ARM32):
             self.__sp = self.__sp & (~7)
-        elif (self.__emu.get_arch() == emu_const.ARCH_ARM64):
+        elif (self.__emu.arch == emu_const.ARCH_ARM64):
             self.__sp = self.__sp & (~15)
         #
         self.__emu.mu.reg_write(self.__sp_reg, self.__sp)

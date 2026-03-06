@@ -15,7 +15,7 @@ from .fun_hooks.libc_fun import LibCFunHooks
 from ..internal.bionic.tls_resolver import TLSSymbolResolver
 
 from .asset_mgr_hooks import AssetManagerHooks
-from ..utils import memory_helpers
+from ..utils.memory import memory_helpers
 
 if TYPE_CHECKING:
     from ..emulator import Emulator
@@ -57,7 +57,7 @@ class SymbolHooks:
             self._emu.linker.add_symbol_hook(name, self._emu._hooker.write_function(func))
 
         # self._emu.linker.add_symbol_hook('__tls_get_addr', self._emu._hooker.write_function(self.resolver.tls_get_addr))
-        asset_hook = AssetManagerHooks(self._emu, self._emu.linker, self._emu._hooker, self._emu.get_vfs_root())
+        asset_hook = AssetManagerHooks(self._emu, self._emu.linker, self._emu._hooker, self._emu.vfs_root)
         asset_hook.register()
 
         logger.debug("[+] Symbol hooks initialized")

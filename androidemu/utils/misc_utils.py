@@ -64,7 +64,7 @@ def my_open(fd, flag):
 
 def set_errno(emu, errno):
     mu = emu.mu
-    if (emu.get_arch() == emu_const.ARCH_ARM32):
+    if (emu.arch == emu_const.ARCH_ARM32):
         err_ptr = mu.reg_reg(UC_ARM_REG_C13_C0_3) + 8
         mu.mem_write(err_ptr, int(errno).to_bytes(4, byteorder='little'))
     #

@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from ...emulator import Emulator
 
 def create_tls_backend(emu: 'Emulator'):
-    arch = emu.get_arch()
+    arch = emu.arch
 
     logger.debug(f"[*] Creating TLS backend for arch: {'ARM32' if arch == emu_const.ARCH_ARM32 else 'ARM64'}")
 

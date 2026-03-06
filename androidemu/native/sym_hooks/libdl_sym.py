@@ -9,7 +9,7 @@ import os
 from unicorn import *
 
 from ...java.helpers.native_method import native_method
-from ...utils import memory_helpers
+from ...utils.memory import memory_helpers
 
 
 if TYPE_CHECKING:
@@ -75,7 +75,7 @@ class LibDLSymbolHooks(BaseSymbolHooks):
 
     @native_method
     def dladdr(self, uc: 'Uc', addr: int, info_ptr: int):
-        ptr_sz = self._emu.get_ptr_size()
+        ptr_sz = self._emu.ptr_size
         
         for mod in self._emu.linker.linked_modules:
             if mod.base <= addr < mod.base + mod.size:
@@ -92,7 +92,7 @@ class LibDLSymbolHooks(BaseSymbolHooks):
         symbol_name = memory_helpers.read_utf8(uc, symbol_ptr)
         
         # ARM64: 0, ARM32: 0xffffffff
-        is_64 = (self._emu.get_ptr_size() == 8)
+        is_64 = (self._emu.ptr_size == 8)
         rtld_default = 0 if is_64 else 0xffffffff
         rtld_next = -1 if is_64 else -2 #future
 

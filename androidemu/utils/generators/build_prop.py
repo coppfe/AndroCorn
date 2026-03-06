@@ -72,9 +72,6 @@ class PropAreaGenerator:
         return off
 
     def new_prop_info(self, name, namelen, value):
-        """
-        Аналог: new_prop_info(...)
-        """
         # uint32_t need_size = ALIGN(sizeof(prop_info) + namelen + 1, sizeof(uint32_t));
         # sizeof(prop_info) = 4 (serial) + 92 (value) = 96
         struct_size = 96

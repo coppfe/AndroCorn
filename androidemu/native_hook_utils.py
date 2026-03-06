@@ -3,7 +3,6 @@ from unicorn import *
 from unicorn.arm_const import *
 from unicorn.arm64_const import *
 from .const import emu_const
-from . import config
 import sys
 import traceback
 import logging
@@ -48,8 +47,8 @@ class FuncHooker:
     def __hook_stub(self, mu: 'Uc', address, size, user_data):
         try:
             address = standlize_addr(address)
-            fun_entry_addr = address - self.__emu.get_ptr_size()
-            fun_entry_bytes = mu.mem_read(fun_entry_addr, self.__emu.get_ptr_size())
+            fun_entry_addr = address - self.__emu.ptr_size
+            fun_entry_bytes = mu.mem_read(fun_entry_addr, self.__emu.ptr_size)
             fun_entry = int.from_bytes(fun_entry_bytes, byteorder='little', signed=False)
             if (fun_entry in self.__hook_params):
                 hook_param = self.__hook_params[fun_entry]
@@ -79,7 +78,7 @@ class FuncHooker:
 
     def __init__(self, emu: 'Emulator'):
         self.__emu = emu
-        self.__arch = self.__emu.get_arch()
+        self.__arch = self.__emu.arch
         self.__hook_params = {}
         HOOK_STUB_MEMORY_SIZE = 0x00100000
         self.__stub_off = self.__emu.memory.map(0, HOOK_STUB_MEMORY_SIZE, UC_PROT_READ | UC_PROT_WRITE | UC_PROT_EXEC)

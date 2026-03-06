@@ -4,13 +4,13 @@ from unicorn import *
 from unicorn.arm_const import *
 from unicorn.arm64_const import *
 
-from .interrupt_handler import InterruptHandler
-from .syscall_handler import SyscallHandler
-from ..const import emu_const
+from ..interrupt_handler import InterruptHandler
+from ....objects.syscall_handler import SyscallHandler
+from ....const import emu_const
 
 from typing import TYPE_CHECKING, Dict
 if TYPE_CHECKING:
-    from ..scheduler import Scheduler
+    from ....scheduler import Scheduler
 
 class SyscallHandlers:
 

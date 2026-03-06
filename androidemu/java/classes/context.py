@@ -8,7 +8,6 @@ from .wifi import TelephonyManager, WifiManager, ConnectivityManager
 from .contentresolver import ContentResolver
 from .string import String
 from .file import File
-from ... import config
 
 
 

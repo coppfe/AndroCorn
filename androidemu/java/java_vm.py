@@ -37,7 +37,7 @@ class JavaVM:
     
     @native_method
     def attach_current_thread(self, mu, java_vm, env_ptr, thr_args):
-        mu.mem_write(env_ptr, self.jni_env.address_ptr.to_bytes(self.__emu.get_ptr_size(), byteorder='little'))
+        mu.mem_write(env_ptr, self.jni_env.address_ptr.to_bytes(self.__emu.ptr_size, byteorder='little'))
         return JNI_OK
     #
 
@@ -49,13 +49,13 @@ class JavaVM:
 
     @native_method
     def get_env(self, mu, java_vm, env_ptr, version):
-        mu.mem_write(env_ptr, self.jni_env.address_ptr.to_bytes(self.__emu.get_ptr_size(), byteorder='little'))
+        mu.mem_write(env_ptr, self.jni_env.address_ptr.to_bytes(self.__emu.ptr_size, byteorder='little'))
         return JNI_OK
     #
 
     @native_method
     def attach_current_thread_as_daemon(self, mu, java_vm, env_ptr, thr_args):
-        mu.mem_write(env_ptr, self.jni_env.address_ptr.to_bytes(self.__emu.get_ptr_size(), byteorder='little'))
+        mu.mem_write(env_ptr, self.jni_env.address_ptr.to_bytes(self.__emu.ptr_size, byteorder='little'))
         return JNI_OK
     #
 

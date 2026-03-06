@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 
 from ..java.helpers.native_method import native_method
-from ..utils import memory_helpers
+from ..utils.memory import memory_helpers
 from ..java.jni_env import JNIEnv
 from unicorn import *
 

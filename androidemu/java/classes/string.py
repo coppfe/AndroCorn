@@ -10,7 +10,7 @@ class String(metaclass=JavaClassDef, jvm_name='java/lang/String'):
         self.__str = pystr
     #
 
-    def get_py_string(self):
+    def get_py_string(self) -> str:
         return self.__str
     #
 

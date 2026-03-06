@@ -1,29 +1,28 @@
 from typing import TYPE_CHECKING
 from unicorn import UC_PROT_READ, UC_PROT_WRITE
-from ..const import emu_const
+from ....const import emu_const
 import logging
-from ..config import STACK_ADDR
 
 import logging
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from ..emulator import Emulator
-    from ..pcb import Pcb
-    from ..cpu.syscall_handlers import SyscallHandlers
-    from .memory_map import MemoryMap
+    from ....emulator import Emulator
+    from ....pcb import Pcb
+    from ..syscall_base.syscall_handlers import SyscallHandlers
+    from ....utils.memory.memory_map import MemoryMap
 
 class MemorySyscallHandler:
     """
     """
     def __init__(self, emu: 'Emulator', memory: 'MemoryMap', syscall_handler: 'SyscallHandlers'):
         self.__emu: 'Emulator' = emu
-        self.__pcb: 'Pcb' = emu.get_pcb()
+        self.__pcb: 'Pcb' = emu.pcb
         self._memory: 'MemoryMap' = memory
         self._syscall_handler: 'SyscallHandlers' = syscall_handler
         self.current_brk = 0
 
-        if self.__emu.get_arch() == emu_const.ARCH_ARM32:
+        if self.__emu.arch == emu_const.ARCH_ARM32:
             # Memory
             self._syscall_handler.set_handler(0x2d, "brk", 1, self._handle_brk)
             self._syscall_handler.set_handler(0x5B, "munmap", 2, self._handle_munmap)

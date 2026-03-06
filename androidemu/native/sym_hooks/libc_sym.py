@@ -9,7 +9,7 @@ from unicorn.arm_const import *
 from unicorn import *
 
 from ...java.helpers.native_method import native_method
-from ...utils import memory_helpers
+from ...utils.memory import memory_helpers
 
 
 if TYPE_CHECKING:
@@ -148,7 +148,7 @@ class LibCSymbolHooks(BaseSymbolHooks):
     def pthread_create(self, uc: 'Uc', pthread_t_ptr: int, attr: int, start_routine: int, arg: int):
         logging.warning("pthread_create called start_routine [0x%08X]"%(start_routine,))
         #pthread_t结构体实际上只是一个long
-        uc.mem_write(pthread_t_ptr, int(self.__thread_id).to_bytes(self._emu.get_ptr_size(), byteorder='little'))
+        uc.mem_write(pthread_t_ptr, int(self.__thread_id).to_bytes(self._emu.ptr_size, byteorder='little'))
         self.__thread_id = self.__thread_id + 1
         return 0
     #

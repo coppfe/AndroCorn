@@ -46,7 +46,7 @@ class Class(metaclass=JavaClassDef, jvm_name='java/lang/Class'):
     #
 
     @java_method_def(name='getName', signature='()Ljava/lang/String;', native=False)
-    def getName(self, emu):
+    def getName(self, emu) -> 'String':
         name = self.__descriptor_represent
         assert name != None
 
@@ -55,7 +55,7 @@ class Class(metaclass=JavaClassDef, jvm_name='java/lang/Class'):
     #
 
     @java_method_def(name='getCanonicalName', signature='()Ljava/lang/String;', native=False)
-    def getCanonicalName(self, emu):
+    def getCanonicalName(self, emu) -> 'String':
         name = self.getName(emu).get_py_string()
         
         if (name[0] == "["):
@@ -84,11 +84,11 @@ class Class(metaclass=JavaClassDef, jvm_name='java/lang/Class'):
         return String(name)
     #
 
-    def get_jni_descriptor(self):
+    def get_jni_descriptor(self) -> str:
         return self.__descriptor_represent
     #
 
-    def get_py_clazz(self):
+    def get_py_clazz(self) -> 'JavaClassDef':
         return self.__pyclazz
     #
 

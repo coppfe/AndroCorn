@@ -1,8 +1,6 @@
 from ..java_class_def import JavaClassDef
-from ..java_field_def import JavaFieldDef
-from ..java_method_def import java_method_def,JavaMethodDef
+from ..java_method_def import java_method_def
 from .string import String
-from ... import config
 
 
 class Secure(metaclass=JavaClassDef, jvm_name='android/provider/Settings$Secure'):

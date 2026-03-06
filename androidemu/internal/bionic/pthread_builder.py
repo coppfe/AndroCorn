@@ -1,6 +1,5 @@
 import logging
 from abc import ABC, abstractmethod
-from ...config import STACK_ADDR, STACK_SIZE
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -14,7 +13,7 @@ class PThreadBuilder(ABC):
         self.emu = emu
         self.mu = emu.mu
         self.state = state
-        self.ptr_sz = emu.get_ptr_size()
+        self.ptr_sz = emu.ptr_size
 
     @abstractmethod
     def build(self, tls_slots_ptr: int, bionic_tls_ptr: int, dtv_ptr: int = 0) -> int:

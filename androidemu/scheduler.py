@@ -1,16 +1,15 @@
 import logging
-import time
-import binascii
-
-from typing import TYPE_CHECKING
+import random
+from collections import deque
+from typing import TYPE_CHECKING, Dict, List, Set, Optional
 
 from unicorn import *
 from unicorn.arm_const import *
 from unicorn.arm64_const import *
-from . import config
+from .data import mem_map as config
 from .const import emu_const
-from .utils import memory_helpers
-from .utils.mem_monitor import MemoryMonitor
+from .utils.memory.mem_monitor import MemoryMonitor
+from .java.helpers.native_method import native_write_args
 
 if TYPE_CHECKING:
     from .emulator import Emulator
@@ -22,88 +21,51 @@ class Task:
         self.tid = 0
         self.init_stack_ptr = 0
         self.tls_ptr = 0
-        #是否第一次调用
         self.is_init = True
         self.is_main = False
         self.is_exit = False
-        #the time ts for prev halt, in ms
-        self.halt_ts = -1
-        #the timeout for blocking -1 is infinte
-        self.blocking_timeout = -1
-    #
-#
+        self.wakeup_time_us = -1 
 
 class Scheduler:
-
-
     def __init__(self, emu: 'Emulator'):
         self.__emu = emu
         self.__mu = self.__emu.mu
-        self.__pid = self.__emu.get_pcb().get_pid()
+        self.__pid = self.__emu.pcb.get_pid()
         self.__next_sub_tid = self.__pid + 1
-        self.__tasks_map = {} # in python 3.7+ dict is ordered
-        self.__defer_task_map = {}
+        
+        self.__tasks_map: Dict[int, Task] = {} 
+        self.__ready_queue: deque = deque()
         self.__tid_2_remove = set()
         self.__cur_tid = 0
+        self.__is_running = False
 
         self.__emu.memory.map(config.STOP_MEMORY_BASE, config.STOP_MEMORY_SIZE, UC_PROT_READ | UC_PROT_EXEC)
         self.__stop_pos = config.STOP_MEMORY_BASE
 
-        #blocking futex ptr to thread lists, 
-        #记录在futex中等待的任务id
         self.__futex_blocking_map = {}
-        self.pending_logs = {}
-        #just record all blocking tid
-        self.__blocking_set = set()
-
-        self.loggingvalues = {}
+        self.__blocking_set: Set[int] = set()
 
         self.mem_monitor = MemoryMonitor(emu)
-    #
 
-    def __get_pc(self):
-        if (self.__emu.get_arch() == emu_const.ARCH_ARM32):
-            pc = self.__emu.mu.reg_read(UC_ARM_REG_PC)
-            return pc
-        else:
-            return self.__emu.mu.reg_read(UC_ARM64_REG_PC)
-        #
-    #
+        is_arm32 = self.__emu.arch == emu_const.ARCH_ARM32
+        self._reg_pc  = UC_ARM_REG_PC if is_arm32 else UC_ARM64_REG_PC
+        self._reg_sp  = UC_ARM_REG_SP if is_arm32 else UC_ARM64_REG_SP
+        self._reg_lr  = UC_ARM_REG_LR if is_arm32 else UC_ARM64_REG_X30
+        self._reg_ret = UC_ARM_REG_R0 if is_arm32 else UC_ARM64_REG_X0
+        self._reg_tls = UC_ARM_REG_C13_C0_3 if is_arm32 else UC_ARM64_REG_TPIDR_EL0
+        self._reg_cpsr = UC_ARM_REG_CPSR if is_arm32 else None
 
-    def __clear_reg0(self):
-        
-        if (self.__emu.get_arch() == emu_const.ARCH_ARM32):
-            self.__mu.reg_write(UC_ARM_REG_R0, 0)
-        else:
-            self.__mu.reg_write(UC_ARM64_REG_X0, 0)
-        #
-    #
-
-    def __set_sp(self, sp):
-        if (self.__emu.get_arch() == emu_const.ARCH_ARM32):
-            self.__emu.mu.reg_write(UC_ARM_REG_SP, sp)
-        else:
-            self.__emu.mu.reg_write(UC_ARM64_REG_SP, sp)
-        #
-    #
-
-    def __set_tls(self, tls_ptr):
-        if (self.__emu.get_arch() ==  emu_const.ARCH_ARM32):
-            self.__emu.mu.reg_write(UC_ARM_REG_C13_C0_3, tls_ptr)
-        else:
-            self.__emu.mu.reg_write(UC_ARM64_REG_TPIDR_EL0, tls_ptr)
-    #
+    def __get_pc(self): return self.__mu.reg_read(self._reg_pc)
+    def __set_sp(self, sp): self.__mu.reg_write(self._reg_sp, sp)
+    def __set_tls(self, tls_ptr): self.__mu.reg_write(self._reg_tls, tls_ptr)
+    def __clear_reg0(self): self.__mu.reg_write(self._reg_ret, 0)
 
     def __get_interrupted_entry(self):
         pc = self.__get_pc()
-        if (self.__emu.get_arch() == emu_const.ARCH_ARM32):
-            cpsr = self.__emu.mu.reg_read(UC_ARM_REG_CPSR)
-            if (cpsr & (1<<5)):
-                pc = pc | 1
-            #
-        #
+        if self._reg_cpsr is not None:
+            cpsr = self.__mu.reg_read(self._reg_cpsr)
+            if cpsr & (1 << 5): pc |= 1
         return pc
-    #
 
     def __create_task(self, tid, stack_ptr, context, is_main, tls_ptr):
         t = Task()
@@ -113,172 +75,201 @@ class Scheduler:
         t.is_main = is_main
         t.tls_ptr = tls_ptr
         return t
-    #
 
-    def __set_main_task(self):
-        tid = self.__emu.get_pcb().get_pid()
-        if (tid in self.__tasks_map):
-            raise RuntimeError("set_main_task fail for main task %d exist!!!"%tid)
-        #
+    def __set_main_task(self, entry_point):
+        tid = self.__pid
+        if tid in self.__tasks_map:
+            self.__tasks_map[tid].entry = entry_point
+            return
         t = self.__create_task(tid, 0, None, True, 0)
+        t.entry = entry_point 
         self.__tasks_map[tid] = t
-    #
+        self.__ready_queue.append(tid)
+
+    def get_current_tid(self):
+        return self.__cur_tid
+
+    def add_sub_task(self, stack_ptr, tls_ptr=0):
+        tid = self.__next_sub_tid
+        ctx = self.__mu.context_save()
+        t = self.__create_task(tid, stack_ptr, ctx, False, tls_ptr)
+        self.__tasks_map[tid] = t
+        self.__ready_queue.append(tid)
+        self.__next_sub_tid += 1
+        return tid
+
+    def exit_current_task(self):
+        if self.__cur_tid in self.__tasks_map:
+            self.__tasks_map[self.__cur_tid].is_exit = True
+            self.__tid_2_remove.add(self.__cur_tid)
+        self.yield_task()
+
+    def yield_task(self):
+        self.__mu.emu_stop()
 
     def sleep(self, ms):
         tid = self.__cur_tid
         self.__blocking_set.add(tid)
-        self.__tasks_map[tid].blocking_timeout = ms
+        curr_time = self.__emu.time_manager.get_current_time_us()
+        self.__tasks_map[tid].wakeup_time_us = curr_time + int(ms * 1000)
         self.yield_task()
-    #
 
     def futex_wait(self, futex_ptr, timeout=-1):
-        block_set = None
-        if futex_ptr in self.__futex_blocking_map:
-            block_set = self.__futex_blocking_map[futex_ptr]
-        #
-        else:
-            block_set = set()
-            self.__futex_blocking_map[futex_ptr] = block_set
-        #
-        tid = self.get_current_tid()
+        block_set = self.__futex_blocking_map.setdefault(futex_ptr, set())
+        tid = self.__cur_tid
         block_set.add(tid)
         self.__blocking_set.add(tid)
-        self.__tasks_map[tid].blocking_timeout = timeout
-
-        #handle out control flow
+        if timeout > 0:
+            curr_time = self.__emu.time_manager.get_current_time_us()
+            self.__tasks_map[tid].wakeup_time_us = curr_time + int(timeout * 1000)
+        else:
+            self.__tasks_map[tid].wakeup_time_us = -1
         self.yield_task()
-    #
 
     def futex_wake(self, futex_ptr):
-        cur_tid = self.get_current_tid()
+        cur_tid = self.__cur_tid
+        block_set = self.__futex_blocking_map.get(futex_ptr)
+        if block_set and len(block_set) > 0:
+            tid = block_set.pop()
+            if tid in self.__blocking_set: self.__blocking_set.remove(tid)
+            if tid in self.__tasks_map:
+                self.__tasks_map[tid].wakeup_time_us = -1 
+                self.__ready_queue.append(tid)
+            logging.debug(f"{cur_tid} futex_wake tid {tid} unblocked")
+            return True
+        return False
 
-        if (futex_ptr in self.__futex_blocking_map):
-            block_set = self.__futex_blocking_map[futex_ptr]
-            if len(block_set) > 0:
-                tid = block_set.pop()
-                self.__blocking_set.remove(tid)
-                logging.debug("%d futex_wake tid %d waiting in futex_ptr 0x%08X is unblocked"%(cur_tid, tid, futex_ptr))
-                return True
-            else:
-                logging.info("%d futex_wake unblock nobody waiting in futex ptr 0x%08X"%(cur_tid, futex_ptr))
-                return False
-        #
-        else:
-            logging.info("%d futex_wake unblock nobody waiting in futex ptr 0x%08X"%(cur_tid, futex_ptr))
-            return False
-        #
- 
-    #
+    # --- EXEC & CALL_NATIVE ---
 
-    #创建子线程任务
-    def add_sub_task(self, stack_ptr, tls_ptr=0):
-        tid = self.__next_sub_tid
-        #保存当前执行的上下文
-        ctx = self.__emu.mu.context_save()
-        t = self.__create_task(tid, stack_ptr, ctx, False, tls_ptr)
-        self.__defer_task_map[tid] = t
-        self.__next_sub_tid = self.__next_sub_tid + 1
-        return tid
-    #
-
-    def get_current_tid(self):
-        return self.__cur_tid
-    #
-
-    #yield the task.
-    def yield_task(self):
-        logging.debug("tid %d yield"%self.__cur_tid)
-        self.__emu.mu.emu_stop()
-    #
-    
-    def exit_current_task(self):
-        self.__tasks_map[self.__cur_tid].is_exit = True
-        self.__tid_2_remove.add(self.__cur_tid)
-        self.yield_task()
-    #
-
-    #@params entry the main_thread entry_point
     def exec(self, main_entry, clear_task_when_return=True):
-        self.__set_main_task()
+        if self.__is_running:
+            raise RuntimeError("Scheduler running. Use call_native.")
         
-        lr_reg = UC_ARM_REG_LR if self.__emu.get_arch() == emu_const.ARCH_ARM32 else UC_ARM64_REG_X30
-        self.__emu.mu.reg_write(lr_reg, self.__stop_pos)
+        self.__is_running = True
+        try:
+            self.__set_main_task(main_entry)
+            self.__mu.reg_write(self._reg_lr, self.__stop_pos)
+            self.__run_scheduler_loop()
+        finally:
+            self.__is_running = False
+            logging.debug("Main scheduler finished.")
+            if clear_task_when_return:
+                self.__tasks_map.clear()
+                self.__ready_queue.clear()
+                self.__blocking_set.clear()
 
+    def call_native(self, addr, *args):
+        """
+        Nested call: Native -> Python -> Native.
+        """
+        if not self.__is_running:
+            native_write_args(self.__emu, *args)
+            self.exec(addr)
+            return self.__mu.reg_read(self._reg_ret)
+
+        tid = self.__cur_tid
+        task = self.__tasks_map[tid]
+        
+        saved_context = self.__mu.context_save()
+
+        try:
+            sp = self.__mu.reg_read(self._reg_sp)
+            safe_sp = (sp - 0x2000) & ~0xF 
+            self.__mu.reg_write(self._reg_sp, safe_sp)
+
+            native_write_args(self.__emu, *args)
+
+            self.__mu.reg_write(self._reg_lr, self.__stop_pos)
+            self.__mu.reg_write(self._reg_pc, addr)
+            
+            task.context = self.__mu.context_save()
+            
+            self.__run_scheduler_loop(target_tid_exit=tid)
+            return self.__mu.reg_read(self._reg_ret)
+            
+        finally:
+            self.__mu.context_restore(saved_context)
+
+            lr = self.__mu.reg_read(self._reg_lr)
+            self.__mu.reg_write(self._reg_pc, lr)
+
+            task.context = self.__mu.context_save()
+    def __run_scheduler_loop(self, target_tid_exit: Optional[int] = None):
         while self.__pid in self.__tasks_map:
-
-            for tid in reversed(list(self.__tasks_map.keys())):
-                if tid not in self.__tasks_map:
+            current_time = self.__emu.time_manager.get_current_time_us()
+            woken_up = []
+            for tid in list(self.__blocking_set):
+                if tid not in self.__tasks_map: 
+                    self.__blocking_set.remove(tid)
                     continue
-                
-                task: Task = self.__tasks_map[tid]
+                t = self.__tasks_map[tid]
+                if t.wakeup_time_us != -1 and current_time >= t.wakeup_time_us:
+                    woken_up.append(tid)
+            
+            for tid in woken_up:
+                self.__blocking_set.remove(tid)
+                self.__tasks_map[tid].wakeup_time_us = -1
+                self.__ready_queue.append(tid)
 
-                if tid in self.__blocking_set:
-                    if not self._process_task_blocking(tid, task):
+            if not self.__ready_queue:
+                if self.__blocking_set:
+                    valid = [self.__tasks_map[t].wakeup_time_us for t in self.__blocking_set if self.__tasks_map[t].wakeup_time_us != -1]
+                    if valid:
+                        self.__emu.time_manager.jump_to_time(min(valid))
                         continue
-
-                logging.debug(f"{tid} scheduling enter")
-                self.__cur_tid = tid
-                if task.is_init:
-                    start_pos = main_entry if task.is_main else self.__get_interrupted_entry()
-                    if not task.is_main:
-                        self.__emu.mu.context_restore(task.context)
-                        self.__set_sp(task.init_stack_ptr)
-                        if task.tls_ptr:
-                            self.__set_tls(task.tls_ptr)
-                        self.__clear_reg0()
-                    task.is_init = False
+                    elif len(self.__tasks_map) == 1 and not target_tid_exit:
+                        raise RuntimeError("Deadlock.")
+                    else:
+                        break # Nested wait or deadlock potential
                 else:
-                    self.__emu.mu.context_restore(task.context)
-                    start_pos = self.__get_interrupted_entry()
-                
-                try:
-                    self.__emu.mu.emu_start(start_pos, self.__stop_pos, 0, 0)
-                except Exception as e:
-                    logging.error(f"Critical error in thread {tid} at FUN_{hex(start_pos)}: {e}")
-                    raise
-                
-                task.halt_ts = int(time.time() * 1000)
-                task.context = self.__emu.mu.context_save()
+                    break
 
-                if self.__get_pc() == self.__stop_pos or task.is_exit:
-                    self.__tid_2_remove.add(tid)
-                    logging.debug(f"{tid} scheduling exit")
-                else:
-                    logging.debug(f"{tid} scheduling paused")
+            tid = self.__ready_queue.popleft()
+            if tid not in self.__tasks_map or tid in self.__blocking_set: continue
+            
+            task = self.__tasks_map[tid]
+            self.__cur_tid = tid
+            self.__emu.pcb._current_tid = tid 
 
-            for tid in self.__tid_2_remove:
-                self.__tasks_map.pop(tid, None)
+            # Restore Context
+            if task.is_init:
+                start_pos = task.entry if task.is_main else self.__get_interrupted_entry()
+                if not task.is_main:
+                    self.__mu.context_restore(task.context)
+                    self.__set_sp(task.init_stack_ptr)
+                    if task.tls_ptr: self.__set_tls(task.tls_ptr)
+                    self.__clear_reg0()
+                task.is_init = False
+            else:
+                self.__mu.context_restore(task.context)
+                start_pos = self.__get_interrupted_entry()
+
+            # Execute
+            try:
+                self.__mu.emu_start(start_pos, self.__stop_pos, 0, 0)
+            except UcError as e:
+                logging.error(f"Crash thread {tid} at {hex(self.__get_pc())}: {e}")
+                raise
+
+            # Save Context
+            task.context = self.__mu.context_save()
+            self.__emu.time_manager.advance_time(random.randint(50, 200))
+
+            pc = self.__get_pc()
+            
+            # --- Exit Conditions ---
+            if pc == self.__stop_pos:
+                if target_tid_exit is not None and tid == target_tid_exit:
+                    return # Nested call finished
+                self.__tid_2_remove.add(tid)
+            elif task.is_exit:
+                self.__tid_2_remove.add(tid)
+            elif tid not in self.__blocking_set:
+                self.__ready_queue.append(tid)
+
+            for t in self.__tid_2_remove: self.__tasks_map.pop(t, None)
             self.__tid_2_remove.clear()
 
-            if self.__defer_task_map:
-                self.__tasks_map.update(self.__defer_task_map)
-                self.__defer_task_map.clear()
-
-        logging.debug(f"Main thread tid [{self.__pid}] exit. Cleaning up.")
-        if clear_task_when_return:
-            self.__tasks_map.clear()
-
-    def _process_task_blocking(self, tid: int, task: Task):
-        is_only_task = len(self.__tasks_map) == 1
-
-        if is_only_task:
-            if task.blocking_timeout < 0:
-                raise RuntimeError(f"Deadlock detected: only task {tid} is blocked indefinitely.")
-            
-            logging.debug(f"Only task {tid} is blocked. Sleeping for {task.blocking_timeout}ms")
-            time.sleep(task.blocking_timeout / 1000.0)
-            self.__blocking_set.remove(tid)
-            return True
-
-        if task.blocking_timeout > 0:
-            elapsed = int(time.time() * 1000) - task.halt_ts
-            if elapsed >= task.blocking_timeout:
-                logging.debug(f"Task {tid} woke up by timeout")
-                task.blocking_timeout = -1
-                self.__blocking_set.remove(tid)
-                return True
-            
-            logging.debug(f"Task {tid} is still sleeping ({elapsed}/{task.blocking_timeout}ms)")
-            return False
-
-        return False
+            if target_tid_exit is not None and target_tid_exit not in self.__tasks_map:
+                logging.warning(f"Target thread {target_tid_exit} died.")
+                return

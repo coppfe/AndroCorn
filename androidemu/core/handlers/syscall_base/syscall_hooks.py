@@ -1,6 +1,4 @@
-import calendar
 import logging
-import math
 import os
 import time
 import sys
@@ -10,16 +8,19 @@ from random import randint
 from unicorn import Uc
 from unicorn.arm_const import *
 
-from ..const.android import *
-from ..const.linux import *
-from ..const import emu_const
+from ....const.android import *
+from ....const.linux import *
+from ....const import emu_const
 from.syscall_handlers import SyscallHandlers
-from ..utils import memory_helpers
+from ....utils.memory import memory_helpers
+from ...state.time_manager import TimeManager
+from ....utils.generators.vfs_generators import VFSGenerator
 from unicorn import *
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from ..emulator import Emulator
+    from ....emulator import Emulator
+    from ....config import Config
 
 OVERRIDE_TIMEOFDAY = False
 OVERRIDE_TIMEOFDAY_SEC = 0
@@ -36,13 +37,23 @@ class SyscallHooks:
     :type mu Uc
     :type syscall_handler SyscallHandlers
     """
-    def __init__(self, emu: 'Emulator', cfg: dict, syscall_handler: 'SyscallHandlers'):
+    def __init__(self, emu: 'Emulator', cfg: 'Config', syscall_handler: 'SyscallHandlers'):
         self.__emu = emu
         self.hooks = []
         self.cache = []
-        self.__ptr_sz = emu.get_ptr_size()
+
+        self.__device_cfg = cfg.get("device", {})
+        self.__kernel_cfg = self.__device_cfg.get("kernel", {})
+        self.__mem_cfg = self.__device_cfg.get("memory", {})
+
+        self.__ptr_sz = emu.ptr_size
         self._syscall_handler: 'SyscallHandlers' = syscall_handler
-        if (self.__emu.get_arch() == emu_const.ARCH_ARM32):
+
+        # Utils
+        self.time_manager = TimeManager(start_timestamp=cfg.get("start_timestamp", None))
+        self.vfs_gen = VFSGenerator(cfg, self.__emu.pcb, self.__emu.memory)
+
+        if (self.__emu.arch == emu_const.ARCH_ARM32):
             self._syscall_handler.set_handler(0x1, "exit", 1, self.__exit)
             self._syscall_handler.set_handler(0x2, "fork", 0, self.__fork)
             self._syscall_handler.set_handler(0x0B, "execve", 3, self.__execve)
@@ -124,7 +135,7 @@ class SyscallHooks:
         self._clock_start = time.time()
         self._clock_offset = randint(50000, 100000)
         self._sig_maps = {}
-        self.__pcb = self.__emu.get_pcb()
+        self.__pcb = self.__emu.pcb
         self.__cfg = cfg
         self._process_name = cfg.get("pkg_name") #"ChromiumNet10"
         self.__tid_2_tid_addr = {}
@@ -145,7 +156,7 @@ class SyscallHooks:
     #
 
     def __exit(self, mu: 'Uc', err_code):
-        sch = self.__emu.get_schduler()
+        sch = self.__emu.scheduler
         cur_tid = sch.get_current_tid()
         if (cur_tid in self.__tid_2_tid_addr):
             #CLONE_CHILD_CLEARTID 语义，退出时候唤醒线程对应的tid_addr对应的futex
@@ -177,7 +188,7 @@ class SyscallHooks:
             if (len(param) == 0):
                 break
             params.append(param)
-            ptr += self.__emu.get_ptr_size()
+            ptr += self.__emu.ptr_size
         #
         logging.warning("execve %s %r"%(filename, params))
         cmd = " ".join(params)
@@ -304,7 +315,7 @@ class SyscallHooks:
     #
 
     def _gettid(self, mu):
-        sch = self.__emu.get_schduler()
+        sch = self.__emu.scheduler
         return sch.get_current_tid()
     #
 
@@ -319,34 +330,36 @@ class SyscallHooks:
             mu.mem_write(_cpu, int(1).to_bytes(4, byteorder='little'))
         return 0
 
-    def _handle_gettimeofday(self, uc, tv, tz):
-        """
-        If either tv or tz is NULL, the corresponding structure is not set or returned.
-        """
+    def _handle_gettimeofday(self, mu: 'Uc', tv_ptr, tz_ptr):
+        if tv_ptr != 0:
+            sec, usec = self.time_manager.get_timeofday()
+            
+            mu.mem_write(tv_ptr, int(sec).to_bytes(self.__ptr_sz, byteorder='little'))
+            mu.mem_write(tv_ptr + self.__ptr_sz, int(usec).to_bytes(self.__ptr_sz, byteorder='little'))
 
-        self.tv_call_pc = uc.reg_read(UC_ARM_REG_PC) & ~1
-        self.tv_call_lr = uc.reg_read(UC_ARM_REG_LR) & ~1
-        self.tv_call_sp = uc.reg_read(UC_ARM_REG_SP)
-        if tv != 0:
-            ptr_sz = self.__emu.get_ptr_size()
-            if OVERRIDE_TIMEOFDAY:
-                uc.mem_write(tv + 0, int(OVERRIDE_TIMEOFDAY_SEC).to_bytes(ptr_sz, byteorder='little'))
-                uc.mem_write(tv + ptr_sz, int(OVERRIDE_TIMEOFDAY_USEC).to_bytes(ptr_sz, byteorder='little'))
-            else:
-                timestamp = time.time()
-                (usec, sec) = math.modf(timestamp)
-                usec = abs(int(usec * 100000))
-
-                uc.mem_write(tv + 0, int(sec).to_bytes(ptr_sz, byteorder='little'))
-                uc.mem_write(tv + ptr_sz, int(usec).to_bytes(ptr_sz, byteorder='little'))
-
-        if tz != 0:
-            #timezone结构体不64还是32都是两个4字节成员
-            uc.mem_write(tz + 0, int(-120).to_bytes(4, byteorder='little'))  # minuteswest -(+GMT_HOURS) * 60
-            uc.mem_write(tz + 4, int().to_bytes(4, byteorder='little'))  # dsttime
+        if tz_ptr != 0:
+            # timezone: minuteswest, dsttime
+            mu.mem_write(tz_ptr, int(-120).to_bytes(4, byteorder='little', signed=True))
+            mu.mem_write(tz_ptr + 4, int(0).to_bytes(4, byteorder='little'))
 
         return 0
-    #
+    
+    def _handle_clock_gettime(self, mu: 'Uc', clk_id, tp_ptr):
+        if tp_ptr == 0:
+            return -1 # EFAULT
+
+        if clk_id == CLOCK_REALTIME:
+            sec, usec = self.time_manager.get_timeofday()
+            nsec = usec * 1000
+        elif clk_id in (CLOCK_MONOTONIC, CLOCK_MONOTONIC_COARSE, CLOCK_BOOTTIME):
+            sec, nsec = self.time_manager.get_clock_monotonic()
+        else:
+            logging.warning(f"Unsupported clk_id: {clk_id}")
+            sec, nsec = self.time_manager.get_clock_monotonic()
+
+        mu.mem_write(tp_ptr, int(sec).to_bytes(self.__ptr_sz, byteorder='little'))
+        mu.mem_write(tp_ptr + self.__ptr_sz, int(nsec).to_bytes(self.__ptr_sz, byteorder='little'))
+        return 0
 
     def __wait4(self, mu, pid, wstatus, options, ru):
         assert ru==0
@@ -380,49 +393,64 @@ class SyscallHooks:
         mem_unit = {__u32} 1
         f = 0 char[8]
         '''
-        uptime = int(self._clock_offset + time.time() - self._clock_start)
-        if self.__emu.get_arch() == emu_const.ARCH_ARM32:
-            mu.mem_write(info_ptr + 0, int(uptime).to_bytes(4, byteorder='little'))
-            mu.mem_write(info_ptr + 4, int(503328).to_bytes(4, byteorder='little'))
-            mu.mem_write(info_ptr + 8, int(504576).to_bytes(4, byteorder='little'))
-            mu.mem_write(info_ptr + 12, int(537280).to_bytes(4, byteorder='little'))
-            mu.mem_write(info_ptr + 16, int(1945137152).to_bytes(4, byteorder='little'))
-            mu.mem_write(info_ptr + 20, int(47845376).to_bytes(4, byteorder='little'))
-            mu.mem_write(info_ptr + 24, int(0).to_bytes(4, byteorder='little'))
-            mu.mem_write(info_ptr + 28, int(169373696).to_bytes(4, byteorder='little'))
-            mu.mem_write(info_ptr + 32, int(0).to_bytes(4, byteorder='little'))
-            mu.mem_write(info_ptr + 36, int(0).to_bytes(4, byteorder='little'))
-            mu.mem_write(info_ptr + 40, int(1297).to_bytes(2, byteorder='little'))
-            mu.mem_write(info_ptr + 42, int(0).to_bytes(2, byteorder='little'))
-            mu.mem_write(info_ptr + 44, int(1185939456).to_bytes(4, byteorder='little'))
-            mu.mem_write(info_ptr + 48, int(1863680).to_bytes(4, byteorder='little'))
-            mu.mem_write(info_ptr + 52, int(1).to_bytes(4, byteorder='little'))
-            mu.mem_write(info_ptr + 56, int(0).to_bytes(8, byteorder='little'))
-            #sz 64
-        else:
-            #arm64
-            mu.mem_write(info_ptr + 0, int(uptime).to_bytes(8, byteorder='little'))
-            mu.mem_write(info_ptr + 8, int(503328).to_bytes(8, byteorder='little'))
-            mu.mem_write(info_ptr + 16, int(504576).to_bytes(8, byteorder='little'))
-            mu.mem_write(info_ptr + 24, int(537280).to_bytes(8, byteorder='little'))
-            mu.mem_write(info_ptr + 32, int(1945137152).to_bytes(8, byteorder='little'))
-            mu.mem_write(info_ptr + 40, int(47845376).to_bytes(8, byteorder='little'))
-            mu.mem_write(info_ptr + 48, int(0).to_bytes(8, byteorder='little'))
-            mu.mem_write(info_ptr + 56, int(169373696).to_bytes(8, byteorder='little'))
-            mu.mem_write(info_ptr + 64, int(0).to_bytes(8, byteorder='little'))
-            mu.mem_write(info_ptr + 72, int(0).to_bytes(8, byteorder='little'))
-            mu.mem_write(info_ptr + 80, int(1297).to_bytes(2, byteorder='little'))
-            mu.mem_write(info_ptr + 82, int(0).to_bytes(6, byteorder='little')) #pading
 
-            mu.mem_write(info_ptr + 88, int(0).to_bytes(8, byteorder='little'))
-            mu.mem_write(info_ptr + 96, int(0).to_bytes(8, byteorder='little'))
-            mu.mem_write(info_ptr + 104, int(1).to_bytes(4, byteorder='little'))
-            mu.mem_write(info_ptr + 108, int(0).to_bytes(4, byteorder='little'))
-            #sz 112
-        #
-        logging.warning("syscall sysinfo buf 0x%08X return fixed value"%(info_ptr))
+        total_mb = self.__mem_cfg.get("ram_total_mb", 6144)
+        total_ram = total_mb * 1024 * 1024
+        
+        free_percent = self.__mem_cfg.get("ram_free_percent_start", 50)
+        free_percent += (randint(-100, 100) / 100.0) 
+        free_ram = int(total_ram * (free_percent / 100.0))
+        
+        uptime = int(self._clock_offset + time.time() - self._clock_start)
+
+        mem_unit = 1 
+        loads = [503328, 504576, 537280] # Load avg 1/5/15 min
+
+        if self.__emu.arch == emu_const.ARCH_ARM32:
+            mu.mem_write(info_ptr + 0, int(uptime).to_bytes(4, 'little'))
+            # Loads
+            for i in range(3):
+                mu.mem_write(info_ptr + 4 + (i*4), int(loads[i]).to_bytes(4, 'little'))
+            
+            mu.mem_write(info_ptr + 16, int(total_ram).to_bytes(4, 'little'))
+            mu.mem_write(info_ptr + 20, int(free_ram).to_bytes(4, 'little'))
+            mu.mem_write(info_ptr + 24, int(0).to_bytes(4, 'little')) # shared
+            mu.mem_write(info_ptr + 28, int(total_ram // 20).to_bytes(4, 'little')) # buffer
+            mu.mem_write(info_ptr + 32, int(0).to_bytes(4, 'little')) # totalswap
+            mu.mem_write(info_ptr + 36, int(0).to_bytes(4, 'little')) # freeswap
+            mu.mem_write(info_ptr + 40, int(randint(500, 1500)).to_bytes(2, 'little')) # procs
+            mu.mem_write(info_ptr + 42, int(0).to_bytes(2, 'little')) # pad
+            
+            # High mem
+            total_high = total_ram - (896 * 1024 * 1024) if total_ram > (1024*1024*1024) else 0
+            if total_high < 0: total_high = 0
+            
+            mu.mem_write(info_ptr + 44, int(total_high).to_bytes(4, 'little'))
+            mu.mem_write(info_ptr + 48, int(total_high // 2).to_bytes(4, 'little')) # freehigh
+            mu.mem_write(info_ptr + 52, int(mem_unit).to_bytes(4, 'little'))
+            
+        else:
+            # ARM64 (Longs are 8 bytes)
+            mu.mem_write(info_ptr + 0, int(uptime).to_bytes(8, 'little'))
+             # Loads
+            for i in range(3):
+                mu.mem_write(info_ptr + 8 + (i*8), int(loads[i]).to_bytes(8, 'little'))
+                
+            mu.mem_write(info_ptr + 32, int(total_ram).to_bytes(8, 'little'))
+            mu.mem_write(info_ptr + 40, int(free_ram).to_bytes(8, 'little'))
+            mu.mem_write(info_ptr + 48, int(0).to_bytes(8, 'little'))
+            mu.mem_write(info_ptr + 56, int(total_ram // 20).to_bytes(8, 'little'))
+            mu.mem_write(info_ptr + 64, int(0).to_bytes(8, 'little'))
+            mu.mem_write(info_ptr + 72, int(0).to_bytes(8, 'little'))
+            mu.mem_write(info_ptr + 80, int(randint(500, 1500)).to_bytes(2, 'little'))
+            mu.mem_write(info_ptr + 82, int(0).to_bytes(6, 'little')) # pad
+    
+            mu.mem_write(info_ptr + 88, int(0).to_bytes(8, 'little'))
+            mu.mem_write(info_ptr + 96, int(0).to_bytes(8, 'little'))
+            mu.mem_write(info_ptr + 104, int(mem_unit).to_bytes(4, 'little'))
+            
+        logging.debug(f"sysinfo: TotalRAM={total_mb}MB FreeRAM={free_ram//1024//1024}MB")
         return 0
-    #
 
     def __clone(self, mu, flags, child_stack, parent_tid, new_tls, child_tid):
         CLONE_FILES = 0x00000400
@@ -454,7 +482,7 @@ class SyscallHooks:
         #
         elif(flags & thread_flags == thread_flags):
             #clone一定要成功， 4.4 的libc有bug，当clone失败之后会释放一个锁，而锁的内存在child_stack中，而他逻辑先释放了stack再unlock锁，必蹦，之所以不出问题的原因是在真机上clone不会失败，这里注意
-            sch = self.__emu.get_schduler()
+            sch = self.__emu.scheduler
             #父线程调用clone，返回子线程tid
             tls_ptr = 0
             if (flags & (CLONE_SETTLS|CLONE_CHILD_SETTID|CLONE_CHILD_CLEARTID) != 0):
@@ -520,21 +548,22 @@ class SyscallHooks:
         #
     #
     def __uname(self, mu, buf):
-        is_32 = self.__emu.get_arch() == 1
+        is_32 = self.__emu.arch == emu_const.ARCH_ARM32
+        
+        sysname = "Linux"
+        nodename = "localhost"
+        release = self.__kernel_cfg.get("release", "4.14.186-gb9c9f5a9d3f2")
+        version = self.__kernel_cfg.get("version", "#1 SMP PREEMPT Wed Mar 15 12:41:09 UTC 2023")
+        machine = "armv8l" if is_32 else "aarch64"
+        domain = "localdomain"
 
-        memory_helpers.write_utf8(mu, buf + 0, "Linux")
-        memory_helpers.write_utf8(mu, buf + 65, "android")
-
-        if not is_32:
-            memory_helpers.write_utf8(mu, buf + 130, "4.14.186-gb9c9f5a9d3f2")
-            memory_helpers.write_utf8(mu, buf + 195, "#1 SMP PREEMPT Wed Mar 15 12:41:09 UTC 2023")
-            memory_helpers.write_utf8(mu, buf + 260, "aarch64")
-        else:
-            memory_helpers.write_utf8(mu, buf + 130, "4.14.186-gb9c9f5a9d3f2")
-            memory_helpers.write_utf8(mu, buf + 195, "#1 SMP PREEMPT Wed Mar 15 12:41:09 UTC 2023")
-            memory_helpers.write_utf8(mu, buf + 260, "armv7l")
-
-        memory_helpers.write_utf8(mu, buf + 325, "localdomain")
+        memory_helpers.write_utf8(mu, buf + 0, sysname)
+        memory_helpers.write_utf8(mu, buf + 65, nodename)
+        memory_helpers.write_utf8(mu, buf + 130, release)
+        memory_helpers.write_utf8(mu, buf + 195, version)
+        memory_helpers.write_utf8(mu, buf + 260, machine)
+        memory_helpers.write_utf8(mu, buf + 325, domain)
+        
         return 0
 
     def _handle_sigprocmask(self, mu, how, set, oset):
@@ -555,7 +584,7 @@ class SyscallHooks:
     #
 
     def _get_uid(self, mu):
-        uid = self.__cfg.get("uid")
+        uid = self.__emu.pcb.uid
         return uid
     #
 
@@ -577,7 +606,7 @@ class SyscallHooks:
         See: https://linux.die.net/man/2/futex
         """
         cmd = op & FUTEX_CMD_MASK
-        sch = self.__emu.get_schduler()
+        sch = self.__emu.scheduler
         if cmd == FUTEX_WAIT or cmd == FUTEX_WAIT_BITSET:
             #TODO implement timeout
             logging.info("futext_wait call op=0x%08X uaddr=0x%08X *uaddr=0x%08X val=0x%08X timeout=0x%08X"%(op, uaddr, v, val, timeout_ptr))
@@ -639,35 +668,6 @@ class SyscallHooks:
         raise NotImplementedError()
         return 0
 
-    def _handle_clock_gettime(self, mu, clk_id, tp_ptr):
-        """
-        The functions clock_gettime() retrieve the time of the specified clock clk_id.
-
-        The clk_id argument is the identifier of the particular clock on which to act. A clock may be system-wide and
-        hence visible for all processes, or per-process if it measures time only within a single process.
-
-        clock_gettime(), clock_settime() and clock_getres() return 0 for success, or -1 for failure (in which case
-        errno is set appropriately).
-        """
-        if clk_id == CLOCK_REALTIME:
-            # Its time represents seconds and nanoseconds since the Epoch.
-            clock_real = calendar.timegm(time.gmtime())
-            mu.mem_write(tp_ptr + 0, int(clock_real).to_bytes(self.__ptr_sz, byteorder='little'))
-            mu.mem_write(tp_ptr + self.__ptr_sz, int(0).to_bytes(self.__ptr_sz, byteorder='little'))
-            return 0
-        elif clk_id == CLOCK_MONOTONIC or clk_id == CLOCK_MONOTONIC_COARSE:
-            if OVERRIDE_CLOCK:
-                mu.mem_write(tp_ptr + 0, int(OVERRIDE_CLOCK_TIME).to_bytes(self.__ptr_sz, byteorder='little'))
-                mu.mem_write(tp_ptr + self.__ptr_sz, int(0).to_bytes(self.__ptr_sz, byteorder='little'))
-            else:
-                clock_add = time.time() - self._clock_start  # Seconds passed since clock_start was set.
-
-                mu.mem_write(tp_ptr + 0, int(self._clock_start + clock_add).to_bytes(self.__ptr_sz, byteorder='little'))
-                mu.mem_write(tp_ptr + self.__ptr_sz, int(0).to_bytes(self.__ptr_sz, byteorder='little'))
-            return 0
-        else:
-            raise NotImplementedError("Unsupported clk_id: %d (%x)" % (clk_id, clk_id))
-
     def _socket(self, mu, family, type_in, protocol):
         if (family == 16):
             logging.warning("family 16 not support")
@@ -717,9 +717,20 @@ class SyscallHooks:
         return self.__pipe_common(mu, files_ptr, flags)
     #
 
-    def _getrandom(self, mu, buf, count, flags):
-        mu.mem_write(buf, b"\x01" * count)
-        return count
+    def _getrandom(self, mu, buf_addr, count, flags):
+        """
+        size_t getrandom(void *buf, size_t buflen, unsigned int flags);
+        """
+        try:
+            rand_bytes = os.urandom(count)
+            
+            mu.mem_write(buf_addr, rand_bytes)
+            
+            logging.debug(f"getrandom size={count} flags=0x{flags:x}")
+            return count
+        except Exception as e:
+            logging.error(f"getrandom failed: {e}")
+            return -1 # EFAULT
 
     def __process_vm_readv(self, mu, pid, local_iov, liovcnt, remote_iov, riovcnt, flag):
         '''
@@ -758,7 +769,7 @@ class SyscallHooks:
     #
 
     def _ARM_set_tls(self, mu, tls_ptr):
-        assert self.__emu.get_arch() == emu_const.ARCH_ARM32, "error only arm32 has _ARM_set_tls syscall!!!"
+        assert self.__emu.arch == emu_const.ARCH_ARM32, "error only arm32 has _ARM_set_tls syscall!!!"
         self.__emu.mu.reg_write(UC_ARM_REG_C13_C0_3, tls_ptr)
     #
     
@@ -772,10 +783,15 @@ class SyscallHooks:
         '''
         req_tv_sec = memory_helpers.read_ptr_sz(mu, req, self.__ptr_sz)
         req_tv_nsec = memory_helpers.read_ptr_sz(mu, req + self.__ptr_sz, self.__ptr_sz)
-        ms = req_tv_sec * 1000 + req_tv_nsec / 1000000
-        logging.debug("nanosleep sleep %.3f ms"%ms)
-        sch = self.__emu.get_schduler()
-        sch.sleep(ms)
+        
+        us = (req_tv_sec * 1000000) + (req_tv_nsec // 1000)
+        
+        if us <= 0: us = 1 
+
+        self.__emu.scheduler.sleep(us)
+
+        if rem != 0:
+            memory_helpers.write_ptrs_sz(mu, rem, 0, self.__ptr_sz)
+            memory_helpers.write_ptrs_sz(mu, rem + self.__ptr_sz, 0, self.__ptr_sz)
+
         return 0
-    #
-#

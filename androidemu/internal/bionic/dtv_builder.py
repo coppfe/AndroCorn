@@ -13,7 +13,7 @@ class DTVBuilder(ABC):
         self.emu = emu
         self.mu = emu.mu
         self.state: 'BionicTLS' = state
-        self.ptr_sz = emu.get_ptr_size()
+        self.ptr_sz = emu.ptr_size
         
         self.base = 0
         self.max_modules = 64

@@ -1,5 +1,5 @@
 import logging
-from ....config import STACK_ADDR, STACK_SIZE
+from ....data.mem_map import STACK_ADDR, STACK_SIZE
 from ..pthread_builder import PThreadBuilder
 
 from typing import TYPE_CHECKING

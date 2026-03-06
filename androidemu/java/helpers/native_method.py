@@ -13,7 +13,7 @@ from ..jni_ref import jobject
 
 
 def native_write_args(emu, *argv):
-    if emu.get_arch() == emu_const.ARCH_ARM32:
+    if emu.arch == emu_const.ARCH_ARM32:
         regs = [UC_ARM_REG_R0, UC_ARM_REG_R1, UC_ARM_REG_R2, UC_ARM_REG_R3]
         sp_reg = UC_ARM_REG_SP
     else:
@@ -22,7 +22,7 @@ def native_write_args(emu, *argv):
         sp_reg = UC_ARM64_REG_SP
 
     max_regs_args = len(regs)
-    ptr_sz = emu.get_ptr_size()
+    ptr_sz = emu.ptr_size
     amount = len(argv)
     
     nreg = min(amount, max_regs_args)
@@ -50,12 +50,12 @@ def native_read_args_in_hook_code(emu, args_count):
     reg_base = UC_ARM_REG_R0
     sp_reg = UC_ARM_REG_SP
 
-    if (emu.get_arch() == emu_const.ARCH_ARM64):
+    if (emu.arch == emu_const.ARCH_ARM64):
         max_regs_args = 8
         reg_base = UC_ARM64_REG_X0
         sp_reg = UC_ARM64_REG_SP
     #
-    ptr_sz = emu.get_ptr_size()
+    ptr_sz = emu.ptr_size
 
     nreg = max_regs_args
     if (args_count < max_regs_args):
@@ -125,7 +125,7 @@ def native_method(func):
             os._exit(1)
         ret_reg0 = UC_ARM_REG_R0
         ret_reg1 = UC_ARM_REG_R1
-        if (emu.get_arch() == emu_const.ARCH_ARM64):
+        if (emu.arch == emu_const.ARCH_ARM64):
             ret_reg0 = UC_ARM64_REG_X0
             ret_reg1 = UC_ARM64_REG_X1
         #

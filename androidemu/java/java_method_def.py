@@ -15,15 +15,15 @@ class JavaMethodDef:
 
     def __init__(self, func_name, func, name, signature, native, args_list=None, modifier=None, ignore=None):
         self.jvm_id = next_method_id()
-        self.func_name = func_name
-        self.func = func
-        self.name = name
-        self.signature = signature
-        self.native = native
-        self.native_addr = None
-        self.args_list = args_list
-        self.modifier = modifier
-        self.ignore = ignore
+        self.func_name: str = func_name
+        self.func: callable = func
+        self.name: str = name
+        self.signature: str = signature
+        self.native: bool = native
+        self.native_addr: int = None
+        self.args_list: List = args_list
+        self.modifier: int = modifier
+        self.ignore: bool = ignore
 
 
 def java_method_def(name: str, signature: str, native: bool=False, args_list: List=None, modifier: int=None, ignore: bool=False):
@@ -70,7 +70,7 @@ def java_method_def(name: str, signature: str, native: bool=False, args_list: Li
             return_index = brace_index + 1
             return_ch = signature[return_index]
             res = None
-            arch = emulator.get_arch()
+            arch = emulator.arch
             if (return_ch in ('J', 'D') and arch == emu_const.ARCH_ARM32):
                 #返回值是jlong或者jdouble,在32位下需要读取两个寄存器
                 res = emulator.call_native_return_2reg(

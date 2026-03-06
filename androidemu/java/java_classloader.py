@@ -12,7 +12,7 @@ class JavaClassLoader(metaclass=JavaClassDef, jvm_name='java/lang/ClassLoader'):
         self.class_by_name = dict()
     #
 
-    def add_class(self, clazz):
+    def add_class(self, clazz) -> None:
         if not isinstance(clazz, JavaClassDef):
             raise ValueError('Expected a JavaClassDef.')
         #
@@ -27,13 +27,13 @@ class JavaClassLoader(metaclass=JavaClassDef, jvm_name='java/lang/ClassLoader'):
         self.class_by_name[clazz.jvm_name] = clazz
     #
 
-    def find_class_by_id(self, jvm_id):
+    def find_class_by_id(self, jvm_id) -> 'JavaClassDef':
         if jvm_id not in self.class_by_id:
             return None
 
         return self.class_by_id[jvm_id]
     #
-    def find_class_by_name(self, name):
+    def find_class_by_name(self, name) -> 'JavaClassDef':
         if name not in self.class_by_name:
             return None
 

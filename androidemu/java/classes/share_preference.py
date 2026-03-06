@@ -26,7 +26,7 @@ class Editor(metaclass=JavaClassDef, jvm_name='android/content/SharedPreferences
 
 class SharedPreferences(metaclass=JavaClassDef, jvm_name='android/content/SharedPreferences'):
     def __init__(self, emu, path):
-        vfs_root = emu.get_vfs_root()
+        vfs_root = emu.vfs_root
         real_path = misc_utils.vfs_path_to_system_path(vfs_root, path)
         self.__xml_tree = xml.dom.minidom.parse(real_path)
         self.__editor = Editor()

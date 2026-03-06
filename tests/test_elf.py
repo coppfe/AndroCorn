@@ -4,6 +4,8 @@ import sys
 import unittest
 from androidemu.internal.elf_reader import ELFReader
 
+# OUTDATED
+
 class TestElf(unittest.TestCase):
 
     def test_readelf32(self):

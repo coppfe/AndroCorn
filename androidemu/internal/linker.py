@@ -8,9 +8,11 @@ from unicorn.arm64_const import *
 
 from lief.ELF import Relocation
 
+from ..utils.memory import memory_helpers
+
 from ..const import emu_const
-from .. import config
-from ..utils import memory_helpers, misc_utils
+from ..data import mem_map as config
+from ..utils import misc_utils
 from .module import Module
 from .elf_reader import ELFReader
 from .soinfo import SoinfoWriter
@@ -89,7 +91,7 @@ class AndroidLinker:
         return self.modules_by_name.get(basename)
     
     def __get_ld_library_path(self):
-        if (self.emu.get_arch() == emu_const.ARCH_ARM32):
+        if (self.emu.arch == emu_const.ARCH_ARM32):
             return ["/system/lib/"]
         else:
             return ["/system/lib64/"]
@@ -97,14 +99,14 @@ class AndroidLinker:
 
     def find_so_on_disk(self, so_path):
         if os.path.isabs(so_path):
-            path = misc_utils.vfs_path_to_system_path(self.emu.get_vfs_root(), so_path)
+            path = misc_utils.vfs_path_to_system_path(self.emu.vfs_root, so_path)
             return path
         else:
             ld_library_path = self.__get_ld_library_path()
             so_name = so_path
             for lib_path in ld_library_path:
                 lib_full_path = "%s/%s"%(lib_path, so_name)
-                vfs_lib_path = misc_utils.vfs_path_to_system_path(self.emu.get_vfs_root(), lib_full_path)
+                vfs_lib_path = misc_utils.vfs_path_to_system_path(self.emu.vfs_root, lib_full_path)
                 if (os.path.exists(vfs_lib_path)):
                     return vfs_lib_path
                 #
@@ -292,7 +294,7 @@ class AndroidLinker:
     def _call_constructors(self, module: Module):
         reader = module.reader
         bias = module.bias
-        ptr_sz = self.emu.get_ptr_size()
+        ptr_sz = self.emu.ptr_size
         
         logger.info(f"  [Init] {os.path.basename(module.filename)}")
 
@@ -325,7 +327,7 @@ class AndroidLinker:
 
         # Link previous
         if self._last_next_field_addr:
-            ptr_sz = self.emu.get_ptr_size()
+            ptr_sz = self.emu.ptr_size
             self.emu.mu.mem_write(self._last_next_field_addr, info_ptr.to_bytes(ptr_sz, 'little'))
 
         logger.debug(f"[*] soinfo: {hex(info_ptr)} for {module.filename}. Next: {hex(next_field_addr)}. Size: {hex(next_field_addr - info_ptr)}.")
@@ -363,7 +365,7 @@ class AndroidLinker:
     def _resolve_path(self, filename: str) -> Optional[str]:
         if os.path.exists(filename): return filename
         
-        is_64 = (self.emu.get_arch() == emu_const.ARCH_ARM64)
+        is_64 = (self.emu.arch == emu_const.ARCH_ARM64)
         lib_dir = "lib64" if is_64 else "lib"
         
         base = os.path.basename(filename)
@@ -382,6 +384,6 @@ class AndroidLinker:
 
     def _check_arch(self, reader: 'ELFReader', path):
         is_32 = reader.is_32
-        emu_32 = (self.emu.get_arch() == emu_const.ARCH_ARM32)
+        emu_32 = (self.emu.arch == emu_const.ARCH_ARM32)
         if is_32 != emu_32:
-            raise RuntimeError(f"Arch mismatch: {path}. Expected {emu_const.ARCH_ARM32 if is_32 else emu_const.ARCH_ARM64}, got {self.emu.get_arch()}.")
+            raise RuntimeError(f"Arch mismatch: {path}. Expected {emu_const.ARCH_ARM32 if is_32 else emu_const.ARCH_ARM64}, got {self.emu.arch}.")

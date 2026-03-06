@@ -3,6 +3,12 @@ import itertools
 import logging
 from .jvm_id_conter import *
 
+from typing import TYPE_CHECKING, Dict
+if TYPE_CHECKING:
+    from .java_class_def import JavaClassDef
+    from .java_method_def import JavaMethodDef
+    from .java_field_def import JavaFieldDef
+
 logger = logging.getLogger(__name__)
 
 #Class函数实现基本原则：
@@ -12,13 +18,13 @@ logger = logging.getLogger(__name__)
 class JavaClassDef(type):
     
     def __init__(cls, name, base, ns, jvm_name=None, jvm_fields=None, jvm_ignore=False, jvm_super=None):
-        cls.jvm_id = next_cls_id()
-        cls.jvm_name = jvm_name
-        cls.jvm_methods = dict()
-        cls.jvm_fields = dict()
-        cls.jvm_ignore = jvm_ignore
-        cls.jvm_super = jvm_super
-        cls.class_object = None
+        cls.jvm_id: int = next_cls_id()
+        cls.jvm_name: str = jvm_name
+        cls.jvm_methods: Dict[int, 'JavaMethodDef'] = dict()
+        cls.jvm_fields: Dict[int, 'JavaFieldDef'] = dict()
+        cls.jvm_ignore: bool = jvm_ignore
+        cls.jvm_super: 'JavaClassDef' = jvm_super
+        cls.class_object: 'JavaClassDef' = None
 
         # Register all defined Java methods.
         for func in inspect.getmembers(cls, predicate=inspect.isfunction):
@@ -39,7 +45,7 @@ class JavaClassDef(type):
         return type.__new__(cls, name, base, ns)
     #
 
-    def register_native(cls, name, signature, ptr_func):
+    def register_native(cls, name, signature, ptr_func) -> None:
         found = False
         found_method = None
 
@@ -57,7 +63,7 @@ class JavaClassDef(type):
             # raise RuntimeError("Register native ('%s', '%s') failed on class %s." % (name, signature, cls.__name__))
     #
     
-    def find_method(cls, name, signature):
+    def find_method(cls, name, signature) -> 'JavaMethodDef':
         for method in cls.jvm_methods.values():
             if method.name == name and method.signature == signature:
                 return method
@@ -71,7 +77,7 @@ class JavaClassDef(type):
 
     #用于支持java反射，java反射签名都没有返回值
     #@param signature_no_ret something like (ILjava/lang/String;) 注意，没有返回值
-    def find_method_sig_with_no_ret(cls, name, signature_no_ret):
+    def find_method_sig_with_no_ret(cls, name, signature_no_ret) -> 'JavaMethodDef':
         assert signature_no_ret[0] == "(" and signature_no_ret[len(signature_no_ret)-1] == ")", "signature_no_ret error"
         for method in cls.jvm_methods.values():
             if method.name == name and method.signature.startswith(signature_no_ret):
@@ -85,7 +91,7 @@ class JavaClassDef(type):
     #
 
 
-    def find_method_by_id(cls, jvm_id):
+    def find_method_by_id(cls, jvm_id) -> 'JavaMethodDef':
         if (jvm_id in cls.jvm_methods):
             return cls.jvm_methods[jvm_id]
         if cls.jvm_super is not None:
@@ -94,7 +100,7 @@ class JavaClassDef(type):
         return None
     #
 
-    def find_field(cls, name, signature, is_static):
+    def find_field(cls, name, signature, is_static) -> 'JavaFieldDef':
         for field in cls.jvm_fields.values():
             if field.name == name and field.signature == signature and field.is_static == is_static:
                 return field
@@ -106,7 +112,7 @@ class JavaClassDef(type):
 
         return None
 
-    def find_field_by_id(cls, jvm_id):
+    def find_field_by_id(cls, jvm_id) -> 'JavaFieldDef':
         if (jvm_id in cls.jvm_fields):
             return cls.jvm_fields[jvm_id]
         if cls.jvm_super is not None:

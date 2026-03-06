@@ -14,7 +14,7 @@ class TLSModuleLoader:
     def __init__(self, emu: 'Emulator', state: 'BionicTLS'):
         self.emu = emu
         self.mu = emu.mu
-        self.ptr_sz = emu.get_ptr_size()
+        self.ptr_sz = emu.ptr_size
         self.state: 'BionicTLS' = state
 
     def register_module(self, reader: 'ELFReader', load_bias: int) -> int:

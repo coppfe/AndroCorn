@@ -14,15 +14,19 @@ from androidemu.java.classes.map import *
 from androidemu.java.classes.activity_thread import *
 from androidemu.utils.chain_log import ChainLogger
 from androidemu.java.constant_values import *
-from androidemu.vfs.virtual_file import VirtualFile
+from androidemu.objects.virtual_file import VirtualFile
 from androidemu.const import emu_const
-from androidemu.utils import misc_utils, debug_utils, memory_helpers
+from androidemu.utils import misc_utils, debug_utils
 from unicorn import UcError
 from unicorn.arm_const import *
 from unicorn.arm64_const import *
 
 from androidemu.utils import debug_utils
+from androidemu.utils.memory import memory_helpers
 logger = logging.getLogger(__name__)
+
+# what the fuck
+# OUTDATED
 
 class TestClass(metaclass=JavaClassDef, jvm_name='com/dingxiang/demo/TestClass'):
 
@@ -74,7 +78,7 @@ class TestNative(unittest.TestCase):
 
         key_buf_ptr = emulator.call_symbol(libcm, "malloc", 100)
         emulator.call_symbol(libcm, "pthread_key_create", key_buf_ptr, 0)
-        key = memory_helpers.read_ptr_sz(emulator.mu, key_buf_ptr, emulator.get_ptr_size())
+        key = memory_helpers.read_ptr_sz(emulator.mu, key_buf_ptr, emulator.ptr_size)
         target_int = 3000
         emulator.call_symbol(libcm, "pthread_setspecific", key, target_int)
 

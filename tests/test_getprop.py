@@ -3,7 +3,7 @@ import os.path
 import unittest
 
 from androidemu.emulator import Emulator
-from androidemu.utils import memory_helpers
+from androidemu.utils.memory import memory_helpers
 from androidemu.const import emu_const
 
 from unicorn import *
@@ -18,7 +18,7 @@ class TestGetSign(unittest.TestCase):
 
     def getprop_arm32(self, prop_name):
         emulator = self.emulator
-        vfs_path = emulator.get_vfs_root()
+        vfs_path = emulator.vfs_root
 
         libcm = emulator.load_library("%s/system/lib/libc.so" % vfs_path, do_init=True, main_lib=True)
 
@@ -41,7 +41,7 @@ class TestGetSign(unittest.TestCase):
 
     def getprop_arm64(self, prop_name):
         emulator = self.emulator
-        vfs_path = emulator.get_vfs_root()
+        vfs_path = emulator.vfs_root
 
         libcm = emulator.load_library("%s/system/lib64/libc.so" % vfs_path, do_init=True, main_lib=True)
 

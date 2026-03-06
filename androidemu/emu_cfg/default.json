@@ -1,9 +1,35 @@
 {
 	"__pkg_name":"com.netease.cloudmusic",
-	"pkg_name":"com.ss.android.ugc.aweme",
-	"pid": 4386,
-	"uid": 10023,
-	"android_id": "39cc04a2ae83db0b",
-	"ip":"192.168.31.52",
-	"mac":[204, 250, 166, 0, 138, 169]
-}
+	"pkg_name": "com.ss.android.ugc.aweme",
+	"uid": 10123,
+	"debug_logs": true,
+	"start_timestamp": 1678884069,
+
+	"device": {
+		"model": "Pixel 6",
+		"manufacturer": "Google",
+		"product": "oriole",
+		"board": "oriole",
+		"hardware": "oriole",
+		"cpu_abi": "arm64-v8a",
+		"cpu_cores": 8,
+		"android_id": "39cc04a2ae83db0b",
+		
+		"memory": {
+		"ram_total_mb": 8192,
+		"ram_free_percent_start": 45,
+		"swap_total_mb": 2048
+		},
+
+		"kernel": {
+		"release": "5.10.43-android12-9-00001-g532147395026",
+		"version": "#1 SMP PREEMPT Wed Mar 15 12:41:09 UTC 2023"
+		},
+
+		"net": {
+		"ip": "192.168.1.52",
+		"mac": "cc:fa:a6:00:8a:a9",
+		"dns": "8.8.8.8"
+		}
+	}
+	}

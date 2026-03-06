@@ -33,7 +33,7 @@ class Relocator:
     def __init__(self, emu: 'Emulator', load_bias):
         self.emu = emu
         self.load_bias = load_bias
-        self.word_size = emu.get_ptr_size()
+        self.word_size = emu.ptr_size
 
     def write_val(self, addr, value):        
         try:

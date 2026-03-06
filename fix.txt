@@ -1,0 +1,142 @@
+Давай честно: **стало намного лучше**.
+Переход на виртуальные дескрипторы (VFD) и нормальный генератор энтропии — это качественный скачок. Ты ушел от "детской" эмуляции, где `/dev/urandom` читался с диска.
+
+Но ты **не дожал**. В текущем виде код **гарантированно упадет** (crash) или спалится на первой же серьезной проверке.
+
+Вот разбор по пунктам, где остались дыры, и как их закрыть.
+
+---
+
+### 1. `SyscallHooks` (Kernel Level)
+
+**Вердикт:** 7/10. Логика стала лучше, но остались "статичные" хвосты.
+
+#### ❌ Проблема 1: `uname` — Палево
+```python
+memory_helpers.write_utf8(mu, buf + 130, "4.14.186-gb9c9f5a9d3f2")
+```
+Ты все еще хардкодишь версию ядра.
+**Сценарий:** Малварь собирает инфу о тысяче зараженных устройств. Если у 100 из них одинаковый хеш ядра `gb9c9f5a9d3f2` — это ботнет эмуляторов.
+**Фикс:** Вынеси это в `cfg` или генерируй случайный хеш при старте.
+
+#### ❌ Проблема 2: `sysinfo` — Статика (Палево)
+```python
+mu.mem_write(info_ptr + 20, int(47845376).to_bytes(4, byteorder='little')) # freeram
+```
+Значения памяти **зашиты**.
+**Сценарий:** Малварь делает `malloc(50MB)`, потом `sysinfo`. `freeram` не изменился? До свидания.
+**Фикс:** В классе `PCB` или `MemoryManager` держи переменную `current_free_ram`. При `mmap`/`brk` вычитай, при `munmap` прибавляй.
+
+#### ✅ Успех: `getrandom`
+```python
+rand_bytes = os.urandom(count)
+```
+Идеально. Это то, что нужно.
+
+---
+
+### 2. `VirtualFileSystem` (File System Level)
+
+**Вердикт:** 5/10. Идея с VFD правильная, но реализация **сломана**. Ты перехватил `read` и `open`, но забыл про **все остальные** операции с дескрипторами.
+
+#### ❌ КРИТИЧЕСКАЯ ОШИБКА: `fstat64` и `fstat`
+Смотри на свой код:
+```python
+def _handle_fstat64(self, mu, fd, stat_ptr):
+    # ...
+    # ЕСЛИ FD == 1000 (Виртуальный urandom), то:
+    stats = os.fstat(fd) # <--- КРАШ ЗДЕСЬ!
+```
+Ты пытаешься скормить хостовой ОС (`os.fstat`) виртуальный дескриптор `1000`. Windows/Linux скажет "Bad file descriptor" и кинет исключение. Эмулятор упадет.
+
+**Фикс:** Нужно эмулировать `stat` для виртуальных устройств.
+
+```python
+    def _handle_fstat64(self, mu, fd, stat_ptr):
+        # 1. ПРОВЕРКА НА ВИРТУАЛЬНЫЙ FD
+        if fd in self.__virtual_fd_map:
+            dev_name = self.__virtual_fd_map[fd]
+            
+            # Создаем фейковый объект stat
+            class FakeStat:
+                st_mode = 0o20666 # S_IFCHR (Character device) + rw-rw-rw-
+                st_ino = fd
+                st_dev = (0 << 8) | 6 # Major 0, Minor 6 (типично для pseudo-devices)
+                st_rdev = (1 << 8) | 9 # Major 1, Minor 9 (urandom)
+                st_nlink = 1
+                st_uid = 0
+                st_gid = 0
+                st_size = 0
+                st_atime = int(time.time())
+                st_mtime = int(time.time())
+                st_ctime = int(time.time())
+                st_blksize = 4096
+                st_blocks = 0
+            
+            # Используем наши правильные хелперы
+            if (self.__emu.arch == emu_const.ARCH_ARM32):
+                file_helpers.stat_to_memory2(mu, stat_ptr, FakeStat(), 0, FakeStat.st_mode)
+            else:
+                file_helpers.stat_to_memory64(mu, stat_ptr, FakeStat(), 0, FakeStat.st_mode)
+            return 0
+
+        # 2. РЕАЛЬНЫЙ FD
+        detail = self.__pcb.get_fd_detail(fd)
+        if (not detail): return -1
+        
+        try:
+            stats = os.fstat(fd)
+            # ... (дальше твой код)
+```
+
+#### ❌ КРИТИЧЕСКАЯ ОШИБКА: `poll` / `ppoll`
+Та же история.
+```python
+p.register(int(fd), ...) # <--- КРАШ ЕСЛИ FD=1000
+poll_r = p.poll(timeout)
+```
+Ты не можешь поллить виртуальный дескриптор средствами ОС.
+
+**Фикс:**
+Виртуальные устройства (`urandom`, `null`) **всегда готовы** к чтению и записи. Они не блокируются.
+В цикле `poll` ты должен проверять: "Если это виртуальный FD, сразу добавляем его в список готовых событий (`POLLIN | POLLOUT`)".
+
+#### ❌ ОШИБКА: `access` / `faccessat`
+Ты транслируешь путь:
+```python
+vfs_path = self.__translate_path(filename)
+rc = os.access(vfs_path, flags)
+```
+Если малварь проверяет `access("/dev/urandom", R_OK)`, а у нас этот файл виртуальный и на диске его нет -> вернется `-1` (File not found). Малварь поймет, что устройства нет, хотя `open` сработал.
+
+**Фикс:**
+Нужно использовать `generator.prepare_path` и здесь тоже.
+```python
+    def _handle_access(self, mu, filename_ptr, flags):
+        filename = memory_helpers.read_utf8(mu, filename_ptr)
+        
+        # Спрашиваем генератор
+        is_virtual, _ = self.__generator.prepare_path(filename, "")
+        
+        if is_virtual:
+            return 0 # Виртуальные устройства всегда доступны
+            
+        # Дальше обычная проверка
+        vfs_path = self.__translate_path(filename)
+        # ...
+```
+
+---
+
+### Итоговый вердикт
+
+Ты сделал **правильный архитектурный шаг** с VFD и генераторами. Это "Матрица" на 90%.
+Но ты забыл, что если ты вводишь фиктивные сущности (FD 1000), ты должен поддерживать их **во всех** сисколлах, которые принимают `fd` или `path`.
+
+**Что нужно сделать прямо сейчас:**
+1.  Внедрить фикс для `fstat64` (код выше). Без этого любой `File file = new File("/dev/urandom"); file.length();` в Java упадет.
+2.  Внедрить фикс для `access` (код выше).
+3.  Внедрить фикс для `poll` (просто считай, что виртуальные FD всегда `revents = POLLIN | POLLOUT`).
+4.  Вынести строку версии ядра (`uname`) в конфиг.
+
+После этих правок код будет **очень сильным**.

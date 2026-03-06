@@ -1,11 +1,12 @@
 import logging
 from unicorn.arm64_const import UC_ARM64_REG_TPIDR_EL0
-from ....utils.struct_writer import StructWriter
+from ....utils.memory.struct_writer import StructWriter
 from ....const import linux
 from .dtv_builder import DTVBuilderARM64
 from .pthread_builder import PThreadBuilderARM64
 from ..tls_modules import TLSModuleLoader
 from ..tls_bionic import BionicTLS
+from ....data.mem_map import PAGE_SIZE, TLS_BASE
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +17,6 @@ class BionicTLS_ARM64(BionicTLS):
         self.mu = emu.mu
         self.ptr_sz = 8
         
-        from ....config import TLS_BASE
         self.counter_memory = TLS_BASE
 
         self.tp = 0
@@ -31,7 +31,6 @@ class BionicTLS_ARM64(BionicTLS):
         self.at_rand = b"\x42" * 16
 
     def mem_reserve(self, size: int, align: int = 0x10) -> int:
-        from ....config import PAGE_SIZE
         base = (self.counter_memory + (align - 1)) & ~(align - 1)
         end = base + size
         map_start = base & ~(PAGE_SIZE - 1)
