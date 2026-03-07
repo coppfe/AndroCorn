@@ -1,7 +1,7 @@
 import logging
 import random
 from collections import deque
-from typing import TYPE_CHECKING, Dict, List, Set, Optional
+from typing import TYPE_CHECKING, Dict, Set
 
 from unicorn import *
 from unicorn.arm_const import *
@@ -78,9 +78,6 @@ class Scheduler:
 
     def __set_main_task(self, entry_point):
         tid = self.__pid
-        if tid in self.__tasks_map:
-            self.__tasks_map[tid].entry = entry_point
-            return
         t = self.__create_task(tid, 0, None, True, 0)
         t.entry = entry_point 
         self.__tasks_map[tid] = t
@@ -135,15 +132,13 @@ class Scheduler:
             if tid in self.__tasks_map:
                 self.__tasks_map[tid].wakeup_time_us = -1 
                 self.__ready_queue.append(tid)
-            logging.debug(f"{cur_tid} futex_wake tid {tid} unblocked")
+            logging.debug(f"{cur_tid} futex_wake unblocked tid {tid}")
             return True
         return False
 
-    # --- EXEC & CALL_NATIVE ---
-
     def exec(self, main_entry, clear_task_when_return=True):
         if self.__is_running:
-            raise RuntimeError("Scheduler running. Use call_native.")
+            raise RuntimeError("Scheduler is already running!")
         
         self.__is_running = True
         try:
@@ -159,45 +154,17 @@ class Scheduler:
                 self.__blocking_set.clear()
 
     def call_native(self, addr, *args):
-        """
-        Nested call: Native -> Python -> Native.
-        """
         if not self.__is_running:
             native_write_args(self.__emu, *args)
             self.exec(addr)
             return self.__mu.reg_read(self._reg_ret)
+        else:
+            raise NotImplementedError("Nested calls are temporarily disabled.")
 
-        tid = self.__cur_tid
-        task = self.__tasks_map[tid]
-        
-        saved_context = self.__mu.context_save()
-
-        try:
-            sp = self.__mu.reg_read(self._reg_sp)
-            safe_sp = (sp - 0x2000) & ~0xF 
-            self.__mu.reg_write(self._reg_sp, safe_sp)
-
-            native_write_args(self.__emu, *args)
-
-            self.__mu.reg_write(self._reg_lr, self.__stop_pos)
-            self.__mu.reg_write(self._reg_pc, addr)
-            
-            task.context = self.__mu.context_save()
-            
-            self.__run_scheduler_loop(target_tid_exit=tid)
-            return self.__mu.reg_read(self._reg_ret)
-            
-        finally:
-            self.__mu.context_restore(saved_context)
-
-            lr = self.__mu.reg_read(self._reg_lr)
-            self.__mu.reg_write(self._reg_pc, lr)
-
-            task.context = self.__mu.context_save()
-    def __run_scheduler_loop(self, target_tid_exit: Optional[int] = None):
+    def __run_scheduler_loop(self):
         while self.__pid in self.__tasks_map:
             current_time = self.__emu.time_manager.get_current_time_us()
-            woken_up = []
+            woken_up =[]
             for tid in list(self.__blocking_set):
                 if tid not in self.__tasks_map: 
                     self.__blocking_set.remove(tid)
@@ -213,14 +180,14 @@ class Scheduler:
 
             if not self.__ready_queue:
                 if self.__blocking_set:
-                    valid = [self.__tasks_map[t].wakeup_time_us for t in self.__blocking_set if self.__tasks_map[t].wakeup_time_us != -1]
-                    if valid:
-                        self.__emu.time_manager.jump_to_time(min(valid))
+                    valid_times = [self.__tasks_map[t].wakeup_time_us for t in self.__blocking_set if self.__tasks_map[t].wakeup_time_us != -1]
+                    if valid_times:
+                        self.__emu.time_manager.jump_to_time(min(valid_times))
                         continue
-                    elif len(self.__tasks_map) == 1 and not target_tid_exit:
-                        raise RuntimeError("Deadlock.")
+                    elif len(self.__tasks_map) == 1:
+                        raise RuntimeError("Deadlock: Main thread waiting indefinitely.")
                     else:
-                        break # Nested wait or deadlock potential
+                        break
                 else:
                     break
 
@@ -231,45 +198,34 @@ class Scheduler:
             self.__cur_tid = tid
             self.__emu.pcb._current_tid = tid 
 
-            # Restore Context
             if task.is_init:
                 start_pos = task.entry if task.is_main else self.__get_interrupted_entry()
                 if not task.is_main:
                     self.__mu.context_restore(task.context)
                     self.__set_sp(task.init_stack_ptr)
                     if task.tls_ptr: self.__set_tls(task.tls_ptr)
-                    self.__clear_reg0()
+                    self.__clear_reg0() # return 0 for child thread
                 task.is_init = False
             else:
                 self.__mu.context_restore(task.context)
                 start_pos = self.__get_interrupted_entry()
 
-            # Execute
             try:
                 self.__mu.emu_start(start_pos, self.__stop_pos, 0, 0)
             except UcError as e:
-                logging.error(f"Crash thread {tid} at {hex(self.__get_pc())}: {e}")
+                logging.error(f"Crash in thread {tid} at {hex(self.__get_pc())}: {e}")
                 raise
 
-            # Save Context
             task.context = self.__mu.context_save()
             self.__emu.time_manager.advance_time(random.randint(50, 200))
 
             pc = self.__get_pc()
             
-            # --- Exit Conditions ---
-            if pc == self.__stop_pos:
-                if target_tid_exit is not None and tid == target_tid_exit:
-                    return # Nested call finished
-                self.__tid_2_remove.add(tid)
-            elif task.is_exit:
+            if pc == self.__stop_pos or task.is_exit:
                 self.__tid_2_remove.add(tid)
             elif tid not in self.__blocking_set:
                 self.__ready_queue.append(tid)
 
-            for t in self.__tid_2_remove: self.__tasks_map.pop(t, None)
+            for t in self.__tid_2_remove: 
+                self.__tasks_map.pop(t, None)
             self.__tid_2_remove.clear()
-
-            if target_tid_exit is not None and target_tid_exit not in self.__tasks_map:
-                logging.warning(f"Target thread {target_tid_exit} died.")
-                return

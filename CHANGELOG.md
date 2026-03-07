@@ -1,7 +1,7 @@
 # Changelog 2026.03.6
 
 ## Added
-- Support of nested calls: now you can call a native function from a hook function. Example:
+- ~~Support of nested calls: now you can call a native function from a hook function. Example:~~
 
 ```python
 @native_method # Hook of malloc
@@ -14,6 +14,9 @@ def malloc(uc, size):
         raise MemoryError(f"Native malloc failed to allocate {size} bytes")
     return ptr
 ```
+
+# Nested calls are temporarily disabled
+###### idk how to realise it... i have bugs. help me
 
 - Support of virtual time
 - Support of multiple threads (futex full implementation)

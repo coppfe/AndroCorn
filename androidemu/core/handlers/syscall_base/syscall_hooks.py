@@ -776,20 +776,19 @@ class SyscallHooks:
     def _nanosleep(self, mu, req, rem):
         '''
         int nanosleep(const struct timespec *req,struct timespec *rem);
-        struct timespec{
-              time_t  tv_sec;         /* seconds */
-              long    tv_nsec;        /* nanoseconds */
-        };
         '''
         req_tv_sec = memory_helpers.read_ptr_sz(mu, req, self.__ptr_sz)
         req_tv_nsec = memory_helpers.read_ptr_sz(mu, req + self.__ptr_sz, self.__ptr_sz)
         
-        us = (req_tv_sec * 1000000) + (req_tv_nsec // 1000)
+        ms = (req_tv_sec * 1000) + (req_tv_nsec / 1000000.0)
         
-        if us <= 0: us = 1 
+        if ms <= 0: 
+            ms = 0.001
 
-        self.__emu.scheduler.sleep(us)
-
+        # print(f"nanosleep called: req={req_tv_sec}s {req_tv_nsec}ns -> sleep {ms} ms")
+        
+        self.__emu.scheduler.sleep(ms)
+        
         if rem != 0:
             memory_helpers.write_ptrs_sz(mu, rem, 0, self.__ptr_sz)
             memory_helpers.write_ptrs_sz(mu, rem + self.__ptr_sz, 0, self.__ptr_sz)
