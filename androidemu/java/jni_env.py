@@ -5,17 +5,18 @@ from ..hooker import Hooker
 from .classes.constructor import Constructor
 from .classes.method import Method
 from .java_class_def import JavaClassDef
-from .constant_values import MODIFIER_STATIC
+from .constants.default_const import MODIFIER_STATIC
 from .helpers.native_method import native_method
-from .jni_const import *
+from .constants.jni_const import *
 from .jni_ref import *
 from .reference_table import ReferenceTable
 from .classes.string import String
 from .classes.array import Array
-from .constant_values import JAVA_NULL
+from .constants.default_const import JAVA_NULL
 from ..utils.memory import memory_helpers
 from unicorn import *
 from ..const import emu_const
+from .helpers.jni_native import *
 
 from ..highlevel.libc import LibC
 
@@ -48,11 +49,11 @@ class JNIEnv:
 
         arch = emu.arch
         if (arch == emu_const.ARCH_ARM32):
-            self.__read_args = self.__read_args32
-            self.__read_args_v = self.__read_args_v32
+            self.__read_args = read_args32
+            self.__read_args_v = read_args_v32
         elif(arch == emu_const.ARCH_ARM64):
-            self.__read_args = self.__read_args64
-            self.__read_args_v = self.__read_args_v64
+            self.__read_args = read_args64
+            self.__read_args_v = read_args_v64
         else:
             raise NotImplementedError("unsupport arch %d"%arch)
 
@@ -288,6 +289,17 @@ class JNIEnv:
             232: self.get_object_ref_type
         })
 
+    #arg_type = 0 tuple or list, 1 arg_v, 2 array
+    def __read_args_common(self, mu: 'Uc', args, args_type_list, arg_type) -> List:
+        if (arg_type == 0):
+            args_items = args
+            return self.__read_args(self, mu, args_items, args_type_list)
+        elif (arg_type == 1):
+            args_ptr = args
+            return self.__read_args_v(self, mu, args_ptr, args_type_list)
+        else:
+            raise RuntimeError("arg_type %d not support"%arg_type)
+
     def get_reference(self, idx) -> jobject:
         if idx == 0:
             return None
@@ -343,197 +355,6 @@ class JNIEnv:
         return self._globals.remove(obj)
     #
 
-    #args is a tuple or list
-    def __read_args32(self, mu, args, args_type_list) -> List:
-        #在这里处理八个字节参数问题，
-        #1.第一个参数为jlong jdouble 直接跳过列表第一个成员，因为第一个成员刚好是call_xxx的第三个参数，根据调用约定，如果这个参数是8个字节，则直接跳过R3寄存器使用栈
-        #2.jlong或者jdouble需要两个arg成一个参数，对应用层透明
-        if args_type_list is None:
-            return []
-        #
-        result = []
-        args_index = 0
-        n = len(args_type_list)
-        nargs = len(args)
-        args_list_index = 0
-        while args_list_index < n:
-            arg_name = args_type_list[args_list_index]
-            if (args_index == 0 and arg_name in ("jlong", "jdouble")):
-                #处理第一个参数(call_xxx第四个参数)跳过问题
-                args_index =  args_index + 1
-                continue
-            #
-            v = args[args_index]
-            if arg_name in ('jint', "jchar", "jbyte", "jboolean"):
-                result.append(v)
-            #
-            elif arg_name in ("jlong", "jdouble"):
-                args_index = args_index + 1
-                if (args_index >= nargs):
-                    raise RuntimeError("read_args get long on args_type_list, but args len is not enough to read high bytes")
-                #
-                vh = args[args_index]
-                value = (vh << 32) | v
-                result.append(value)
-            #
-            elif arg_name == 'jstring' or arg_name == "jobject":
-                ref = v
-                jobj: 'jobject' = self.get_reference(ref)
-                obj = None
-                if (jobj == None):
-                    obj = JAVA_NULL
-                else:
-                    obj = jobj.value
-                result.append(obj)
-            else:
-                raise NotImplementedError('Unknown arg name %s' % arg_name)
-            args_index = args_index + 1
-            args_list_index = args_list_index + 1
-        #
-        return result
-    #
-
-    def __read_args64(self, mu, args, args_type_list) -> List:
-        #64w位情况简单得多，因为寄存器的大小为8字节，因此jlong，jdouble直接一个寄存器能装下，直接读即可
-        if args_type_list is None:
-            return []
-        #
-        result = []
-        n = len(args_type_list)
-        nargs = len(args)
-
-        for args_index in nargs:
-            arg_name = args_type_list[args_index]
-            v = args[args_index]
-            if arg_name in ('jint', "jchar", "jbyte", "jboolean", "jlong", "jdouble"):
-                result.append(v)
-            #
-            elif arg_name == 'jstring' or arg_name == "jobject":
-                ref = v
-                jobj: 'jobject' = self.get_reference(ref)
-                obj = None
-                if (jobj == None):
-                    obj = JAVA_NULL
-                else:
-                    obj = jobj.value
-                result.append(obj)
-            else:
-                raise NotImplementedError('Unknown arg name %s' % arg_name)
-            #
-        #
-        return result
-    #
-
-
-    def __read_args_v32(self, mu: 'Uc', args_ptr, args_type_list) -> List:
-        result = []
-        if args_type_list is None:
-            return result
-        #
-        for arg_name in args_type_list:
-            #使用指针arg_ptr的作为call_xxx_v第四个参数,不会出现跳过第四个参数的情况,因为arg_ptr总是四个字节
-            v = int.from_bytes(mu.mem_read(args_ptr, 4), byteorder='little')
-            if arg_name in ('jint', "jchar", "jbyte", "jboolean"):
-                result.append(v)
-            elif arg_name in ("jlong", "jdouble"):
-                args_ptr = args_ptr + 4
-                vh = int.from_bytes(mu.mem_read(args_ptr, 4), byteorder='little')
-                value = (vh << 32) | v
-                result.append(value)
-            #
-            elif arg_name == 'jstring' or arg_name == "jobject":
-                ref = v
-                jobj = self.get_reference(ref)
-                obj = None
-                if (jobj == None):
-                    obj = JAVA_NULL
-                else:
-                    obj = jobj.value
-                result.append(obj)
-            else:
-                raise NotImplementedError('Unknown arg name %s' % arg_name)
-            #
-            args_ptr = args_ptr + 4
-        #
-        return result
-    #
-
-    def __read_args_v64(self, mu: 'Uc', args_ptr, args_type_list) -> List:
-        result = []
-        if args_type_list is None:
-            return result
-            
-        # void *__stack;   (0x0)
-        # void *__gr_top;  (0x8)
-        # void *__vr_top;  (0x10)
-        # int __gr_offs;   (0x18)
-        # int __vr_offs;   (0x1c)
-        va_list_data = mu.mem_read(args_ptr, 32)
-        __stack, __gr_top, __vr_top, __gr_offs, __vr_offs = struct.unpack("<QQQii", va_list_data)
-
-        for arg_name in args_type_list:
-            is_float = arg_name in ("jdouble", "jfloat")
-            
-            if not is_float:
-                if __gr_offs >= 0:
-                    val_bytes = mu.mem_read(__stack, 8)
-                    v = int.from_bytes(val_bytes, byteorder='little')
-                    __stack += 8
-                else:
-                    arg_addr = __gr_top + __gr_offs
-                    val_bytes = mu.mem_read(arg_addr, 8)
-                    v = int.from_bytes(val_bytes, byteorder='little')
-                    __gr_offs += 8
-            else:
-                if __vr_offs >= 0:
-                    val_bytes = mu.mem_read(__stack, 8)
-                    v = int.from_bytes(val_bytes, byteorder='little')
-                    __stack += 8
-                else:
-                    arg_addr = __vr_top + __vr_offs
-                    val_bytes = mu.mem_read(arg_addr, 8)
-                    v = int.from_bytes(val_bytes, byteorder='little')
-                    __vr_offs += 16
-
-            if arg_name in ("jint", "jchar", "jbyte", "jboolean", "jlong", "jdouble", "jfloat"):
-                result.append(v)
-
-            elif arg_name == 'jstring' or arg_name == "jobject":
-                ref = v
-                if ref == 0:
-                    try:
-                        result.append(JAVA_NULL)
-                    except NameError:
-                        result.append(None)
-                else:
-                    jobj = self.get_reference(ref)
-                    obj = None
-                    if (jobj == None):
-                        try:
-                            obj = JAVA_NULL
-                        except NameError:
-                            obj = None
-                    else:
-                        obj = jobj.value
-                    result.append(obj)
-            else:
-                raise NotImplementedError('Unknown arg name %s' % arg_name)
-        
-        return result
-
-    #arg_type = 0 tuple or list, 1 arg_v, 2 array
-    def __read_args_common(self, mu: 'Uc', args, args_type_list, arg_type) -> List:
-        if (arg_type == 0):
-            args_items = args
-            return self.__read_args(mu, args_items, args_type_list)
-        elif (arg_type == 1):
-            args_ptr = args
-            return self.__read_args_v(mu, args_ptr, args_type_list)
-        else:
-            raise RuntimeError("arg_type %d not support"%arg_type)
-        #
-    #
-
     @staticmethod
     def jobject_to_pyobject(obj: jobject) -> object:
         if(isinstance(obj, jobject)):
@@ -545,7 +366,7 @@ class JNIEnv:
 
     @native_method
     def get_version(self, mu, env) -> int:
-        return 65542
+        return JNI_VERSION_1_6
     #
 
     @native_method
@@ -695,12 +516,19 @@ class JNIEnv:
         raise NotImplementedError()
 
     @native_method
-    def push_local_frame(self, mu, env):
-        raise NotImplementedError()
-
+    def push_local_frame(self, mu, env, capacity):
+        """
+        Creates a new local reference frame, in which at least a given number of local references can be created.
+        """
+        return 0
+    
     @native_method
-    def pop_local_frame(self, mu, env):
-        raise NotImplementedError()
+    def pop_local_frame(self, mu, env, result_jobj):
+        """
+        Pops off the current local reference frame, frees all the local references, 
+        and returns a local reference in the previous local reference frame for the given result object.
+        """
+        return result_jobj
 
     @native_method
     def new_global_ref(self, mu: 'Uc', env, jobj):
@@ -2127,7 +1955,6 @@ class JNIEnv:
         """
         Returns JNI_TRUE when there is a pending exception; otherwise, returns JNI_FALSE.
         """
-        # TODO: Implement
         return JNI_FALSE
 
     @native_method
@@ -2144,4 +1971,4 @@ class JNIEnv:
 
     @native_method
     def get_object_ref_type(self, mu, env):
-        return 0
+        return JNI_InvalidRefType

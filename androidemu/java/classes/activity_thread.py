@@ -2,7 +2,7 @@ from ..java_class_def import JavaClassDef
 from ..java_field_def import JavaFieldDef
 from ..java_method_def import java_method_def, JavaMethodDef
 from ..classes.context import ContextImpl
-from ..constant_values import *
+from ..constants.default_const import *
 from .application import Application
 
 class AccessibilityManager(metaclass=JavaClassDef, jvm_name='android/view/accessibility/AccessibilityManager'):
@@ -205,7 +205,7 @@ class ActivityThread(metaclass=JavaClassDef, jvm_name='android/app/ActivityThrea
     @staticmethod
     @java_method_def(name='currentActivityThread', signature='()Landroid/app/ActivityThread;', native=False)
     def currentActivityThread(emu):
-        pyPkgName = emu.config.get("pkg_name")
+        pyPkgName = emu.config.pkg.pkg_name
         if (pyPkgName not in ActivityThread.s_am):
             ActivityThread.s_am[pyPkgName] = ActivityThread(pyPkgName)
         #

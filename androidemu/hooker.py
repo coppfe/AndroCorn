@@ -2,7 +2,7 @@ from unicorn import *
 from unicorn.arm_const import *
 from unicorn.arm64_const import *
 from .const import emu_const
-import sys
+import os
 import traceback
 import logging
 
@@ -22,17 +22,17 @@ class Hooker:
         self._size = size
         self._current_id = 0xFF00
         self._hooks = dict()
+        self._addr_to_hook = dict()
         _hook_start = base_addr + emu.ptr_size
         self._hook_current = _hook_start
         self._emu.mu.hook_add(UC_HOOK_CODE, self._hook, None, _hook_start, _hook_start + size)
-    #
 
     def _get_next_id(self):
         idx = self._current_id
         self._current_id += 1
         return idx
 
-    #返回function首地址，如果是thumb指令，自动+1
+    #Returns the address of the function's starting point; if it's a thumb instruction, it's automatically incremented by 1.
     def write_function(self, func):
         # Get the hook id.
         hook_id = self._get_next_id()
@@ -42,6 +42,7 @@ class Hooker:
         self._hook_current+=4
         
         hook_addr = self._hook_current
+        self._addr_to_hook[hook_addr] = func
         if (self._emu.arch == emu_const.ARCH_ARM32):
             # Create the ARM assembly code.
             # 注意，这里不要改sp，因为后面hook code会靠sp来定位参数
@@ -51,9 +52,7 @@ class Hooker:
         else:
             self._emu.mu.mem_write(self._hook_current, b"\xC0\x03\x5F\xD6")  #ret
             self._hook_current += 4 
-        #
         return hook_addr
-    #
 
     def write_function_table(self, table):
         if not isinstance(table, dict):
@@ -72,18 +71,16 @@ class Hooker:
         ptr_size = self._emu.ptr_size
         for index in range(0, index_max):
             address = hook_map[index] if index in hook_map else 0
-            table_bytes += int(address).to_bytes(ptr_size, byteorder='little')  #把每个函数指针写到指针表里面
-        #
+            table_bytes += int(address).to_bytes(ptr_size, byteorder='little')  # Write each function pointer into the pointer table.
 
         self._emu.mu.mem_write(table_address, table_bytes)
         self._hook_current += len(table_bytes)
 
-        # Then we write the a pointer to the table.指向table的指针，写在table的后面
+        # Then we write the a pointer to the table.
         ptr_address = self._hook_current
         self._emu.mu.mem_write(ptr_address, table_address.to_bytes(ptr_size, byteorder='little'))
         self._hook_current += ptr_size
         return ptr_address, table_address
-    #
 
     def _hook(self, mu: 'Uc', address, size, user_data):
         #通过hook一条特殊的指令回调到python处理
@@ -101,22 +98,13 @@ class Hooker:
         # modified (now incorrect) context from the first run.
         # Current limitation: Do not call emu_stop() inside a hook_code callback.
 
-        arch = self._emu.arch
-        #所有hook_id就在这条指令的前四个四节
-        hook_id_ptr = address - 4
-        hook_id_bytes = mu.mem_read(hook_id_ptr, 4)
-        hook_id = int.from_bytes(hook_id_bytes, byteorder='little', signed=False)
-        hook_func = self._hooks[hook_id]
-        #logging.debug("hook_id:%d, hook_func:%r"%(hook_id, hook_func))
-        # Call hook.
+        hook_func = self._addr_to_hook[address & ~1]
+
         try:
             hook_func(self._emu)
         except Exception as e:
-            # Make sure we catch exceptions inside hooks and stop emulation.
             mu.emu_stop()
             traceback.print_exc()
             logging.exception("catch error on _hook")
-            sys.exit(-1)
+            os._exit(-1)
             raise
-        #
-    #

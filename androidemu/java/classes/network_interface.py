@@ -2,6 +2,10 @@ from ..java_class_def import JavaClassDef
 from ..java_method_def import java_method_def
 from .array import Array
 
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from ...emulator import Emulator
+
 class NetworkInterface(metaclass=JavaClassDef, jvm_name='java/net/NetworkInterface'):
     def __init__(self, pyname):
         self.__name = pyname
@@ -16,8 +20,8 @@ class NetworkInterface(metaclass=JavaClassDef, jvm_name='java/net/NetworkInterfa
     #
 
     @java_method_def(name='getHardwareAddress', signature='()[B', native=False)
-    def getHardwareAddress(self, emu):
-        mac = emu.config.get("mac")
+    def getHardwareAddress(self, emu: "Emulator"):
+        mac = emu.config.pkg.device.net.mac
         barr = bytearray(mac)
         arr = Array(barr)
         return arr

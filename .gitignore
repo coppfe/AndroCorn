@@ -10,3 +10,6 @@ env/
 
 *.log
 fix.txt
+test.py
+keystone_in/
+androidemu/highlevel/host

@@ -86,10 +86,3 @@ This program is free software: you can redistribute it and/or modify it under th
 - License: [GNU GPL v3.0](https://www.gnu.org/licenses/gpl-3.0.html)
 
 ###### Probably not a very original name for the project, but okay.
-
-## TODO
-- Improve type hinting
-- Make clearer imports
-- Divide the functionality of syscalls
-- Replace python runtime unicorn mappings to native libc everywhere (faster)
-- idk

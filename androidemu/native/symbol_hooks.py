@@ -12,10 +12,9 @@ from .sym_hooks.libcpp_sym import LibCPPSymbolHooks
 
 from .fun_hooks.libc_fun import LibCFunHooks
 
-from ..internal.bionic.tls_resolver import TLSSymbolResolver
+# from ..internal.bionic.tls_resolver import TLSSymbolResolver
 
 from .asset_mgr_hooks import AssetManagerHooks
-from ..utils.memory import memory_helpers
 
 if TYPE_CHECKING:
     from ..emulator import Emulator
@@ -40,7 +39,7 @@ class SymbolHooks:
     def __init__(self, emu: 'Emulator'):
         self._emu: 'Emulator' = emu
         self.fun: 'FuncHooker' = emu.func_hooker
-        self.resolver = TLSSymbolResolver(emu, self._emu.tls_state)
+        # self.resolver = TLSSymbolResolver(emu, self._emu.tls_state)
 
         for clz in SYM_HOOK_CLASSES:
             clz(emu)
@@ -73,8 +72,10 @@ class SymbolHooks:
             sym_addr = self._emu.linker.find_function_by_name(symbol)
 
             if sym_addr == 0:
-                logger.warning(f"[!] Symbol {symbol} not found")
+                logging.debug("[!] Symbol %s not found as function name. Hooking as address.", symbol)
+                sym_addr = symbol
+                # logger.warning(f"[!] Symbol {symbol} not found")
                 continue
 
             self.fun.fun_hook(sym_addr, num_args, before, after)
-            logger.debug(f"[+] Symbol {symbol} hooked in {hex(sym_addr)}")
+            logger.debug("[+] Symbol %s hooked in %#x", symbol, sym_addr)

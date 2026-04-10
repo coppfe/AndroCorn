@@ -81,13 +81,12 @@ jvm_fields=[
         if (package_name.get_py_string() != package_name.get_py_string()):
             raise NotImplementedError("not own package package-info not support now..")
         #
-        sign_hex = emu.config.get("sign_hex", "0")
+        sign_hex = emu.config.pkg.sign_hex
         if (flags == PackageManager.GET_SIGNATURES):
             if (sign_hex == "0"):
                 raise RuntimeError("getPackageInfo with PackageManager.GET_SIGNATURES is called but no 'sign_hex' set in config!!!")
-            #
-        #
-        version_code = emu.config.get("version_code")
+
+        version_code = emu.config.pkg.version_code
         if (version_code == None):
             version_code = 0
             logging.info("version_code not config default to 0")

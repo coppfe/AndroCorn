@@ -17,16 +17,16 @@ from .config import Config
 from .data import mem_map as config
 from .const import emu_const
 
-from .core.handlers.syscall_base.syscall_handlers import SyscallHandlers
-from .core.handlers.syscall_base.syscall_hooks import SyscallHooks
-from .core.handlers.syscall_file.file_system import VirtualFileSystem
-from .core.handlers.syscall_memory.memory_syscall_handler import MemorySyscallHandler
+from .kernel.syscalls.syscall_handlers import SyscallHandlers
+from .kernel.syscalls.syscall_base.syscall_hooks import SyscallHooks
+from .kernel.syscalls.syscall_file.file_system import VirtualFileSystem
+from .kernel.syscalls.syscall_memory.memory_syscall_handler import MemorySyscallHandler
 
-from .core.state.time_manager import TimeManager
+from .kernel.state.time_manager import TimeManager
 
 from .objects.virtual_file import VirtualFile
 
-from .pcb import Pcb
+from .kernel.pcb import Pcb
 from .hooker import Hooker
 from .scheduler import Scheduler
 
@@ -51,7 +51,6 @@ from .utils.cpu import CPU_Utils
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .internal.module import Module
-
 
 class Emulator:
 
@@ -123,7 +122,6 @@ class Emulator:
                 utils._enable_vfp32()
 
             self.__sp_reg = UC_ARM_REG_SP
-            self.call_native = self.__call_native32
             self.call_native_return_2reg = self.__call_native_return_2reg32
 
 
@@ -135,8 +133,6 @@ class Emulator:
                 utils._enable_vfp64()
     
             self.__sp_reg = UC_ARM64_REG_SP
-
-            self.call_native = self.__call_native64
             self.call_native_return_2reg = self.__call_native_return_2reg64
 
         else:
@@ -149,28 +145,28 @@ class Emulator:
         for lib in syslibs:
             self.linker.load_module(prefix + lib)
 
+    def __init_utils(self):
+        self.time_manager = TimeManager(start_timestamp=self.config.pkg.start_timestamp)
+
     def __init__(self, vfs_root="vfs", config_path="androidemu/emu_cfg/default.json", vfp_inst_set=True, arch=emu_const.ARCH_ARM32, muti_task=False):
+
+        # logging.warning("LIEF Leaks Warning Disabled!")
+
         self.config = Config(config_path)
         
         self.__arch = arch
         self.__support_muti_task = muti_task
         self.__vfs_root = vfs_root
-        self.__pcb = Pcb(self.config)
+        self.__pcb = Pcb(self, self.config)
 
-        self.pid = self.__pcb.get_pid()
+        self.pid = self.__pcb.pid
         self.tid = self.__pcb.generate_new_tid()
-        self.uid = self.__pcb.get_uid()
+        self.uid = self.__pcb.uid
 
         self.__init_fields(vfp_inst_set)
-        #self.mu.mem_map(0x0, 0x00001000, UC_PROT_READ | UC_PROT_WRITE)
-
-        # NOTE: there was a bug before — the linker initialization did not complete the init_tls step.
-        # As a result, libc initialization accessed a null pointer and could not finish normally.
-        # Here we map address 0 directly to force the execution to continue,
-        # because R1 happens to be 0; otherwise a memory unmapped exception would occur.
-        # This issue has been fixed in the latest version, so this mapping is no longer needed.
 
         self.__init_properties()
+        self.__init_utils()
 
         self.memory = MemoryMap(self.mu, config.MAP_ALLOC_BASE, config.MAP_ALLOC_BASE+config.MAP_ALLOC_SIZE)
 
@@ -190,11 +186,8 @@ class Emulator:
 
         # Syscalls
         self.mem_handler = MemorySyscallHandler(self, self.memory, self.__syscall_handler)
-        self.syscall_hooks = SyscallHooks(self, self.config, self.__syscall_handler)
-        self.vfs = VirtualFileSystem(self, vfs_root, self.config, self.__syscall_handler, self.memory)
-
-        # Utils
-        self.time_manager = TimeManager()
+        self.syscall_hooks = SyscallHooks(self, self.__syscall_handler)
+        self.vfs = VirtualFileSystem(self, vfs_root, self.__syscall_handler)
 
         # Linker & TLS
         self.tls_state: 'BionicTLS' = create_tls_backend(self)
@@ -220,21 +213,21 @@ class Emulator:
         if self.__arch == emu_const.ARCH_ARM32:
             path = "%s/system/lib/vectors"%self.__vfs_root
             fd = misc_utils.my_open(path, os.O_RDONLY)
-            vf = VirtualFile("[vectors]", fd, path)
+            vf = self.__pcb.virtual_files.create_virtual_file(name="[vectors]", name_in_system=path, fd=fd)
             self.memory.map(0xffff0000, 0x1000, UC_PROT_EXEC | UC_PROT_READ, vf, 0)
             os.close(fd)
 
             path = "%s/system/bin/app_process32"%self.__vfs_root
             sz = os.path.getsize(path)
             fd = misc_utils.my_open(path, os.O_RDONLY)
-            vf = VirtualFile("/system/bin/app_process32", fd, path)
+            vf = self.__pcb.virtual_files.create_virtual_file(name="/system/bin/app_process32", name_in_system=path, fd=fd)
             self.memory.map(0xab006000, sz, UC_PROT_EXEC | UC_PROT_READ, vf, 0)
             os.close(fd)
         else:
             path = "%s/system/bin/app_process64"%self.__vfs_root
             sz = os.path.getsize(path)
             fd = misc_utils.my_open(path, os.O_RDONLY)
-            vf = VirtualFile("/system/bin/app_process64", fd, path)
+            vf = self.__pcb.virtual_files.create_virtual_file(name="/system/bin/app_process64", name_in_system=path, fd=fd)
             self.memory.map(0xab006000, sz, UC_PROT_EXEC | UC_PROT_READ, vf, 0)
             os.close(fd)
 
@@ -264,18 +257,14 @@ class Emulator:
             return
 
         return self.call_native(symbol_addr, *argv)
-
-    def __call_native32(self, addr, *argv) -> int:
-        assert addr is not None, "call addr is None!"
-        return self.__sch.call_native(addr, *argv)
-
-    def __call_native64(self, addr, *argv) -> int:
+    
+    def call_native(self, addr, *argv) -> int:
         assert addr is not None, "call addr is None!"
         return self.__sch.call_native(addr, *argv)
 
     # The 8-byte return value is split across two registers.
     def __call_native_return_2reg32(self, addr, *argv) -> int:
-        res = self.__call_native32(addr, *argv)
+        res = self.call_native(addr, *argv)
 
         res_high = self.mu.reg_read(UC_ARM_REG_R1)
 
@@ -283,7 +272,7 @@ class Emulator:
 
     # The 16-byte return value is split across two registers.
     def __call_native_return_2reg64(self, addr, *argv) -> int:
-        res = self.__call_native64(addr, *argv)
+        res = self.call_native(addr, *argv)
 
         res_high = self.mu.reg_read(UC_ARM64_REG_X1)
 

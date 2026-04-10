@@ -37,7 +37,7 @@ class DTVBuilderARM64(DTVBuilder):
             self.mu.mem_write(base + 2 * self.ptr_sz, b'\x00' * rest_size)
 
         self.state.dtv = base
-        logger.debug(f"[DTV-ARM64] Built at {hex(base)}")
+        logger.debug("[DTV-ARM64] Built at %#x", base)
         return base
 
     def register_module(self, tls_block: int) -> int:
@@ -53,7 +53,10 @@ class DTVBuilderARM64(DTVBuilder):
         self.dtv_generation += 1
         self._write_ptr(self.base, self.dtv_generation)
 
-        logger.debug(f"[DTV-ARM64] Registered mod_id={module_id} block={hex(tls_block)} at {hex(entry_addr)}")
+        logger.debug("[DTV-ARM64] Registered mod_id=%d block=%#x at %#x", 
+                    module_id, 
+                    tls_block, 
+                    entry_addr)
         return module_id
 
     def get_tls_block(self, module_id: int) -> int:

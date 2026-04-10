@@ -21,15 +21,9 @@ class LibCFunHooks(BaseFuncHooks):
         self._emu: 'Emulator' = emu
         
         self._func_table = [
-            ("__libc_write_log", 2, self.libc_log, None)
+            # ("__libc_write_log", 2, self.libc_log, None)
         ] # name, num_args, before, after
-        # idk how many args a function have
-        #FIXME: num_args
+        # not used anymore. All logs coming into writev syscall as logcat
 
         for hook in self._func_table:
-
             self.global_func_table.append(hook)
-
-
-    def libc_log(self, uc, *args):
-        print("__libc_write_log called", args)

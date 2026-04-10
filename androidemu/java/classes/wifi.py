@@ -4,6 +4,10 @@ from ..java_method_def import java_method_def,JavaMethodDef
 from ..classes.list import List
 from ..classes.string import String
 
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from ...emulator import Emulator
+
 class WifiInfo(metaclass=JavaClassDef, jvm_name='android/net/wifi/WifiInfo'):
 
     def __init__(self):
@@ -11,27 +15,22 @@ class WifiInfo(metaclass=JavaClassDef, jvm_name='android/net/wifi/WifiInfo'):
 
     @java_method_def(name='getMacAddress', signature='()Ljava/lang/String;'
         , native=False)
-    def getMacAddress(self, emu, *args, **kwargs):
-        #TODO read from config
-        mac = emu.config.get("mac")
-        s = "%02x:%02x:%02x:%02x:%02x:%02x"%(mac[0], mac[1], mac[2], mac[3], mac[4], mac[5])
-        return String(s)
-    #
+    def getMacAddress(self, emu: "Emulator", *args, **kwargs):
+        mac = emu.config.pkg.device.net.mac
+        return String(mac)
 
     @java_method_def(name='getBSSID', signature='()Ljava/lang/String;'
         , native=False)
-    def getBSSID(self, *args, **kwargs):
-        #TODO 从WifiConfiguration 获取
-        return String("")
+    def getBSSID(self, emu: "Emulator", *args, **kwargs):
+        bssid = emu.config.pkg.device.net.mac
+        return String(bssid)
 
-    #
 
     @java_method_def(name='getSSID', signature='()Ljava/lang/String;'
         , native=False)
-    def getSSID(self, *args, **kwargs):
-        #TODO 从WifiConfiguration 获取
-        return String("")
-    #
+    def getSSID(self, emu: "Emulator", *args, **kwargs):
+        ssid = emu.config.pkg.device.net.ssid
+        return String(ssid)
 
 
 class NetworkInfo(metaclass=JavaClassDef, jvm_name='android/net/NetworkInfo'):

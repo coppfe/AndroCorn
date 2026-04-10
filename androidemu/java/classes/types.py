@@ -1,8 +1,5 @@
 from ..java_class_def import JavaClassDef
-from ..java_field_def import JavaFieldDef
-from ..java_method_def import java_method_def, JavaMethodDef
-from ...utils import debug_utils
-import sys
+from ..java_method_def import java_method_def
 
 class Boolean(metaclass=JavaClassDef, jvm_name='java/lang/Boolean'):
     
@@ -90,6 +87,10 @@ class Long(metaclass=JavaClassDef, jvm_name='java/lang/Long'):
     def longValue(self, emu):
         return self.__value
     #
+
+    @java_method_def(name='valueOf', args_list=["jlong"], signature='(J)Ljava/lang/Long;', native=False)
+    def valueOf(emu, lvalue):
+        return Long(lvalue)
 
     def __repr__(self):
         return "%r"%self.__value

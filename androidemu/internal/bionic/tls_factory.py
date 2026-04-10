@@ -13,7 +13,8 @@ if TYPE_CHECKING:
 def create_tls_backend(emu: 'Emulator'):
     arch = emu.arch
 
-    logger.debug(f"[*] Creating TLS backend for arch: {'ARM32' if arch == emu_const.ARCH_ARM32 else 'ARM64'}")
+    arch_str = 'ARM32' if arch == emu_const.ARCH_ARM32 else 'ARM64'
+    logger.debug("[*] Creating TLS backend for arch: %s", arch_str)
 
     if arch == emu_const.ARCH_ARM32:
         return BionicTLS_ARM32(emu)

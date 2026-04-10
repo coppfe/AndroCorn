@@ -40,7 +40,7 @@ class LibDLSymbolHooks(BaseSymbolHooks):
         if path_str == 0:
             if self._emu.linker.modules:
                 main_mod = self._emu.linker.modules[0]
-                logger.debug(f"[+] dlopen(NULL) -> returning main module: {main_mod.filename}")
+                logger.debug("[+] dlopen(NULL) -> returning main module: %s", main_mod.filename)
                 return main_mod.soinfo_ptr
             return 0
 

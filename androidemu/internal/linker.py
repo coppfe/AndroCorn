@@ -169,7 +169,9 @@ class AndroidLinker:
         if self.tls:
             for mod in new_modules_list:
                 mod.tls_offset = self.tls.setup_static_tls(mod.reader, mod.bias)
-                logger.debug(f"[Linker] Dynamic TLS registered for {os.path.basename(mod.filename)}")
+                
+                logger.debug("[Linker] Dynamic TLS registered for %s", 
+                            os.path.basename(mod.filename))
         
         for mod in new_modules_list:
             self._relocate_module(mod)
@@ -193,7 +195,7 @@ class AndroidLinker:
         if basename in self.modules_by_name:
             return self.modules_by_name[basename]
 
-        logger.debug(f"  [Load] Parsing {basename}")
+        logger.debug("  [Load] Parsing %s", basename)
         reader = ELFReader(path)
         self._check_arch(reader, path)
         
@@ -239,14 +241,18 @@ class AndroidLinker:
         self.tls_initialized = True
 
     def _relocate_module(self, module: Module):
-        logger.debug(f"  [Reloc] Applying to {os.path.basename(module.filename)}")
+        logger.debug("  [Reloc] Applying to %s", os.path.basename(module.filename))
         reader = module.reader
         bias = module.bias
 
         is_64 = not reader.is_32
 
         relocator = ARM64Relocator(self.emu, bias) if is_64 else ARM32Relocator(self.emu, bias)
-        logger.debug(f"  [Reloc] Relocations: {len(reader.relocations)}. is_64: {is_64}. Bias: {hex(bias)}")
+        logger.debug("  [Reloc] Relocations: %d. is_64: %d. Bias: %#x", 
+            len(reader.relocations), 
+            is_64, 
+            bias)
+        
         for rel in reader.relocations:
             r_type = rel.type
             r_addr = bias + rel.address
@@ -323,14 +329,13 @@ class AndroidLinker:
         next_field_addr = writer.write_soinfo(module, reader)
         
         self.soinfo_alloc_addr += next_field_addr - info_ptr
-        logger.debug(f"[*] soinfo: {hex(info_ptr)} for {module.filename}. Current alloc: {hex(self.soinfo_alloc_addr)}.")
-
         # Link previous
         if self._last_next_field_addr:
             ptr_sz = self.emu.ptr_size
             self.emu.mu.mem_write(self._last_next_field_addr, info_ptr.to_bytes(ptr_sz, 'little'))
 
-        logger.debug(f"[*] soinfo: {hex(info_ptr)} for {module.filename}. Next: {hex(next_field_addr)}. Size: {hex(next_field_addr - info_ptr)}.")
+        logger.debug("[*] soinfo: %#x for %s. Next: %#x. Size: %#x.", 
+                     info_ptr, module.filename, next_field_addr, next_field_addr - info_ptr)
 
         self._last_next_field_addr = next_field_addr
 
@@ -359,7 +364,14 @@ class AndroidLinker:
             if seg['p_memsz'] > len(content):
                 self.emu.mu.mem_write(dest + len(content), b'\x00' * (seg['p_memsz'] - len(content)))
         
-        logger.debug(f"[*] ELF mapped to {hex(base)}. Size: {hex(size)}. Bias: {hex(bias)}. Segments: {len(load_segs)}. Min: {hex(min_v)}, Max: {hex(max_v)}")
+        logger.debug("[*] ELF mapped to %#x. Size: %#x. Bias: %#x. Segments: %d. Min: %#x, Max: %#x", 
+            base, 
+            size, 
+            bias, 
+            len(load_segs), 
+            min_v, 
+            max_v)
+        
         return base, bias, size
 
     def _resolve_path(self, filename: str) -> Optional[str]:

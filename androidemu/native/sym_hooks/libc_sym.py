@@ -29,12 +29,12 @@ class LibCSymbolHooks(BaseSymbolHooks):
         self._emu: 'Emulator' = emu
         
         self._func_table = {
-        "__stack_chk_fail": self.stack_check_fail, # also try abort hook
+        # "__stack_chk_fail": self.stack_check_fail, # also try abort hook
         # "__system_property_get": self.system_property_get,
         # "pthread_create": self.pthread_create,
         # "pthread_once": self.pthread_once,
         # "pthread_detach": self.pthread_detach,
-        "abort": self.abort,
+        # "abort": self.abort,
         # "newlocale": self.newlocale,
         # "rand": self.rand,
         # "swprintf": self.swprintf,
@@ -51,8 +51,7 @@ class LibCSymbolHooks(BaseSymbolHooks):
     }
 
         self.global_func_table.update(self._func_table)
-
-
+        
     # @native_method
     # def pthread_mutex_lock(self, uc, mutex):
     #     print("LICK MY BALLS")
@@ -140,7 +139,7 @@ class LibCSymbolHooks(BaseSymbolHooks):
         state = int.from_bytes(uc.mem_read(once_control_ptr, 4), 'little')
         if state == 0:
             uc.mem_write(once_control_ptr, b'\x01\x00\x00\x00')
-            logger.debug(f"[*] pthread_once: calling init_routine at {hex(init_routine)}")
+            logger.debug("[*] pthread_once: calling init_routine at %#x", init_routine)
             self._emu.call_native(init_routine)
         return 0
 

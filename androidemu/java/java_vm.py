@@ -3,7 +3,7 @@ import traceback
 
 from ..hooker import Hooker
 from .helpers.native_method import native_method
-from .jni_const import *
+from .constants.jni_const import *
 from .jni_env import JNIEnv
 
 logger = logging.getLogger(__name__)

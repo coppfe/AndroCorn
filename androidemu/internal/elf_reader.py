@@ -28,6 +28,8 @@ class ELFReader:
         self._dynamic_tags: Dict[str, int] = self._parse_dynamic_tags()
         self._functions: Dict[str, int] = self._parse_functions()
 
+        lief.disable_leak_warning()
+
     def _parse_dynamic_tags(self) -> Dict[str, int]:
         tags = {}
         DT = lief.ELF.DynamicEntry.TAG
@@ -81,8 +83,11 @@ class ELFReader:
                 "content": data                
             })
             if seg_type_str == "LOAD":
-                logger.debug(f"Parsed segment {seg_type_str}: {hex(seg.virtual_address)} size: {hex(seg.virtual_size)}")
-                
+                logger.debug("Parsed segment %s: %#x size: %#x", 
+                    seg_type_str, 
+                    seg.virtual_address, 
+                    seg.virtual_size)
+                        
         return segments
     
     def _parse_functions(self) -> List:

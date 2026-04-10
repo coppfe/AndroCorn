@@ -1,0 +1,31 @@
+{
+	"_pkg_name":"parent_pkg_name",
+	"pkg_name": "main_pkg_name",
+	"uid": 10123,
+	"pid": 4386,
+	"ppid": 821,
+	"debuggable": true,
+	"start_timestamp": 1774458140,
+	"build_at": 1678884069,
+	
+	"device": {
+		"memory": {
+			"ram_total_mb": 8192,
+			"ram_free_percent_start": 45,
+			"swap_total_mb": 2048
+		},
+
+		"kernel": {
+			"release": "5.10.43-android12-9-00001-g532147395026",
+			"version": "#1 SMP PREEMPT Wed Mar 15 12:41:09 UTC 2023"
+		},
+
+		"net": {
+			"ip": "192.168.1.52",
+			"mac": "cc:fa:a6:00:8a:a9",
+			"dns": "8.8.8.8",
+			"ssid": "Massive",
+			"gateway": "89.207.132.170"
+		}
+	}
+	}

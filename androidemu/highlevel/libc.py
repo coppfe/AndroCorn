@@ -9,10 +9,12 @@ class LibC:
         self.libc = emu.get_library('libc.so')
 
     def malloc(self, size):
-        ptr = self.__emu.call_symbol(self.libc, 'malloc', size)
-        if ptr == 0:
-            raise MemoryError(f"Native malloc failed to allocate {size} bytes")
-        return ptr
+        # ptr = self.__emu.call_symbol(self.libc, 'malloc', size)
+        # if ptr == 0:
+        #     raise MemoryError(f"Native malloc failed to allocate {size} bytes")
+        # return ptr
+        return self.__emu.memory.map(0, size)
     
     def free(self, ptr):
-        return self.__emu.call_symbol(self.libc, 'free', ptr)
+        # return self.__emu.call_symbol(self.libc, 'free', ptr)
+        pass

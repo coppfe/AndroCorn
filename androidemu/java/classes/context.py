@@ -151,21 +151,21 @@ class ContextImpl(Context, metaclass=JavaClassDef, jvm_name='android/app/Context
 
     @java_method_def(name='getPackageCodePath', signature='()Ljava/lang/String;', native=False)
     def getPackageCodePath(self, emu):
-        pkgName = emu.config.get("pkg_name")
+        pkgName = emu.config.pkg.pkg_name
         path = "/data/app/%s-1.apk"%(pkgName, )
         return String(path)
     #
 
     @java_method_def(name='getFilesDir', signature='()Ljava/io/File;', native=False)
     def getFilesDir(self, emu):
-        pkgName = emu.config.get("pkg_name")
+        pkgName = emu.config.pkg.pkg_name
         fdir = "/data/data/%s/files"%(pkgName, )
         return File(fdir)
     #
 
     @java_method_def(name='getSharedPreferences', args_list=["jstring", "jint"], signature='(Ljava/lang/String;I)Landroid/content/SharedPreferences;', native=False)
     def getSharedPreferences(self, emu, name, mode):
-        pkgName = emu.config.get("pkg_name")
+        pkgName = emu.config.pkg.pkg_name
         pyName = name.get_py_string()
         if (pyName in self.__sp_map):
             return self.__sp_map[pyName]

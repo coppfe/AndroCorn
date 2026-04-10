@@ -1,7 +1,7 @@
 from ..java_class_def import JavaClassDef
 from ..java_field_def import JavaFieldDef
 from ..java_method_def import java_method_def,JavaMethodDef
-from ..constant_values import *
+from ..constants.default_const import *
 
 
 class List(metaclass=JavaClassDef, jvm_name='java/util/List'):

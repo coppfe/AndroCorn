@@ -1,34 +1,29 @@
-# Changelog 2026.03.6
+# Changelog 2026.04.10
 
 ## Added
-- ~~Support of nested calls: now you can call a native function from a hook function. Example:~~
+- New utils:
+    - `parsers/android/logcat.py`
+- New constant files:
+    - `kernel/flags.py`
+- New tool:
+    - `gen_jni_env_map.py`
+- New test:
+    - `test_native.py` (armv7a, libcms.so)
 
-```python
-@native_method # Hook of malloc
-def malloc(uc, size):
-    # Some logging features here or additional operations
-    # After all, you can call original method like this
-    libc = emu.get_library("libc.so")
-    ptr = emu.call_symbol(libc, 'malloc', size)
-    if ptr == 0:
-        raise MemoryError(f"Native malloc failed to allocate {size} bytes")
-    return ptr
-```
+## Updates
+- Updated package struct: Now syscalls are grouped by category.
+- Updated PCB: New field: `virtual_files` Full implement work with virtual file system.
+- Updated JNI Env: Now args parsing in file `helpers/jni_native.py`. Optimized and fixed some bugs.
+- Updated config: Now configs are more flexable.
+- Updated `Hooker`: replaced `uc.mem_read` to `self._addr_to_hook[address & ~1]` for faster lookup handlers.
+- Updated `init_fun_hooks`: Now you can hook function by name, or by raw address.
+- Removed f-strings
+- Optimizied `native_method` decorator
+- Fully implement of ContentGenerator (VFS Content Generator)
 
-# Nested calls are temporarily disabled
-###### idk how to realise it... i have bugs. help me
+# Fixed
+- Temporary removed nested call `malloc` and `free` from `highlevel/libc.py`
 
-- Support of virtual time
-- Support of multiple threads (futex full implementation)
-- Support of some system libs high-level API
-- New function `emu.call_function`
-- New function `emu.get_library`
-- New test file "test_urandom.py"
-- Aliases: emu.get_pcb() `->` emu.pcb
-- JNI Type Hints (not fully implemented yet)
-
-## Updated
-- Improved performance
-- Improved VFS generator (50/50)
-- Improved device configuration (not real good)
-- Fixed file syscalls
+# Removed
+- keystone_in dir 
+    ###### actually, it's on my pc, but in the project it's never used for something.

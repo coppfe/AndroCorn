@@ -6,7 +6,7 @@ from .jni_ref import *
 from ..const import emu_const
 import sys
 
-from .constant_values import JAVA_NULL
+from .constants.default_const import JAVA_NULL
 
 if TYPE_CHECKING:
     from ..emulator import Emulator

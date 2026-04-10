@@ -60,9 +60,16 @@ class Module:
         if not init_funcs:
             return
 
-        logger.info(f"[*] Calling {len(init_funcs)} init functions for {self.filename}")
-        logger.debug(f"init_array adjusted: {[hex(a) for a in init_funcs]}")
+        logger.info("[*] Calling %d init functions for %s", 
+                    len(init_funcs), self.filename)
 
-        for func in init_funcs:
-            logger.debug(f"  [>] Calling init: {hex(func)} ({self.find_symbol_name(func) or 'unknown'})")
-            emu.call_native(func)
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("init_array adjusted: %s", [hex(a) for a in init_funcs])
+
+            for func in init_funcs:
+                symbol_name = self.find_symbol_name(func) or 'unknown'
+                logger.debug("  [>] Calling init: %#x (%s)", func, symbol_name)
+                emu.call_native(func)
+        else:
+            for func in init_funcs:
+                emu.call_native(func)

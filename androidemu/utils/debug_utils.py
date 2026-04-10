@@ -1,7 +1,7 @@
 
 from typing import TYPE_CHECKING
 
-import capstone
+# import capstone
 import os
 import io
 from unicorn import *
@@ -94,14 +94,14 @@ def dump_symbols(emulator: "Emulator", fd: io.TextIOWrapper):
     emulator.linker.find_symbol(fd)
 
 
-g_md_thumb = capstone.Cs(capstone.CS_ARCH_ARM, capstone.CS_MODE_THUMB)
-g_md_thumb.detail = True
+# g_md_thumb = capstone.Cs(capstone.CS_ARCH_ARM, capstone.CS_MODE_THUMB)
+# g_md_thumb.detail = True
 
-g_md_arm = capstone.Cs(capstone.CS_ARCH_ARM, capstone.CS_MODE_ARM)
-g_md_arm.detail = True
+# g_md_arm = capstone.Cs(capstone.CS_ARCH_ARM, capstone.CS_MODE_ARM)
+# g_md_arm.detail = True
 
-g_md_arm64 = capstone.Cs(capstone.CS_ARCH_ARM64, capstone.CS_MODE_ARM)
-g_md_arm64.detail = True
+# g_md_arm64 = capstone.Cs(capstone.CS_ARCH_ARM64, capstone.CS_MODE_ARM)
+# g_md_arm64.detail = True
 
 def get_module_by_addr(emu: "Emulator", addr: int):
     ms = emu.linker.modules
@@ -117,65 +117,65 @@ def get_module_by_addr(emu: "Emulator", addr: int):
 #
 
 # print code and its moudle in a line
-DUMP_REG_READ=1
-DUMP_REG_WRITE=2
-def dump_code(emu: "Emulator", address: int, size: int, fd: io.TextIOWrapper, dump_reg_type=DUMP_REG_READ):  
-    mu = emu.mu
-    if (emu.arch == emu_const.ARCH_ARM32):
-        #判断是否arm，用不同的decoder
-        cpsr = mu.reg_read(UC_ARM_REG_CPSR)
-        if (cpsr & (1<<5)):
-            md = g_md_thumb
-        else:
-            md = g_md_arm
-        #
-    else:
-        #arm64
-        md = g_md_arm64
-    #
-    instruction = mu.mem_read(address, size)
-    codes = md.disasm(instruction, address)
-    m = 0
-    for i in codes:
-        addr = i.address
+# DUMP_REG_READ=1
+# DUMP_REG_WRITE=2
+# def dump_code(emu: "Emulator", address: int, size: int, fd: io.TextIOWrapper, dump_reg_type=DUMP_REG_READ):  
+#     mu = emu.mu
+#     if (emu.arch == emu_const.ARCH_ARM32):
+#         #判断是否arm，用不同的decoder
+#         cpsr = mu.reg_read(UC_ARM_REG_CPSR)
+#         if (cpsr & (1<<5)):
+#             md = g_md_thumb
+#         else:
+#             md = g_md_arm
+#         #
+#     else:
+#         #arm64
+#         md = g_md_arm64
+#     #
+#     instruction = mu.mem_read(address, size)
+#     codes = md.disasm(instruction, address)
+#     m = 0
+#     for i in codes:
+#         addr = i.address
 
-        name = "unknown"
-        module = None
-        base = 0
-        funName = None
-        module = get_module_by_addr(emu, addr)
-        if (module != None):
-            name = os.path.basename(module.filename)
-            base = module.base
-            funName = module.is_symbol_addr(addr)
-        #
+#         name = "unknown"
+#         module = None
+#         base = 0
+#         funName = None
+#         module = get_module_by_addr(emu, addr)
+#         if (module != None):
+#             name = os.path.basename(module.filename)
+#             base = module.base
+#             funName = module.is_symbol_addr(addr)
+#         #
 
-        instruction_str = ''.join('{:02X} '.format(x) for x in i.bytes)
-        tid = ""
-        if (emu.muti_task):
-            sch = emu.scheduler
-            tid = "%d:"%sch.get_current_tid()
-        line = "%s(%20s[0x%08X])[%-12s]0x%08X:\t%s\t%s"%(tid, name, base, instruction_str, addr-base, i.mnemonic.upper(), i.op_str.upper())
-        if (funName != None):
-            line = line + " ; %s"%funName
-        #
-        regs = i.regs_access()
-        if (DUMP_REG_READ == dump_reg_type):
-            regs_dump = regs[0]
-        elif(DUMP_REG_WRITE == dump_reg_type):
-            regs_dump = regs[1]
-        #
-        regs_io = io.StringIO()
-        for rid in regs_dump:
-            reg_str = "%s=0x%08X "%(i.reg_name(rid).upper(), mu.reg_read(rid))
-            regs_io.write(reg_str)
-        #
-        regs = regs_io.getvalue()
-        if (regs != ""):
-            line = "%s\t;(%s)"%(line, regs)
-        #
-        fd.write(line+"\n")
-#
+#         instruction_str = ''.join('{:02X} '.format(x) for x in i.bytes)
+#         tid = ""
+#         if (emu.muti_task):
+#             sch = emu.scheduler
+#             tid = "%d:"%sch.get_current_tid()
+#         line = "%s(%20s[0x%08X])[%-12s]0x%08X:\t%s\t%s"%(tid, name, base, instruction_str, addr-base, i.mnemonic.upper(), i.op_str.upper())
+#         if (funName != None):
+#             line = line + " ; %s"%funName
+#         #
+#         regs = i.regs_access()
+#         if (DUMP_REG_READ == dump_reg_type):
+#             regs_dump = regs[0]
+#         elif(DUMP_REG_WRITE == dump_reg_type):
+#             regs_dump = regs[1]
+#         #
+#         regs_io = io.StringIO()
+#         for rid in regs_dump:
+#             reg_str = "%s=0x%08X "%(i.reg_name(rid).upper(), mu.reg_read(rid))
+#             regs_io.write(reg_str)
+#         #
+#         regs = regs_io.getvalue()
+#         if (regs != ""):
+#             line = "%s\t;(%s)"%(line, regs)
+#         #
+#         fd.write(line+"\n")
+# #
 
 def dump_stack(emu: "Emulator", fd: io.TextIOWrapper, max_deep=512):
     mu = emu.mu

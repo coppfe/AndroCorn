@@ -1,4 +1,3 @@
-from .keystone_in import Ks, KS_ARCH_ARM, KS_MODE_THUMB, KS_ARCH_ARM64, KS_MODE_LITTLE_ENDIAN
 from unicorn import *
 from unicorn.arm_const import *
 from unicorn.arm64_const import *
@@ -71,7 +70,7 @@ class FuncHooker:
             mu.emu_stop()
             traceback.print_exc()
             logging.exception("catch error on _hook")
-            sys.exit(-1)
+            os._exit(-1)
             raise
         #
     #

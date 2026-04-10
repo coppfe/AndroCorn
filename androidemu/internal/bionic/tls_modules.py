@@ -29,7 +29,9 @@ class TLSModuleLoader:
 
         module_id = self.state.dtv_builder.register_module(tls_block)
         
-        logger.debug(f"[TLSLoader] Registered module_id={module_id} at {hex(tls_block)}")
+        logger.debug("[TLSLoader] Registered module_id=%d at %#x", 
+            module_id, 
+            tls_block)
         
 
         if not hasattr(self.state, 'modules'):

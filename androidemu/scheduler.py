@@ -8,7 +8,6 @@ from unicorn.arm_const import *
 from unicorn.arm64_const import *
 from .data import mem_map as config
 from .const import emu_const
-from .utils.memory.mem_monitor import MemoryMonitor
 from .java.helpers.native_method import native_write_args
 
 if TYPE_CHECKING:
@@ -30,7 +29,7 @@ class Scheduler:
     def __init__(self, emu: 'Emulator'):
         self.__emu = emu
         self.__mu = self.__emu.mu
-        self.__pid = self.__emu.pcb.get_pid()
+        self.__pid = self.__emu.pcb.pid
         self.__next_sub_tid = self.__pid + 1
         
         self.__tasks_map: Dict[int, Task] = {} 
@@ -45,7 +44,7 @@ class Scheduler:
         self.__futex_blocking_map = {}
         self.__blocking_set: Set[int] = set()
 
-        self.mem_monitor = MemoryMonitor(emu)
+        # self.mem_monitor = MemoryMonitor(emu)
 
         is_arm32 = self.__emu.arch == emu_const.ARCH_ARM32
         self._reg_pc  = UC_ARM_REG_PC if is_arm32 else UC_ARM64_REG_PC
@@ -132,7 +131,7 @@ class Scheduler:
             if tid in self.__tasks_map:
                 self.__tasks_map[tid].wakeup_time_us = -1 
                 self.__ready_queue.append(tid)
-            logging.debug(f"{cur_tid} futex_wake unblocked tid {tid}")
+            logging.debug("%s futex_wake unblocked tid %s", cur_tid, tid)
             return True
         return False
 
