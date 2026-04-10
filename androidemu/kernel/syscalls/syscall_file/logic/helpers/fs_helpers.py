@@ -33,7 +33,7 @@ class FSHelpers:
         self.g_isWin = platform.system() == "Windows"
         
     def _internal_path_stat_handler(self, mu, filename, buf_ptr, follow_links=True):
-        is_virtual, _ = self.__generator.prepare_path(filename, "")
+        is_virtual, _ = self.__generator.prepare_path(filename, "", ignore_handler=True)
         uid = self._get_config_uid(filename)
 
         if is_virtual:

@@ -175,7 +175,7 @@ class VirtualFileSystemCalls:
 
     def _access(self, mu, filename_ptr, flags):
         filename = memory_helpers.read_utf8(mu, filename_ptr)
-        is_virtual, _ = self.__generator.prepare_path(filename, "")
+        is_virtual, _ = self.__generator.prepare_path(filename, "", ignore_handler=True)
 
         if is_virtual:
             logging.debug("access '%s' (virtual) -> 0", filename)
