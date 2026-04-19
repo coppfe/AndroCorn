@@ -6,8 +6,7 @@ from unicorn import UC_PROT_READ, UC_PROT_WRITE, UcError
 from unicorn.arm_const import *
 from unicorn.arm64_const import *
 
-from lief.ELF import Relocation
-
+from ..utils.demangle import simple_demangle
 from ..utils.memory import memory_helpers
 
 from ..const import emu_const
@@ -16,7 +15,7 @@ from ..utils import misc_utils
 from .module import Module
 from .elf_reader import ELFReader
 from .soinfo import SoinfoWriter
-from .relocator import ARM32Relocator, ARM64Relocator, Relocation
+from .relocator import ARM32Relocator, ARM64Relocator
 from .bionic.tls_bionic import BionicTLS
 
 if TYPE_CHECKING:
@@ -35,6 +34,8 @@ class AndroidLinker:
     def __init__(self, emu: 'Emulator', vfs_root: str):
         self.emu = emu
         self.vfs_root = vfs_root
+
+        self.__demangle = False
         
         # --- Storage ---
         self.modules: List[Module] = []           
@@ -88,14 +89,13 @@ class AndroidLinker:
     def find_module_by_name(self, filename: str) -> Optional[Module]:
         """Legacy wrapper."""
         basename = os.path.basename(filename)
-        return self.modules_by_name.get(basename)
+        return self.modules_by_name.get(basename, None)
     
     def __get_ld_library_path(self):
         if (self.emu.arch == emu_const.ARCH_ARM32):
             return ["/system/lib/"]
         else:
             return ["/system/lib64/"]
-    #
 
     def find_so_on_disk(self, so_path):
         if os.path.isabs(so_path):
@@ -109,23 +109,25 @@ class AndroidLinker:
                 vfs_lib_path = misc_utils.vfs_path_to_system_path(self.emu.vfs_root, lib_full_path)
                 if (os.path.exists(vfs_lib_path)):
                     return vfs_lib_path
-                #
-            #
-        #
+
         return None
 
-    def load_module(self, filename: str, do_init: bool = True, main_lib: bool = False) -> Module:
+    def load_module(self, filename: str, do_init: bool, main_lib: bool , demangle: bool) -> Module:
         """
         Main entry point called by Emulator.
         Handles both the initial executable load and subsequent dlopens.
         """
-        logger.info(f"[Linker] Request to load: {filename} (do_init={do_init}) (main={main_lib})")
-        
-        if not self.tls_initialized:
-            return self._pipeline_load_executable(filename)
-        else:
-            return self._pipeline_dlopen(filename, do_init)
+        logger.info("[Linker] Request to load: %s (do_init=%s) (main=%s)", filename, do_init, main_lib)
+        self.__demangle = demangle
 
+        if not self.tls_initialized:
+            lib = self._pipeline_load_executable(filename)
+        else:
+            lib = self._pipeline_dlopen(filename, do_init)
+        
+        self.__demangle = False
+        return lib
+    
     # =========================================================================
     # Core Pipelines
     # =========================================================================
@@ -135,7 +137,7 @@ class AndroidLinker:
         logger.info("=== [Linker Phase 1] Loading Dependencies ===")
         main_module = self._load_recursive(filename)
         if not main_module:
-            raise RuntimeError(f"Could not load {filename}")
+            raise RuntimeError("Could not load executable: %s", filename)
 
         logger.info("=== [Linker Phase 2] TLS Bootstrap ===")
         self._bootstrap_tls(main_module)
@@ -162,7 +164,7 @@ class AndroidLinker:
             # Already loaded?
             m = self.find_module_by_name(filename)
             if m: return m
-            else: raise RuntimeError(f"dlopen failed: {filename}")
+            else: raise RuntimeError("dlopen failed: %s", filename)
 
         new_modules_list = self.modules[start_index:]
         
@@ -196,7 +198,7 @@ class AndroidLinker:
             return self.modules_by_name[basename]
 
         logger.debug("  [Load] Parsing %s", basename)
-        reader = ELFReader(path)
+        reader = ELFReader(path, self.__demangle)
         self._check_arch(reader, path)
         
         # Map
@@ -236,7 +238,9 @@ class AndroidLinker:
         for mod in self.modules:
             mod.tls_offset = self.tls.setup_static_tls(mod.reader, mod.bias)
         
-            logger.info(f"  [TLS] Bootstrap done for {os.path.basename(mod.filename)}. TLS offset: {hex(mod.tls_offset)}")
+            logger.info("  [TLS] Bootstrap done for %s. TLS offset: 0x%x", 
+                        os.path.basename(mod.filename), 
+                        mod.tls_offset)
 
         self.tls_initialized = True
 
@@ -302,7 +306,7 @@ class AndroidLinker:
         bias = module.bias
         ptr_sz = self.emu.ptr_size
         
-        logger.info(f"  [Init] {os.path.basename(module.filename)}")
+        logger.info("  [Init] Initializing %s", os.path.basename(module.filename))
 
         # DT_INIT
         init = reader._dynamic_tags.get("DT_INIT")
@@ -382,9 +386,9 @@ class AndroidLinker:
         
         base = os.path.basename(filename)
         paths = [
-            f"/system/{lib_dir}/{base}",
-            f"/vendor/{lib_dir}/{base}",
-            f"/data/local/tmp/{base}"
+            "/system/%s/%s" % (lib_dir, base),
+            "/vendor/%s/%s" % (lib_dir, base),
+            "/data/local/tmp/%s" % base # ?
         ]
         
         for p in paths:
@@ -398,4 +402,4 @@ class AndroidLinker:
         is_32 = reader.is_32
         emu_32 = (self.emu.arch == emu_const.ARCH_ARM32)
         if is_32 != emu_32:
-            raise RuntimeError(f"Arch mismatch: {path}. Expected {emu_const.ARCH_ARM32 if is_32 else emu_const.ARCH_ARM64}, got {self.emu.arch}.")
+            raise RuntimeError("Arch mismatch: %s. Expected %d, got %d.", path, 1 if is_32 else 2, is_32)

@@ -1,5 +1,4 @@
 import logging
-import os
 
 from unicorn.arm_const import *
 from ....utils.memory.struct_writer import StructWriter
@@ -8,7 +7,7 @@ from .dtv_builder import DTVBuilderARM32
 from .pthread_builder import PThreadBuilderARM32
 from ..tls_modules import TLSModuleLoader
 from ....data.mem_map import PAGE_SIZE
-
+from ....const.offsets.arm32 import *
 from ..tls_bionic import BionicTLS
 
 from typing import TYPE_CHECKING
@@ -45,44 +44,28 @@ class BionicTLS_ARM32(BionicTLS):
     def bootstrap(self, phdr_addr, phnum, entry_point):
         logger.info("[TLS-7.1-ARM32] Bootstrapping Legacy Layout")
 
-        self.tp = self.mem_reserve(0x1000, align=0x1000)
+        self.tp = self.mem_reserve(PAGE_SIZE, align=PAGE_SIZE)
 
         self.kernel_args_base = self._init_kernel_args(phdr_addr, phnum, entry_point)
 
         self.dtv = self.dtv_builder.build()
+        self.pthread_internal = self.pthread_builder.build()
         
-        bionic_internal_data = self.mem_reserve(0x500) 
-        
-        self.pthread_internal = self.pthread_builder.build(
-            tls_slots_ptr=self.tp,
-            bionic_tls_ptr=bionic_internal_data,
-            dtv_ptr=self.dtv
-        )
-        
-        self.errno_ptr = self.pthread_internal + 0x100
+        self._write_ptr(self.tp + ARM32_TLS_BASE, self.tp)                         # Slot 0: TLS Base pointer (Self)
+        self._write_ptr(self.tp + ARM32_TLS_PTHREAD_T, self.pthread_internal)      # Slot 1: pthread_t
+        self._write_ptr(self.tp + ARM32_TLS_ERRNO, 0)                              # Slot 2: __errno
+        self._write_ptr(self.tp + ARM32_TLS_KAB, self.kernel_args_base)            # Slot 3: Kernel Argument Block (AUXV, argc, argv)
+        # ------------ LIBC SLOTS END HERE ----------------------------
+        # self._write_ptr(self.tp + ARM32_TLS_SSP, self.at_rand)                   # Slot 4: Stack Guard (SSP)
+        # self._write_ptr(self.tp + ARM32_TLS_LOCALE, 0)                           # Slot 5: Locale
+        # self._write_ptr(self.tp + ARM32_TLS_RESERVED, 0)                         # Slot 6: Reserved
+        # self._write_ptr(self.tp + ARM32_TLS_DTV, self.dtv)                       # Slot 7: DTV (Dynamic Thread Vector)
 
-        # Slot 0: TLS Base pointer (Self)
-        self._write_ptr(self.tp + 0x00, self.tp)
-        # Slot 1: pthread_t
-        self._write_ptr(self.tp + 0x04, self.pthread_internal)
-        # Slot 2: __errno
-        self._write_ptr(self.tp + 0x08, self.errno_ptr)
-        # Slot 3: Kernel Argument Block (AUXV, argc, argv)
-        self._write_ptr(self.tp + 0x0C, self.kernel_args_base)
-        # Slot 4: Stack Guard (SSP)
-        self._write_ptr(self.tp + 0x10, self.at_rand)
-        # Slot 5: Locale
-        self._write_ptr(self.tp + 0x14, 0)
-        # Slot 6: Reserved
-        self._write_ptr(self.tp + 0x18, 0)
-        # Slot 7: DTV (Dynamic Thread Vector)
-        self._write_ptr(self.tp + 0x1C, self.dtv)
-
-        self.mu.reg_write(UC_ARM_REG_R9, self.tp)
-        self.mu.reg_write(UC_ARM_REG_R10, self.pthread_internal) # ?
+        self.mu.reg_write(UC_ARM_REG_R9, self.tp) # backward compatibility
+        # self.mu.reg_write(UC_ARM_REG_R10, self.pthread_internal) # i dont remember why
         self.mu.reg_write(UC_ARM_REG_C13_C0_3, self.tp)
         
-        logger.info(f"TLS 7.1 Ready. TP: {hex(self.tp)}, DTV: {hex(self.dtv)}, Pthread: {hex(self.pthread_internal)}")
+        logger.info("TLS 7.1 Ready. TP: %#x DTV: %#x, Pthread: %#x", self.tp, self.dtv, self.pthread_internal)
 
     def setup_static_tls(self, reader, bias):
         loader = TLSModuleLoader(self.emu, self)
@@ -126,7 +109,7 @@ class BionicTLS_ARM32(BionicTLS):
 
         env_str_ptrs = []
         for k, v in env.items():
-            s = f"{k}={v}"
+            s = "%s=%s" % (k, v)
             ptr = writer.write_utf8(s)
             env_str_ptrs.append(ptr)
 
@@ -155,10 +138,10 @@ class BionicTLS_ARM32(BionicTLS):
 
         # Kernel Argument Block
         kab_base = writer.reserve(16)
-        self._write_ptr(kab_base + 0, 1)         # argc
-        self._write_ptr(kab_base + 4, argv_ptr)  # argv
-        self._write_ptr(kab_base + 8, envp_ptr)  # envp
-        self._write_ptr(kab_base + 12, auxv_ptr) # auxv
+        self._write_ptr(kab_base + ARM32_KAB_ARGC, 1)         # argc
+        self._write_ptr(kab_base + ARM32_KAB_ARGV, argv_ptr)  # argv
+        self._write_ptr(kab_base + ARM32_KAB_ENVP, envp_ptr)  # envp
+        self._write_ptr(kab_base + ARM32_KAB_AUXV, auxv_ptr)  # auxv
 
         return kab_base
 
@@ -168,4 +151,4 @@ class BionicTLS_ARM32(BionicTLS):
         elif isinstance(val, bytes):
             self.mu.mem_write(addr, val)
         else:
-            raise TypeError(f"_write_ptr: unsupported type {type(val)}")
+            raise TypeError("_write_ptr: unsupported type %s" % type(val))

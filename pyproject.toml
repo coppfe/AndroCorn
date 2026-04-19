@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "androidemu"
+version = "2026.04.19"
+dependencies = [
+    "lief==0.17.6",
+    "unicorn==2.1.4",
+    "cpp_demangle",
+]
+
+[tool.setuptools.packages.find]
+include = ["androidemu*"]

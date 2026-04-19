@@ -3,7 +3,6 @@ from .base_fun import BaseFuncHooks
 from typing import TYPE_CHECKING
 
 import logging
-import random
 from unicorn.arm_const import *
 
 from unicorn import *

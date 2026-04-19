@@ -16,9 +16,13 @@ class PrctlHandler:
             PR_GET_DUMPABLE: self._get_dumpable,
             PR_GET_NAME:     self._get_name,
             PR_SET_NAME:     self._set_name,
+            PR_SET_PTRACER:  self._set_ptracer
         }
 
         self.__mu = mu
+
+    def _set_ptracer(self, mu, arg2, *args):
+        return 0
 
     def _set_vma(self, mu, arg2, arg3, arg4, arg5):
         return 0

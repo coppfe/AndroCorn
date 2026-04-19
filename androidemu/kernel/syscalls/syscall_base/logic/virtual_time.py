@@ -42,7 +42,7 @@ class VirtualTimeSyscall:
         elif clk_id in (CLOCK_MONOTONIC, CLOCK_MONOTONIC_COARSE, CLOCK_BOOTTIME):
             sec, nsec = self.__time_manager.get_clock_monotonic()
         else:
-            logging.warning(f"Unsupported clk_id: {clk_id}")
+            logging.warning("Unsupported clk_id: %d"%clk_id)
             sec, nsec = self.__time_manager.get_clock_monotonic()
             
         mu.mem_write(tp_ptr, int(sec).to_bytes(self.__ptr_sz, byteorder='little'))
@@ -60,9 +60,7 @@ class VirtualTimeSyscall:
         
         if ms <= 0: 
             ms = 0.001
-
-        # print(f"nanosleep called: req={req_tv_sec}s {req_tv_nsec}ns -> sleep {ms} ms")
-        
+                    
         self.__emu.scheduler.sleep(ms)
         
         if rem != 0:

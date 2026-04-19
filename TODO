@@ -1,3 +1,9 @@
 1. Nested calls
-2. Windows support
-3. Refactor module names
+2. Refactor module names and paths
+3. Optimizations
+4. execve -1 and -2 implementation. In real linux if the path is not found, it returns -2 and doesn't kill current process.
+5. Improve find_symbol_globally in linker. 
+6. Collect offsets to offset_cfg.py
+7. soinfo Symbol & Relocation table implementation
+8. Move linux errors to constants.
+9. Check more tests.

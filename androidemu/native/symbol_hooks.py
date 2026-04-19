@@ -22,15 +22,15 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-SYM_HOOK_CLASSES = [ # for exported symbols call
-    LibDLSymbolHooks,
-    LibCSymbolHooks,
-    LibCPPSymbolHooks
-]
+# SYM_HOOK_CLASSES = [ # for exported symbols call
+#     LibDLSymbolHooks,
+#     LibCSymbolHooks,
+#     LibCPPSymbolHooks
+# ]
 
-FUNC_HOOK_CLASSES = [ # for non-exported calls
-    LibCFunHooks
-]
+# FUNC_HOOK_CLASSES = [ # for non-exported calls
+#     LibCFunHooks
+# ]
 
 from ..java.helpers.native_method import native_method
 
@@ -41,11 +41,11 @@ class SymbolHooks:
         self.fun: 'FuncHooker' = emu.func_hooker
         # self.resolver = TLSSymbolResolver(emu, self._emu.tls_state)
 
-        for clz in SYM_HOOK_CLASSES:
-            clz(emu)
+        # for clz in SYM_HOOK_CLASSES:
+        #     clz(emu)
 
-        for clz in FUNC_HOOK_CLASSES:
-            clz(emu)
+        # for clz in FUNC_HOOK_CLASSES:
+        #     clz(emu)
 
         self._initialize()
 

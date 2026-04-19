@@ -41,7 +41,7 @@ class Relocator:
             data = (value & mask).to_bytes(self.word_size, 'little')
             self.emu.mu.mem_write(addr, data)
         except Exception as e:
-            logger.error(f"[Relocator] Write fault at {hex(addr)}: {e}")
+            logger.error("[Relocator] Write fault at 0x%x: %s", addr, e)
 
     def read_val(self, addr):
         return int.from_bytes(self.emu.mu.mem_read(addr, self.word_size), 'little')
@@ -85,7 +85,7 @@ class ARM32Relocator(Relocator):
             self.write_val(r_addr, new_val)
         
         else:
-            logger.warning(f"[ARM32Relocator] Unsupported relocation type: {r_type}")
+            logger.warning("[ARM32Relocator] Unsupported relocation type: %s" % r_type)
 
 class ARM64Relocator(Relocator):
     def apply(self, r_type, r_addr, sym_addr, sym_name, addend, tls_info=None):
@@ -122,4 +122,4 @@ class ARM64Relocator(Relocator):
             self.write_val(r_addr, val)
             
         else:
-            logger.warning(f"[ARM64Relocator] Unsupported relocation type: {r_type}")
+            logger.warning("[ARM64Relocator] Unsupported relocation type: %s" % r_type)

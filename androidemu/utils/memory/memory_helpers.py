@@ -85,9 +85,10 @@ def mem_reserve(mu: 'Uc', start: int, end: int, page_size: int) -> int:
 
         try:
             mu.mem_map(addr_start, size, UC_PROT_ALL)
-            logger.debug(f"[+] mem_map success: {hex(addr_start)} - {hex(addr_end)} (size: {hex(size)})")
+            logger.debug("[+] mem_map success: %#x - %#x (size: %#x)", addr_start, addr_end, size)
+
         except UcError as e:
-            logger.warning(f"[!] Region {hex(addr_start)} already mapped, protecting...")
+            logger.warning("[!] Region %#x already mapped, protecting...", addr_start)
             mu.mem_protect(addr_start, size, UC_PROT_ALL)
 
         return addr_start

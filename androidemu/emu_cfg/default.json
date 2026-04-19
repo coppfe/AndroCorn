@@ -26,6 +26,7 @@
 			"dns": "8.8.8.8",
 			"ssid": "Massive",
 			"gateway": "89.207.132.170"
-		}
+		},
+		"config": "mcc250-mnc01-ru-rRU,ldltr,sw360dp,w360dp,h640dp,320dpi,nokeys,vga,notouch,keysasaccent\nabi: arm64-v8a,armeabi-v7a,armeabi"
 	}
 	}

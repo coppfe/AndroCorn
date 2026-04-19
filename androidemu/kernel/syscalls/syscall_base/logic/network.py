@@ -48,11 +48,11 @@ class NetworkSyscalls:
             s = socket.socket(family, type_in, protocol)
             s.setblocking(False)
         except Exception as e:
-            logging.warning(f"socket error: {e}")
+            logging.warning("socket error: %s", e)
             return -1
 
         socket_id = s.fileno()
-        self.__pcb.add_fd(f"[socket:{family}]", "network_sock", socket_id)
+        self.__pcb.add_fd("[socket:%s]" % socket_id, "network_sock", socket_id)
 
         return socket_id
 
@@ -74,7 +74,7 @@ class NetworkSyscalls:
 
         family = int.from_bytes(data[0:2], "little")
 
-        logging.debug(f"connect fd={fd} family={family}")
+        logging.debug("connect fd=%d family=%d", fd, family)
 
         # AF_UNIX
         if family == 1:
@@ -86,7 +86,7 @@ class NetworkSyscalls:
             port = int.from_bytes(data[2:4], "big")
             ip = ".".join(str(b) for b in data[4:8])
 
-            logging.info(f"connect {ip}:{port}")
+            logging.info("connect to %s:%d", ip, port)
 
             try:
                 sock.connect((ip, port))
@@ -94,7 +94,7 @@ class NetworkSyscalls:
             except BlockingIOError:
                 return 0
             except Exception as e:
-                logging.warning(f"connect error: {e}")
+                logging.warning("connect error: %s", e)
                 return -1
 
         return 0

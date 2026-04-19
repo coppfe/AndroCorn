@@ -44,7 +44,7 @@ class MemorySyscallHandler:
             self._syscall_handler.set_handler(0x10E, "process_vm_readv",    6, self._handle_process_vm_readv)
 
     def _handle_munmap(self, uc, addr, len_in):
-        #TODO: set errno
+        # self.__emu.tls_utils.set_errno(0)
         return self._memory.unmap(addr, len_in)
     
     def _handle_brk(self, mu, brk_addr):

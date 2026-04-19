@@ -69,7 +69,7 @@ class SystemSyscalls:
             logging.debug("getrandom size=%d flags=%#x", count, flags)
             return count
         except Exception as e:
-            logging.error(f"getrandom failed: {e}")
+            logging.error("getrandom failed: %s", e)
             return -1 # EFAULT
 
     def _uname(self, mu, buf):

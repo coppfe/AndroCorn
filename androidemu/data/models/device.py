@@ -19,6 +19,9 @@ class Device:
     memory: Any = field(default_factory=dict) 
     kernel: Any = field(default_factory=dict)
     net: Any    = field(default_factory=dict)
+
+    config: Any = field(default_factory=dict)
+
     extra: Dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):

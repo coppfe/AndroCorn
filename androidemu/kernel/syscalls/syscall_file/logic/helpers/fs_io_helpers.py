@@ -29,126 +29,113 @@ class FSIOHelpers:
     def _do_poll(self, mu, pollfd_ptr, nfds, timeout):
         VIRT_READY = 0x0005 # POLLIN | POLLOUT
         virtual_ready_count = 0
-
         poll_list = []
-
         p = select.poll() if hasattr(select, "poll") else None
         
         for i in range(nfds):
-
             ptr = pollfd_ptr + (i * 8)
-            fd = int.from_bytes(mu.mem_read(ptr, 4), 'little')
+            guest_fd = int.from_bytes(mu.mem_read(ptr, 4), 'little')
             events = int.from_bytes(mu.mem_read(ptr + 4, 2), 'little')
 
-            is_virt = self.__pcb.virtual_files.get_fd_detail(fd).is_virtual
-            info = {"fd": fd, "events": events, "ptr": ptr, "is_virt": is_virt, "revents": 0}
+            vf = self.__pcb.virtual_files.get_fd_detail(guest_fd)
+            if not vf:
+                mu.mem_write(ptr + 6, (0x0020).to_bytes(2, 'little'))
+                continue
+
+            info = {"guest_fd": guest_fd, "vf": vf, "ptr": ptr, "revents": 0}
             
-            if is_virt:
+            if vf.is_virtual:
                 res = events & VIRT_READY
                 if res:
                     info["revents"] = res
                     virtual_ready_count += 1
             elif p:
-                try: p.register(fd, events)
-                except OSError: info["revents"] = 0x0008 # POLLERR
+                try:
+                    p.register(vf.descriptor, events)
+                except OSError:
+                    info["revents"] = 0x0008 # POLLERR
+            
             poll_list.append(info)
 
         actual_timeout = 0 if virtual_ready_count > 0 else timeout
-        if p and any(not x["is_virt"] for x in poll_list):
+        
+        if p and any(not x["vf"].is_virtual for x in poll_list):
             os_results = {fd: rev for fd, rev in p.poll(actual_timeout)}
             for info in poll_list:
-                if not info["is_virt"] and info["fd"] in os_results:
-                    info["revents"] = os_results[info["fd"]]
+                if not info["vf"].is_virtual:
+                    host_fd = info["vf"].descriptor
+                    if host_fd in os_results:
+                        info["revents"] = os_results[host_fd]
 
         for info in poll_list:
             mu.mem_write(info["ptr"] + 6, int(info["revents"]).to_bytes(2, 'little'))
 
-        return virtual_ready_count + sum(1 for x in poll_list if not x["is_virt"] and x["revents"] > 0)
+        return virtual_ready_count + sum(1 for x in poll_list if not x["vf"].is_virtual and x["revents"] > 0)
     
     def _open_file(self, mu, filename, flags):
         file_path = self.__fs_helpers._translate_path(filename)
-        is_virtual, path_info = self.__generator.prepare_path(filename, file_path, ignore_handler=True) # we don't need generate content.
+        
+        is_virtual, path_info = self.__generator.prepare_path(filename, file_path, ignore_handler=True)
         if is_virtual:
             return self.__pcb.virtual_files.add_virtual_fd(filename, path_info)
 
         original_flags = flags
-        
         access_mode = original_flags & 3
-        if access_mode == 0:   # O_RDONLY
-            real_flags = os.O_RDONLY
-        elif access_mode == 1: # O_WRONLY
-            real_flags = os.O_WRONLY
-        elif access_mode == 2: # O_RDWR
-            real_flags = os.O_RDWR
-        else:
-            real_flags = os.O_RDONLY # Дефолт
+        real_flags = {0: os.O_RDONLY, 1: os.O_WRONLY, 2: os.O_RDWR}.get(access_mode, os.O_RDONLY)
 
-        if (original_flags & 0o100):      # O_CREAT
-            real_flags |= os.O_CREAT
-        if (original_flags & 0o2000):     # O_APPEND
-            real_flags |= os.O_APPEND
-        if (original_flags & 0o40000):    # O_DIRECTORY
-            real_flags |= getattr(os, 'O_DIRECTORY', 0)
-        if (original_flags & 0o10000000): # O_PATH
-            real_flags |= getattr(os, 'O_PATH', 0)
+        if (original_flags & 0o100):      real_flags |= os.O_CREAT
+        if (original_flags & 0o2000):     real_flags |= os.O_APPEND
+        if (original_flags & 0o40000):    real_flags |= getattr(os, 'O_DIRECTORY', 0)
+        if (original_flags & 0o10000000): real_flags |= getattr(os, 'O_PATH', 0)
 
         try:
-
-            fd = misc_utils.my_open(file_path, real_flags)
-
+            host_fd = misc_utils.my_open(file_path, real_flags)
         except PermissionError:
-            if os.path.isdir(file_path):
-                return -21  # EISDIR
-            
-            return -13      # EACCES
-        
+            return -21 if os.path.isdir(file_path) else -13
         except FileNotFoundError:
-            return -2       # ENOENT
+            return -2
+
+        guest_fd = self.__pcb.virtual_files.add_fd(filename, file_path, host_fd)
         
-        self.__pcb.virtual_files.add_fd(filename, file_path, fd)
-        logging.info("open [%s][0x%x] return fd %d" % (file_path, flags, fd))
-        self.__create_fd_link(fd, file_path)
-        return fd
+        logging.debug("open [%s] HostFD:%d -> GuestFD:%d", filename, host_fd, guest_fd)
+        
+        self.__create_fd_link(guest_fd, file_path)
+        
+        return guest_fd
         
     def _close_file(self, mu, fd):
-        vf = self.__pcb.virtual_files.get_fd_detail(fd)
-        try:
-
-            if (self.__pcb.virtual_files.has_fd(fd)):
-                file = self.__pcb.virtual_files.get_fd_detail(fd)
-                if not file.is_virtual: os.close(fd)
-                self.__pcb.virtual_files.remove_fd(fd)
-                self.__fs_helpers._del_fd_link(fd)
-            else:
-
-                # Previously closed items will return 0, consistent with Android system behavior.
-                logging.warning("fd 0x%08X not in fds maybe has closed. Return 0"%fd)
-                return 0
-            
-        except OSError as e:
-            logging.warning("fd %d close error."%fd)
-            return -1
+        vfs = self.__pcb.virtual_files
         
-        return 0
+        if vfs.has_fd(fd):
+            vfs.remove_fd(fd)
+            
+            if hasattr(self, '__fs_helpers'):
+                self.__fs_helpers._del_fd_link(fd)
+                
+            return 0
+        else:
+            logging.warning("fd 0x%08X not in fds, maybe already closed.", fd)
+            return 0
     
-    def __create_fd_link(self, fd, target):
-        if (self.g_isWin):
-            # TODO?
+    def __create_fd_link(self, guest_fd, target):
+        if self.g_isWin or guest_fd < 0:
             return
 
-        if (fd >= 0):
-            pid = self.__pcb.pid
-            fdbase = "/proc/%d/fd/"%pid
-            fdbase = self.__fs_helpers._translate_path(fdbase)
-            if (not os.path.exists(fdbase)):
-                os.makedirs(fdbase)
+        pid = self.__pcb.pid
+        fdbase = self.__fs_helpers._translate_path(f"/proc/{pid}/fd/")
+        
+        if not os.path.exists(fdbase):
+            os.makedirs(fdbase, exist_ok=True)
 
-            p = "%s/%d"%(fdbase, fd)
-            if (os.path.exists(p)):
-                os.remove(p)
+        link_path = os.path.join(fdbase, str(guest_fd))
+        if os.path.exists(link_path):
+            os.remove(link_path)
 
+        try:
             full_target = os.path.abspath(target)
-            os.symlink(full_target, p, False)
+            os.symlink(full_target, link_path)
+        except OSError:
+            pass
 
     def _del_fd_link(self, fd):
         if (self.g_isWin):

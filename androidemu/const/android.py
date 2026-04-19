@@ -21,6 +21,7 @@ PR_SET_NAME=15		#/* Set process name */
 PR_GET_NAME=16		#/* Get process name */
 
 PR_SET_VMA = 0x53564d41
+PR_SET_PTRACER = 0x59616d61
 
 IOCTL_TCGETS = 0x5401
 IOCTL_SIOCGIFCONF = 0x8912

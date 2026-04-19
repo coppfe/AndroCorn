@@ -46,6 +46,9 @@ We introduced a robust **DTV (Dynamic Thread Vector) Builder** logic for both AR
 * **Deep Trace Logging:** Granular logging of syscalls, memory mappings, and linker phases.
 * **Symbolic Hooks:** More intuitive API for hooking and intercepting native functions.
 
+### 👀 Read & Write System Registers
+* Emulator supporting some unicorn unmapped registers by asm code execution.
+
 ---
 
 ## 🛠️ Getting Started
@@ -84,5 +87,7 @@ This program is free software: you can redistribute it and/or modify it under th
 
 - Original Project: [AeonLucid/AndroidNativeEmu](https://github.com/AeonLucid/AndroidNativeEmu)
 - License: [GNU GPL v3.0](https://www.gnu.org/licenses/gpl-3.0.html)
+
+## Also check [Tools Repo](https://github.com/coppfe/androcorn_native_tools)!
 
 ###### Probably not a very original name for the project, but okay.

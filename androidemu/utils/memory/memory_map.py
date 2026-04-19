@@ -55,7 +55,7 @@ class MemoryMap:
                 candidate = (r_limit + 0xFFF) & ~0xFFF # Align 4K
         
         if candidate + size > self._alloc_max_addr:
-            raise RuntimeError(f"Out of address space! Can't find {hex(size)} bytes.")
+            raise RuntimeError("Out of address space! Can't find 0x%x bytes." % size)
             
         return candidate
 
@@ -69,7 +69,7 @@ class MemoryMap:
             target_addr = self.__find_free_region(al_size)
         else:
             if not self.__is_page_align(address):
-                raise RuntimeError(f"Address {hex(address)} not page aligned")
+                raise RuntimeError("Address %#x not page aligned" % address)
             target_addr = address
 
         try:
@@ -127,7 +127,7 @@ class MemoryMap:
     def dump_maps(self, stream: 'io.StringIO'):
         regions = sorted(self.__mu.mem_regions())
         for start, end, prot in regions:
-            stream.write(f"{start:08x}-{end+1:08x} {prot}\n")
+            stream.write("%08x-%08x %s\n" % (start, end+1, prot))
     
     def get_regions(self) -> List[Tuple[int, int, int]]:
         return self.__mu.mem_regions()

@@ -3,7 +3,6 @@ import os
 import platform
 
 from .....utils.memory import memory_helpers
-from .....utils.parsers.android.logcat import LogCatParser
 
 from .....const.linux import *
 from .....const.metatags import *
@@ -16,7 +15,6 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .....emulator import Emulator
     from ....pcb import Pcb
-    from .....utils.generators.vfs_content import ContentGenerator
     from .helpers.fs_io_helpers import FSIOHelpers
     from .helpers.fs_helpers import FSHelpers
 
@@ -34,9 +32,6 @@ class VirtualFileIOCalls:
         self._sig_maps = {}
         
         self.g_isWin = platform.system() == "Windows"
-
-        if logging.root.level <= logging.INFO:
-            self.log_cat_parser = LogCatParser()
 
     @PROXY
     def _ioctl(self, mu, fd, cmd, arg1, arg2, arg3, arg4):
@@ -106,41 +101,29 @@ class VirtualFileIOCalls:
     def _lseek(self, mu, fd, offset, whence):
         file = self.__pcb.virtual_files.get_fd_detail(fd)
         if not file:
-            return -1 # EBADF
-
-        if file.is_virtual:
-            if whence == 0: # SEEK_SET
-                file.offset = offset
-            elif whence == 1: # SEEK_CUR
-                file.offset += offset
-            return file.offset
-
-        try:
-            real_fd = file.descriptor 
-            return os.lseek(real_fd, offset, whence)
+            return -9 # EBADF
         
-        except OSError as e:
-
-            logging.warning(f"lseek caused an OS error at fd {fd}: {e}")
-            return -1
+        return file.seek(offset, whence)
         
     def _llseek(self, mu, fd, offset_high, offset_low, result_ptr, whence):
-        if (offset_high != 0):
-            raise RuntimeError("_llseek offset_high %d>0 not implemented"%offset_high)
+        file = self.__pcb.virtual_files.get_fd_detail(fd)
+        if not file:
+            return -9 # EBADF
 
-        n = os.lseek(fd, offset_low, whence)
-        r = -1
+        full_offset = (offset_high << 32) | (offset_low & 0xFFFFFFFF)
 
-        if (n > 0xFFFFFFFF):
-            raise RuntimeError("_llseek return > 32 bits not implemented!!!")
-        
-        if (n >= 0):
+        new_offset = file.seek(full_offset, whence)
 
-            r = 0
-            rbytes = n.to_bytes(8, 'little')
-            mu.mem_write(result_ptr, rbytes)
-            
-        return r
+        if new_offset < 0:
+            return -22 # EINVAL
+
+        try:
+            mu.mem_write(result_ptr, new_offset.to_bytes(8, 'little'))
+        except Exception as e:
+            logging.error("_llseek error writing result to %#x: %s", result_ptr, e)
+            return -14 # EFAULT
+
+        return 0
 
     def _read(self, mu, fd, buf_addr, count):
         virtual_file = self.__pcb.virtual_files.get_fd_detail(fd)
@@ -167,9 +150,4 @@ class VirtualFileIOCalls:
             addr = memory_helpers.read_ptr_sz(mu, vec + (i * vec_sz), ptr_sz)
             size = memory_helpers.read_ptr_sz(mu, vec + (i * vec_sz) + ptr_sz, ptr_sz)
             total_data += mu.mem_read(addr, size)
-
-        if logging.root.level <= logging.INFO:
-            self.log_cat_parser.feed(total_data)
-            print(self.log_cat_parser.get_entries(clear=True))
-
         return file.write(total_data)

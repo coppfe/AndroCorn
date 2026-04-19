@@ -4,7 +4,7 @@ import logging
 import shutil
 import platform
 
-from .structs.vdstat import VirtualDeviceStat
+from ......objects.vdstat import VirtualDeviceStat
 
 from ......utils.files import file_helpers
 from ......const import emu_const
@@ -12,10 +12,11 @@ from ......const import linux
 
 from ......utils import misc_utils
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from ......emulator import Emulator
+    from ......objects.virtual_file import VirtualFile
     from .....pcb import Pcb
     from ......utils.generators.vfs_content import ContentGenerator
 
@@ -31,28 +32,64 @@ class FSHelpers:
         self.__root_path = root_path
 
         self.g_isWin = platform.system() == "Windows"
+    
+    def _get_path_owners(self, filename_in_vm):
+        filename_norm = self._norm_file_name(filename_in_vm)
+        if filename_norm.startswith(("/system", "/vendor", "/dev", "/proc")):
+            return 0, 0
+        uid = self.__emu.config.pkg.uid
+        return uid, uid
+    
+    def _make_stat_object(self, filename, vfile=None, follow_links=True):
+        uid, gid = self._get_path_owners(filename)
+        tm = self.__emu.time_manager
+
+        if not vfile:
+            vfile = self.__pcb.virtual_files.get_fd_by_name(filename)
+
+        if vfile:
+            vfile = cast("VirtualFile", vfile)
+            return VirtualDeviceStat.create_regular_file(
+                size=vfile.get_size(),
+                time_manager=tm,
+                uid=uid, gid=gid,
+                st_ino=vfile.descriptor
+            )
+
+        is_virtual_dev, _ = self.__generator.prepare_path(filename, "", ignore_handler=True)
+        if is_virtual_dev:
+            if "random" in filename: major, minor = 1, 8
+            elif "null" in filename: major, minor = 1, 3
+            elif "zero" in filename: major, minor = 1, 5
+            else: major, minor = 10, 200
+            return VirtualDeviceStat.create_char_device(major, minor, tm, uid, gid)
+
+        try:
+            if vfile and not vfile.is_virtual:
+                host_stat = os.fstat(vfile.descriptor)
+            else:
+                file_path = self._translate_path(filename)
+                host_stat = os.stat(file_path) if follow_links else os.lstat(file_path)
+
+            return VirtualDeviceStat(
+                st_mode=self._fix_st_mode(filename, host_stat.st_mode),
+                st_size=host_stat.st_size,
+                st_ino=host_stat.st_ino,
+                st_dev=host_stat.st_dev,
+                st_uid=uid,
+                st_gid=gid,
+                time_manager=tm
+            )
+        except OSError:
+            return None
         
     def _internal_path_stat_handler(self, mu, filename, buf_ptr, follow_links=True):
-        is_virtual, _ = self.__generator.prepare_path(filename, "", ignore_handler=True)
-        uid = self._get_config_uid(filename)
-
-        if is_virtual:
-            fd = self.__pcb.virtual_files.add_virtual_fd(filename, filename)
-            stats = VirtualDeviceStat(fd, filename, self.__emu.time_manager)
-            st_mode = stats.st_mode
-        else:
-            file_path = self._translate_path(filename)
-            try:
-                stats = os.stat(file_path) if follow_links else os.lstat(file_path)
-                st_mode = self._fix_st_mode(filename, stats.st_mode)
-            except OSError:
-                return -1
+        stats = self._make_stat_object(filename, follow_links=follow_links)
+        if not stats: return -1
 
         is_arm32 = self.__emu.arch == emu_const.ARCH_ARM32
         write_func = file_helpers.stat_to_memory2 if is_arm32 else file_helpers.stat_to_memory64
-        
-        write_func(mu, buf_ptr, stats, uid, st_mode, self.__emu.config)
-        
+        write_func(mu, buf_ptr, stats, stats.st_uid, stats.st_mode, self.__emu.config)
         return 0
 
     def _clear_proc_dir(self):
@@ -79,12 +116,11 @@ class FSHelpers:
         
         fdesc = self.__pcb.virtual_files.get_fd_detail(dirfd_signed)
         if fdesc is None:
-            logging.info(f"dirfd {dirfd_signed} is invalid!!! (original: {dirfd})")
+            logging.info("dirfd %d is invalid!!! (original: %d)", dirfd_signed, dirfd)
             return None
 
         dirpath = fdesc.name
         path = os.path.join(dirpath, relpath)
-        print(f"[*] dirfd_2_path({dirfd_signed}, {relpath}) => {path}")
         return path
     
     def _get_config_uid(self, filename_in_vm):

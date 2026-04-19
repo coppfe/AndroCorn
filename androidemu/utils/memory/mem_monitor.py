@@ -51,8 +51,7 @@ class MemoryMonitor:
                 name_pc = "unknown"
                 base_pc = 0
 
-            print(f"[0x{addr-base_read:08X}({name_read}) 0x{pc-base_pc:08X}({name_pc})]")
-
+            print("[0x%08X(%s) 0x%08X(%s)]"%(addr-base_read, name_read, pc-base_pc, name_pc))
 
     def dump_read_no_write(self, f):
         name_read = "unknown"

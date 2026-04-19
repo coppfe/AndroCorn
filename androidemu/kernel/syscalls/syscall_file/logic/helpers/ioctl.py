@@ -29,15 +29,15 @@ class IoctlHandler:
         return -1 # EPERM
 
     def handle(self, fd, cmd, arg1, arg2, arg3, arg4):
-        logging.debug(f"ioctl: fd={fd:#x} cmd={cmd:#x} arg1={arg1:#x}")
+        logging.debug("ioctl: fd=%#x cmd=%#x arg1=%#x arg2=%#x arg3=%#x arg4=%#x", fd, cmd, arg1, arg2, arg3, arg4)
 
         handler = self._handlers.get(cmd)
         if handler:
             try:
                 return handler(fd, arg1, arg2, arg3, arg4)
             except Exception as e:
-                logging.error(f"Error in ioctl handler 0x{cmd:x}: {e}")
+                logging.error("Error in ioctl handler %#x: %s", cmd, e)
                 return -22 # EINVAL
         
-        logging.warning(f"Unknown ioctl cmd {cmd:#x} for fd {fd}")
+        logging.warning("Unknown ioctl cmd 0x%#x for fd %d", cmd, fd)
         return -22 # EINVAL

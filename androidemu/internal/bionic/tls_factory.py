@@ -21,4 +21,4 @@ def create_tls_backend(emu: 'Emulator'):
     elif arch == emu_const.ARCH_ARM64:
         return BionicTLS_ARM64(emu)
     else:
-        raise NotImplementedError(f"TLS not implemented for arch: {arch}")
+        raise NotImplementedError("TLS not implemented for arch: %d" % arch)

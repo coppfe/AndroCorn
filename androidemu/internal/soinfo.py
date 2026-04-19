@@ -41,7 +41,7 @@ class SoinfoWriter:
             try:
                 struct.pack_into(self.ptr_fmt, data, start_offset + offset, val)
             except struct.error:
-                logging.error(f"[Soinfo] Pack error at offset {offset}, val {val}")
+                logging.error("[Soinfo] Pack error at offset 0x%x, val 0x%x", offset, val)
 
         def tag(name):
             val = reader._dynamic_tags.get(name)
@@ -49,7 +49,7 @@ class SoinfoWriter:
 
         if not self.is_64bit:
             name_bytes = os.path.basename(module.filename).encode('utf-8')[:127]
-            struct.pack_into(f"128s", data, 0, name_bytes)
+            struct.pack_into("128s", data, 0, name_bytes)
 
         # ptr_t phdr;
         phdr_addr = base + reader.header.program_header_offset

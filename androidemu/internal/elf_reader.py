@@ -1,20 +1,21 @@
 import lief
 import logging
 
-from typing import List, Dict, Any, Optional
-
 from ..utils.demangle import simple_demangle
+
+from typing import List, Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
 
 class ELFReader:
-    def __init__(self, filename: str):
+    def __init__(self, filename: str, demangle: bool):
         self.filename = filename
+        self.demangle = demangle
 
         try:
             self.binary: lief.ELF.Binary = lief.parse(filename)
         except Exception as e:
-            logger.error(f"Failed to parse ELF with LIEF: {e}")
+            logger.error("Failed to parse ELF with LIEF: %s", e)
             raise
 
         if not self.binary:
@@ -94,8 +95,12 @@ class ELFReader:
         temp = {}
         for sym in self.binary.symbols:
             if sym.type == lief.ELF.Symbol.TYPE.FUNC:
-                sym.name = simple_demangle(sym.name)
                 temp[sym.name] = sym.value
+                
+                if self.demangle:
+                    nice_name = simple_demangle(sym.name)
+                    if nice_name != sym.name:
+                        temp[nice_name] = sym.value
         return temp
 
     @property
@@ -116,6 +121,11 @@ class ELFReader:
         for sym in self.binary.dynamic_symbols:
             if sym.value > 0 and sym.name:
                 exports[sym.name] = sym.value
+                
+                if self.demangle:
+                    nice_name = simple_demangle(sym.name)
+                    if nice_name != sym.name:
+                        exports[nice_name] = sym.value
         return exports
     
     @property

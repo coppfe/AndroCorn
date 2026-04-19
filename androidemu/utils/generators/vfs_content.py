@@ -227,8 +227,8 @@ class ContentGenerator:
             w = 'w' if prot & 2 else '-'
             x = 'x' if prot & 1 else '-'
             p = 'p' 
-            flags = f"{r}{w}{x}{p}"
-            
+            flags = "%s%s%s%s" % (r, w, x, p)
+
             path = ""
             for mod in modules:
                 if mod.base <= start < (mod.base + mod.size):
@@ -248,8 +248,8 @@ class ContentGenerator:
                 # elif start == 0xf7e22000: path = "[vvar]"
                 # elif start == 0xf7e25000: path = "[vdso]"
 
-            line = f"{start:08x}-{end:08x} {flags} 00000000 00:00 0"
-            
+            line = "%08X-%08X %s 00000000 00:00 0"% (start, end, flags)
+
             if path:
                 line = line.ljust(73) + path
                 
@@ -257,8 +257,8 @@ class ContentGenerator:
         return buf.getvalue()
 
     def _gen_cmdline(self, **kwargs):
-        return f"{self.cfg.pkg.pkg_name}\x00"
-
+        return "%s\x00"%self.cfg.pkg.pkg_name
+    
     def _gen_cpu_online(self, **kwargs):
         return "0-7\n"
 

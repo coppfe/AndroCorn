@@ -7,7 +7,7 @@ import random
 from .....utils.memory import memory_helpers
 from .....utils.generators.vfs_content import ContentGenerator
 
-from .helpers.structs.vdstat import VirtualDeviceStat
+from .....objects.vdstat import VirtualDeviceStat
 from .....utils.files import file_helpers
 
 from .....const.linux import *
@@ -48,7 +48,8 @@ class VirtualFileSystemCalls:
     def _fcntl(self, mu, fd, cmd, arg1, arg2, arg3, arg4):
         if (self.g_isWin):
             return 0
-        r = fcntl.fcntl(fd, cmd, arg1)
+        try: r = fcntl.fcntl(fd, cmd, arg1)
+        except OSError: r = 0 # in windows same shit so why not to do same thing in linux
         return r
 
     @PROXY
@@ -64,35 +65,17 @@ class VirtualFileSystemCalls:
         logging.debug("unlink call path [%s]"%path)
         return 0
 
-    def _fstat64(self, mu, fd, stat_ptr): # # VFS manager
+    def _fstat64(self, mu, fd, stat_ptr):
         vf = self.__pcb.virtual_files.get_fd_detail(fd)
-        if vf.is_virtual:
-            dev_name = vf.name
-            vstat = VirtualDeviceStat(fd, dev_name, self.__emu.time_manager)
-            uid = self.__fs_helpers._get_config_uid(dev_name)
+        if not vf: return -9 # EBADF
 
-            if self.__emu.arch == emu_const.ARCH_ARM32:
-                file_helpers.stat_to_memory2(mu, stat_ptr, vstat, uid, vstat.st_mode, self.__emu.config)
-            else:
-                file_helpers.stat_to_memory64(mu, stat_ptr, vstat, uid, vstat.st_mode, self.__emu.config)
-            return 0
+        stats = self.__fs_helpers._make_stat_object(vf.name, vfile=vf)
+        if not stats: return -1
 
-        detail = self.__pcb.virtual_files.get_fd_detail(fd)
-        if not detail: return -1
-
-        try:
-            stats = os.fstat(fd)
-            uid = self.__fs_helpers._get_config_uid(detail.name)
-            st_mode = self.__fs_helpers._fix_st_mode(detail.name, stats.st_mode)
-
-            if self.__emu.arch == emu_const.ARCH_ARM32:
-                file_helpers.stat_to_memory2(mu, stat_ptr, stats, uid, st_mode, self.__emu.config)
-
-            else:
-                file_helpers.stat_to_memory64(mu, stat_ptr, stats, uid, st_mode, self.__emu.config)
-
-            return 0
-        except OSError: return -1
+        is_arm32 = self.__emu.arch == emu_const.ARCH_ARM32
+        write_func = file_helpers.stat_to_memory2 if is_arm32 else file_helpers.stat_to_memory64
+        write_func(mu, stat_ptr, stats, stats.st_uid, stats.st_mode, self.__emu.config)
+        return 0
 
     def _getdents64(self, mu, fd, linux_dirent64_ptr, count):
         entry = self.__pcb.virtual_files.get_fd_detail(fd)

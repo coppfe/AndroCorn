@@ -3,7 +3,6 @@ from .base_sym import BaseSymbolHooks
 from typing import TYPE_CHECKING
 
 import logging
-import random
 import os
 
 from unicorn import *
@@ -45,12 +44,12 @@ class LibDLSymbolHooks(BaseSymbolHooks):
             return 0
 
         path = memory_helpers.read_utf8(uc, path_str)
-        logger.debug(f"[+] dlopen('{path}', flags={flags})")
+        logger.debug("[+] dlopen('%s', flags=0x%x)", path, flags)
 
         requested_basename = os.path.basename(path)
         for mod in self._emu.linker.modules:
             if os.path.basename(mod.filename) == requested_basename:
-                logger.debug(f"[*] dlopen: '{path}' already loaded as {mod.filename}")
+                logger.debug("[*] dlopen: '%s' already loaded as %s", path, mod.filename)
                 return mod.soinfo_ptr
 
         fullpath = self._emu.linker.find_so_on_disk(path)
@@ -61,7 +60,7 @@ class LibDLSymbolHooks(BaseSymbolHooks):
             if mod:
                 return mod.soinfo_ptr
         
-        logger.warning(f"[!] dlopen: library '{path}' NOT FOUND")
+        logger.warning("[!] dlopen: library '%s' NOT FOUND", path)
         return 0
 
 
@@ -96,7 +95,7 @@ class LibDLSymbolHooks(BaseSymbolHooks):
         rtld_default = 0 if is_64 else 0xffffffff
         rtld_next = -1 if is_64 else -2 #future
 
-        logger.debug(f"[+] dlsym(handle={hex(handle)}, symbol='{symbol_name}')")
+        logger.debug("[+] dlsym(handle=%#x, symbol='%s')", handle, symbol_name)
 
         if handle == rtld_default:
             res = self._emu.linker.find_symbol_globally(symbol_name)
@@ -113,10 +112,10 @@ class LibDLSymbolHooks(BaseSymbolHooks):
                 return target_module.symbols[symbol_name]
             
 
-            logger.warning(f"[!] dlsym: symbol '{symbol_name}' not found in module {target_module.filename}")
+            logger.warning("[!] dlsym: symbol '%s' not found in module %s", symbol_name, target_module.filename)
             return 0
 
-        logger.error(f"[x] dlsym: Invalid handle {hex(handle)}")
+        logger.error("[x] dlsym: Invalid handle %#x", handle)
         return 0
     
     @native_method

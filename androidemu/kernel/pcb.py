@@ -1,5 +1,3 @@
-import sys
-import logging
 from random import randint
 from typing import Dict, List, TYPE_CHECKING
 
@@ -10,6 +8,11 @@ if TYPE_CHECKING:
     from ..emulator import Emulator
 
 class Pcb:
+    """
+    Pcb - Process Control Block
+
+    Have all info about process
+    """
     def __init__(self, emulator: 'Emulator', cfg: 'Config') -> None:
         self._cfg = cfg
         self.__emu: 'Emulator' = emulator
@@ -27,8 +30,12 @@ class Pcb:
         
         self._uc_to_tid = {} 
 
-        self.virtual_files = VirtualFileTable(emulator)
-
+    def post_init(self):
+        """
+        Post Init for methods with recursive dependency
+        """
+        self.virtual_files = VirtualFileTable(self.__emu)
+        
     @property
     def pid(self) -> int:
         return self._pid

@@ -33,7 +33,7 @@ class TLSSymbolResolver:
 
     def _allocate_dynamic_tls(self, module_id: int) -> int:
         if not hasattr(self.state, 'modules') or module_id not in self.state.modules:
-             raise RuntimeError(f"TLS metadata missing for module {module_id}")
+             raise RuntimeError("TLS metadata missing for module %d" % module_id)
 
         meta = self.state.modules[module_id]
         memsz = meta["memsz"]

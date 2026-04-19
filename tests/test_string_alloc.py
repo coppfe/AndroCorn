@@ -15,10 +15,11 @@ class TestLibCppSharedCall(unittest.TestCase):
         emulator = self.emulator
         vfs_path = emulator.vfs_root
 
-        libc = emulator.load_library(f"{vfs_path}/system/lib/libc.so", do_init=True)
-        libcpp = emulator.load_library(f"{vfs_path}/system/lib/libc++_shared.so", do_init=True)
+        libc = emulator.get_library(f"{vfs_path}/system/lib/libc.so")
+        libcpp = emulator.load_library(f"{vfs_path}/system/lib/libc++_shared.so", do_init=True, demangle=False)
 
         symbol_name = "_ZNSt6__ndk112basic_stringIcNS_11char_traitsIcEENS_9allocatorIcEEEC2IPcvEET_S8_"
+        # dmg_sym_name = "std::__ndk1::basic_string<char, std::__ndk1::char_traits<char>, std::__ndk1::allocator<char> >::basic_string<char*, void>(char*)"
 
         test_str = b"AndroidCorn2026"
         str_input_ptr = emulator.call_symbol(libc, "malloc", len(test_str) + 1)

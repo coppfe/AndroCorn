@@ -29,12 +29,12 @@ class SignalSyscalls:
         self.__emu: 'Emulator' = emulator
 
         self.__ptr_sz = self.__emu.ptr_size
-        self.__pid = self.__emu.pid
+        self.__pid = self.__emu.pcb.pid
         # self.__tid = self.__emu.scheduler.get_current_tid()
         self._sig_maps = {}
 
     def _kill(self, mu, pid, sig):
-        logging.warning("kill is call pid=0x%x sig=%d"%(pid, sig))
+        logging.debug("kill is call pid=0x%x sig=%d"%(pid, sig))
         if (pid == self.__pid):
             logging.error("process 0x%x is killing self!!! maybe encounter anti-debug!!!"%pid)
             sys.exit(-10)

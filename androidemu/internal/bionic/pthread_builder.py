@@ -16,7 +16,7 @@ class PThreadBuilder(ABC):
         self.ptr_sz = emu.ptr_size
 
     @abstractmethod
-    def build(self, tls_slots_ptr: int, bionic_tls_ptr: int, dtv_ptr: int = 0) -> int:
+    def build(self, tls_slots_ptr: int = 0, bionic_tls_ptr: int = 0, dtv_ptr: int = 0) -> int:
         raise NotImplementedError()
 
     # --- Helpers ---
