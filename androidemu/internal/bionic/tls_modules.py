@@ -4,7 +4,7 @@ import logging
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ...emulator import Emulator
-    from ..elf_reader import ELFReader
+    from ...utils.parsers.elf import ELFReader
     from .tls_bionic import BionicTLS
 
 logger = logging.getLogger(__name__)
@@ -46,8 +46,8 @@ class TLSModuleLoader:
         return module_id
     
     def _find_tls_segment(self, reader: 'ELFReader'):
-        for seg in reader.binary.segments:
-            if seg.type == lief.ELF.Segment.TYPE.TLS:
+        for seg in reader.segments:
+            if seg["p_type"] == "TLS":
                 if seg.virtual_size > 0:
                     return seg
         return None
@@ -64,4 +64,3 @@ class TLSModuleLoader:
         if seg.virtual_size > len(content):
             zero_sz = seg.virtual_size - len(content)
             self.mu.mem_write(addr + len(content), b'\x00' * zero_sz)
-        

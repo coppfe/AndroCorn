@@ -1,100 +1,135 @@
-    
 import logging
 import socket
 
-from unicorn import Uc
-from unicorn.arm_const import *
-
-from .....const.android import *
-from .....const.linux import *
-from .....objects.virtual_file import VirtualFile
-
-from unicorn import *
-
 from typing import TYPE_CHECKING
+
+from .....const.linux import *
 
 if TYPE_CHECKING:
     from .....emulator import Emulator
-    from ....pcb import Pcb
+    from .....pcb import Pcb
 
 
 class NetworkSyscalls:
     def __init__(self, emulator: 'Emulator'):
-        self.__emu: 'Emulator' = emulator
+        self.__emu = emulator
         self.__pcb: 'Pcb' = emulator.pcb
 
-        self.__real_sockets = {}
+        self._real_sockets = {}
 
-    def _setsockopt(self, mu, fd, level, optname, optval, optlen):
-            logging.warning("_setsockopt not implement skip")
-            return 0
+    # =========================================================
+    # SOCKET
+    # =========================================================
 
     def _socket(self, mu, family, type_in, protocol):
-        # AF_UNIX = 1, AF_INET = 2, AF_NETLINK = 16
-        type_in &= 0xFF
+        type_in &= 0xff
 
-        # AF_NETLINK
+        # -------------------------
+        # AF_NETLINK (virtual)
+        # -------------------------
         if family == 16:
-            logging.debug("Creating Netlink socket (AF_NETLINK)")
-            socket_id = self.__pcb.virtual_files.add_virtual_fd("[netlink]", "netlink_sock")
-            return socket_id
+            return self.__pcb.virtual_files.add_virtual_fd(
+                "[netlink]",
+                "netlink_socket"
+            )
 
+        # -------------------------
+        # AF_UNIX (virtual)
+        # -------------------------
         if family == 1:
-            logging.debug("Creating UNIX socket (virtual)")
-            socket_id = self.__pcb.virtual_files.add_virtual_fd("[unix]", "unix_sock")
-            return socket_id
+            return self.__pcb.virtual_files.add_virtual_fd(
+                "[unix]",
+                "unix_socket"
+            )
 
+        # -------------------------
+        # REAL SOCKET
+        # -------------------------
         try:
             s = socket.socket(family, type_in, protocol)
             s.setblocking(False)
         except Exception as e:
             logging.warning("socket error: %s", e)
-            return -1
+            return -EPERM
 
-        socket_id = s.fileno()
-        self.__pcb.add_fd("[socket:%s]" % socket_id, "network_sock", socket_id)
+        fd = s.fileno()
+        self._real_sockets[fd] = s
 
-        return socket_id
+        self.__pcb.add_fd(
+            "[socket:%d]" % fd,
+            "network_socket",
+            fd
+        )
 
-    def _bind(self, mu, fd, addr, addr_len):
+        return fd
 
-        # The struct is confusing..
-        addr = mu.mem_read(addr + 3, addr_len - 3).decode(encoding="utf-8")
+    # =========================================================
+    # SETSOCKOPT
+    # =========================================================
 
-        logging.info('Binding socket to ://%s' % addr)
-        raise NotImplementedError()
+    def _setsockopt(self, mu, fd, level, optname, optval, optlen):
+        logging.warning("setsockopt not implemented (fd=%d)", fd)
         return 0
 
-    def _connect(self, mu, fd, addr, addr_len):
+    # =========================================================
+    # CONNECT
+    # =========================================================
+
+    def _connect(self, mu, fd, addr_ptr, addr_len):
         sock = self.__pcb.virtual_files.get_fd_detail(fd)
         if not sock:
-            return -1
+            return -EPERM
 
-        data = mu.mem_read(addr, addr_len)
-
+        data = mu.mem_read(addr_ptr, addr_len)
         family = int.from_bytes(data[0:2], "little")
 
-        logging.debug("connect fd=%d family=%d", fd, family)
-
+        # -------------------------
         # AF_UNIX
+        # -------------------------
         if family == 1:
             logging.debug("AF_UNIX connect (virtual)")
             return 0
 
+        # -------------------------
         # AF_INET
+        # -------------------------
         if family == 2:
             port = int.from_bytes(data[2:4], "big")
             ip = ".".join(str(b) for b in data[4:8])
 
-            logging.info("connect to %s:%d", ip, port)
+            logging.info("connect -> %s:%d", ip, port)
+
+            real = self._real_sockets.get(fd)
+            if not real:
+                return -EPERM
 
             try:
-                sock.connect((ip, port))
-                return 0
+                real.connect((ip, port))
             except BlockingIOError:
-                return 0
+                pass
             except Exception as e:
                 logging.warning("connect error: %s", e)
-                return -1
+                return -EPERM
 
+            return 0
+
+        return 0
+
+    # =========================================================
+    # BIND
+    # =========================================================
+
+    def _bind(self, mu, fd, addr_ptr, addr_len):
+        sock = self.__pcb.virtual_files.get_fd_detail(fd)
+        if not sock:
+            return -EPERM
+
+        data = mu.mem_read(addr_ptr, addr_len)
+
+        # skip sockaddr parsing noise safely
+        addr = data[2:].split(b"\x00")[0].decode(errors="ignore")
+
+        logging.info("bind -> %s", addr)
+
+        sock.bound = True
         return 0

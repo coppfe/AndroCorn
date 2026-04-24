@@ -1,6 +1,5 @@
 import logging
 import random
-import struct
 
 from collections import deque
 from typing import TYPE_CHECKING, Dict, Set
@@ -9,6 +8,7 @@ from unicorn import *
 from unicorn.arm_const import *
 from unicorn.arm64_const import *
 
+from .const.linux import *
 from .data import mem_map as config
 from .const import emu_const
 from .java.helpers.native_method import native_write_args
@@ -245,7 +245,7 @@ class Scheduler:
                 self.yield_task()
                 return 0
             else:
-                return -10 # ECHILD
+                return -ECHILD
 
         # TID is "sleeped"
         if target_tid in self.__zombie_tasks:
@@ -270,7 +270,7 @@ class Scheduler:
             self.yield_task()
             return 0
 
-        return -10 # ECHILD
+        return -ECHILD
 
     def get_current_tid(self):
         return self.__cur_tid

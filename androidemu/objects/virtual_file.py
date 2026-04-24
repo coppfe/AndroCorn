@@ -3,10 +3,13 @@ import logging
 
 from typing import TYPE_CHECKING
 
-from .vdstat import VirtualDeviceStat
+from ..const.linux import *
+
+from ..utils import misc_utils
 
 if TYPE_CHECKING:
     from ..emulator import Emulator
+
 
 logging.getLogger(__name__)
 
@@ -22,12 +25,41 @@ class VirtualFile:
         self.descriptor: int = host_fd 
         
         self.is_virtual: bool = is_virtual
-
+        self.symlink_target: str = None
+        
         self.__buffer = bytearray()
 
         if is_virtual:
             from ..utils.generators.vfs_content import ContentGenerator
             self.__content_generator = ContentGenerator(emulator)
+    
+    @staticmethod
+    def open(emulator: 'Emulator', filename: str, file_path: str, flags: int,  is_virtual: bool = False):
+        if is_virtual:
+            guest_fd = emulator.pcb.virtual_files.add_virtual_fd(filename, file_path)
+            logging.debug("open virtual [%s] GuestFD:%d", filename, guest_fd)
+            return guest_fd
+        
+        original_flags = flags
+        access_mode = original_flags & 3
+        real_flags = {0: os.O_RDONLY, 1: os.O_WRONLY, 2: os.O_RDWR}.get(access_mode, os.O_RDONLY)
+
+        if (original_flags & 0o100):      real_flags |= os.O_CREAT
+        if (original_flags & 0o2000):     real_flags |= os.O_APPEND
+        if (original_flags & 0o40000):    real_flags |= getattr(os, 'O_DIRECTORY', 0)
+        if (original_flags & 0o10000000): real_flags |= getattr(os, 'O_PATH', 0)
+
+        try:
+            host_fd = misc_utils.my_open(file_path, real_flags)
+        except PermissionError:
+            return -EISDIR if os.path.isdir(file_path) else -EACCES
+        except FileNotFoundError:
+            return -ENOENT
+        
+        guest_fd = emulator.pcb.virtual_files.add_fd(filename, file_path, host_fd)
+        logging.debug("open [%s] HostFD:%d -> GuestFD:%d", filename, host_fd, guest_fd)
+
+        return guest_fd
 
     def read(self, buf_addr, count):
         try:
@@ -35,33 +67,32 @@ class VirtualFile:
                 if len(self.__buffer) > 0:
                     data = self.__buffer[self.offset : self.offset + count]
                     self.offset += len(data)
-                
                 else:
-                    _, content = self.__content_generator.prepare_path(
-                        self.name, self.name_in_system, fd=self.descriptor, count=count
+                    content = self.__content_generator.generate(
+                        self.name, fd=self.descriptor, count=count
                     )
-                    if isinstance(content, str): data = content.encode('utf-8')
-                    elif isinstance(content, bytes): data = content
-                    else: data = b''
-                    
+                    data = content.encode('utf-8') if isinstance(content, str) else (content if isinstance(content, bytes) else b'')
                     data = data[self.offset : self.offset + count]
                     self.offset += len(data)
             else:
-                os.lseek(self.descriptor, self.offset, os.SEEK_SET)
+                if not os.isatty(self.descriptor):
+                    try:
+                        os.lseek(self.descriptor, self.offset, os.SEEK_SET)
+                    except OSError:
+                        pass
+                
                 data = os.read(self.descriptor, count)
                 self.offset += len(data)
 
-            readable_data = data
-            actual_size = len(readable_data)
-
+            actual_size = len(data)
             if actual_size > 0:
-                self.__emulator.mu.mem_write(buf_addr, readable_data)
+                self.__emulator.mu.mem_write(buf_addr, data)
 
             return actual_size
 
         except Exception as e:
             logging.error("Read error on fd %d (%s): %s", self.descriptor, self.name, e)
-            return -1
+            return -EPERM
         
     def write(self, data):
         if self.is_virtual:
@@ -77,13 +108,18 @@ class VirtualFile:
             return len(data)
             
         try:
-            os.lseek(self.descriptor, self.offset, os.SEEK_SET)
+            if not os.isatty(self.descriptor):
+                try:
+                    os.lseek(self.descriptor, self.offset, os.SEEK_SET)
+                except OSError:
+                    pass
+            
             r = os.write(self.descriptor, data)
             if r != -1:
                 self.offset += r
         except OSError as e:
             logging.warning("Write error on fd %d (%s): %s", self.descriptor, self.name, e)
-            return -1
+            return -EPERM
         return r
     
     def close(self):

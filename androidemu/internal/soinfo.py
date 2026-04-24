@@ -5,7 +5,7 @@ import os
 
 from typing import List, TYPE_CHECKING
 
-from . import elf_reader
+from ..utils.parsers import elf
 from ..utils.memory import memory_helpers
 from ..const.emu_const import *
 
@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from ..emulator import Emulator
     from unicorn import Uc
     from .module import Module
-    from .elf_reader import ELFReader
+    from ..utils.parsers.elf import ELFReader
 
 logging.getLogger(__name__)
 
@@ -52,11 +52,11 @@ class SoinfoWriter:
             struct.pack_into("128s", data, 0, name_bytes)
 
         # ptr_t phdr;
-        phdr_addr = base + reader.header.program_header_offset
+        phdr_addr = base + reader.phoff
         p(0x00, phdr_addr)
         
         # size_t phnum;
-        p(self.ptr_sz, reader.header.numberof_segments)
+        p(self.ptr_sz, reader.phdr_num)
         
         # ptr_t base;
         off_base = 0x0C if not self.is_64bit else 0x18

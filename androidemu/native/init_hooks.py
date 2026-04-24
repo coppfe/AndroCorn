@@ -6,11 +6,11 @@ from unicorn.arm_const import *
 from .sym_hooks.base_sym import BaseSymbolHooks
 from .fun_hooks.base_fun import BaseFuncHooks
 
-from .sym_hooks.libdl_sym import LibDLSymbolHooks
-from .sym_hooks.libc_sym import LibCSymbolHooks
-from .sym_hooks.libcpp_sym import LibCPPSymbolHooks
+# from .sym_hooks.libdl_sym import LibDLSymbolHooks
+# from .sym_hooks.libc_sym import LibCSymbolHooks
+# from .sym_hooks.libcpp_sym import LibCPPSymbolHooks
 
-from .fun_hooks.libc_fun import LibCFunHooks
+# from .fun_hooks.libc_fun import LibCFunHooks
 
 # from ..internal.bionic.tls_resolver import TLSSymbolResolver
 
@@ -34,7 +34,8 @@ logger = logging.getLogger(__name__)
 
 from ..java.helpers.native_method import native_method
 
-class SymbolHooks:
+class HooksInitializer:
+    __slots__ = ('_emu', 'fun')
 
     def __init__(self, emu: 'Emulator'):
         self._emu: 'Emulator' = emu
@@ -74,7 +75,6 @@ class SymbolHooks:
             if sym_addr == 0:
                 logging.debug("[!] Symbol %s not found as function name. Hooking as address.", symbol)
                 sym_addr = symbol
-                # logger.warning(f"[!] Symbol {symbol} not found")
                 continue
 
             self.fun.fun_hook(sym_addr, num_args, before, after)

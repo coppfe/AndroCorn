@@ -24,7 +24,6 @@ class ProcessIOHelper:
         else:
             logging.warning("'pipe2' not support. Using 'pipe'")
             ps = os.pipe()
-
         logging.debug("pipe return %r"%(ps,))
 
         self.__pcb.virtual_files.add_fd("[pipe_r]", "[pipe_r]", ps[0])

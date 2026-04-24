@@ -2,10 +2,10 @@ import logging
 
 from typing import TYPE_CHECKING
 
-from lief.ELF import Relocation
-
 from unicorn.arm_const import *
 from unicorn.arm64_const import *
+
+from lief.ELF import Relocation
 
 
 if TYPE_CHECKING:
@@ -49,7 +49,6 @@ class Relocator:
 class ARM32Relocator(Relocator):
     def apply(self, r_type, r_addr, sym_addr, sym_name, addend, tls_info=None):
         implicit = self.read_val(r_addr)
-
         new_val = None
 
         # 1. Hooks

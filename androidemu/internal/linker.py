@@ -6,14 +6,13 @@ from unicorn import UC_PROT_READ, UC_PROT_WRITE, UcError
 from unicorn.arm_const import *
 from unicorn.arm64_const import *
 
-from ..utils.demangle import simple_demangle
 from ..utils.memory import memory_helpers
 
 from ..const import emu_const
 from ..data import mem_map as config
 from ..utils import misc_utils
 from .module import Module
-from .elf_reader import ELFReader
+from ..utils.parsers.elf import ELFReader
 from .soinfo import SoinfoWriter
 from .relocator import ARM32Relocator, ARM64Relocator
 from .bionic.tls_bionic import BionicTLS
@@ -36,6 +35,8 @@ class AndroidLinker:
         self.vfs_root = vfs_root
 
         self.__demangle = False
+        self.__cache = True
+        self.__global_symbol_cache = {}
         
         # --- Storage ---
         self.modules: List[Module] = []           
@@ -67,18 +68,10 @@ class AndroidLinker:
         self.symbol_hooks[symbol_name] = addr
 
     def find_symbol_globally(self, symbol_name: str) -> int:
-        # 1. Hooks
         if symbol_name in self.symbol_hooks:
             return self.symbol_hooks[symbol_name]
         
-        # 2. Linear Search
-        #O(n**2)
-        #TODO: improve
-
-        for mod in self.modules:
-            val = mod.find_symbol(symbol_name)
-            if val: return val
-        return 0
+        return self.__global_symbol_cache.get(symbol_name, 0)
     
     def find_function_by_name(self, symbol_name: str) -> Optional[Module]:
         for mod in self.modules:
@@ -112,20 +105,20 @@ class AndroidLinker:
 
         return None
 
-    def load_module(self, filename: str, do_init: bool, main_lib: bool , demangle: bool) -> Module:
+    def load_module(self, filename: str, do_init: bool, main_lib: bool , demangle: bool, use_cache: bool) -> Module:
         """
         Main entry point called by Emulator.
         Handles both the initial executable load and subsequent dlopens.
         """
         logger.info("[Linker] Request to load: %s (do_init=%s) (main=%s)", filename, do_init, main_lib)
         self.__demangle = demangle
+        self.__cache = use_cache
 
         if not self.tls_initialized:
             lib = self._pipeline_load_executable(filename)
         else:
             lib = self._pipeline_dlopen(filename, do_init)
         
-        self.__demangle = False
         return lib
     
     # =========================================================================
@@ -203,6 +196,12 @@ class AndroidLinker:
         
         # Map
         base, bias, size = self._map_elf_segments(reader)
+
+        for sym_name, sym_offset in reader.exported_symbols.items():
+            if sym_name not in self.__global_symbol_cache:
+                abs_addr = base + sym_offset
+                
+                self.__global_symbol_cache[sym_name] = abs_addr
         
         # Create Module
         module = Module(path, base, bias, size, reader.exported_symbols, reader)
@@ -258,15 +257,15 @@ class AndroidLinker:
             bias)
         
         for rel in reader.relocations:
-            r_type = rel.type
-            r_addr = bias + rel.address
+            r_type = rel["type"]
+            r_addr = bias + rel["address"]
             
             sym_addr = 0
             sym_name = None
             sym_tls_off = 0
             
-            if rel.has_symbol:
-                sym_name = rel.symbol.name
+            if rel["symbol_name"] is not None:
+                sym_name = rel["symbol_name"]
                 sym_addr = self.find_symbol_globally(sym_name)
 
                 if self.tls:
@@ -275,7 +274,7 @@ class AndroidLinker:
                             sym_tls_off = getattr(m, 'tls_offset', 0)
                             break
 
-            addend = getattr(rel, "addend", 0) if is_64 else int.from_bytes(self.emu.mu.mem_read(r_addr, 4), 'little')
+            addend = rel.get("addend", 0) if is_64 else int.from_bytes(self.emu.mu.mem_read(r_addr, 4), 'little')
             tls_ctx = {"tp": self.tls.tp, "offset": sym_tls_off} if self.tls else None
             
             try:

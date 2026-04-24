@@ -10,7 +10,7 @@ class AccessibleObject(metaclass=JavaClassDef, jvm_name='java/lang/reflect/Acces
     #
 
     @java_method_def(name='setAccessible', args_list=["jboolean"], signature='(Z)V', native=False)
-    def setAccessible(self, emu, access):
+    def setAccessible(self, emu, access):        
         logging.debug("AccessibleObject setAccessible call skip")
     #
 #

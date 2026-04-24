@@ -1,5 +1,8 @@
 import re
 import logging
+
+from ......const.linux import *
+
 from typing import Dict, List, Callable, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -54,7 +57,7 @@ class ExecveHandler:
             shell_cmd = argv[c_idx + 1]
         except (ValueError, IndexError):
             logging.error("sh called without -c or missing command")
-            return -1
+            return -EPERM
 
         shell_cmd = shell_cmd.strip("'\"")
         return self._dispatch_shell_command(shell_cmd)

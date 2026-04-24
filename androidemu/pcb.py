@@ -1,11 +1,11 @@
 from random import randint
 from typing import Dict, List, TYPE_CHECKING
 
-from .state.vf_table import VirtualFileTable
+from .utils.state.vf_table import VirtualFileTable
 
 if TYPE_CHECKING:
-    from ..config import Config
-    from ..emulator import Emulator
+    from .config import Config
+    from .emulator import Emulator
 
 class Pcb:
     """

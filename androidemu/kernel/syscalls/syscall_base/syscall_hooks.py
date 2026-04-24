@@ -1,5 +1,5 @@
 from ....const import emu_const
-from ..syscall_handlers import SyscallHandlers
+from ....handlers.syscall import SyscallHandlers
 
 from .logic.process import ProcessSyscalls
 from .logic.system import SystemSyscalls

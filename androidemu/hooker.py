@@ -83,21 +83,6 @@ class Hooker:
         return ptr_address, table_address
 
     def _hook(self, mu: 'Uc', address, size, user_data):
-        #通过hook一条特殊的指令回调到python处理
-        #FIXME : 这里有隐晦的bug，如果在触发hook的指令刚好被调度器打断，则这个回调会正常执行，但是执行后会修改状态，比如函数调用改了r0等返回值
-        #而unicorn恢复调用时候会再次触发该回调，相当于这个回调同时触发了两次，但是此时的上下文已经被上次的调用改掉了，导致这次调用的上下文是错的
-        #如果调度器采用指令数量中断容易有可能出现这个问题(emu_start第四个参数)
-        #总结目前局限，不要在hook_code内部调用emu_stop
-
-        # Callback to Python by hooking a special instruction.
-        # FIXME: There is a subtle bug here. If the instruction triggering the hook is interrupted 
-        # by the scheduler (e.g., due to the instruction limit in emu_start), the callback 
-        # executes normally and modifies the CPU state (like the R0 return value). 
-        # However, when Unicorn resumes, it re-triggers the same hook again. 
-        # This causes the callback to run twice, but the second execution will use the 
-        # modified (now incorrect) context from the first run.
-        # Current limitation: Do not call emu_stop() inside a hook_code callback.
-
         hook_func = self._addr_to_hook[address & ~1]
 
         try:

@@ -1,179 +1,201 @@
 import logging
-import time
 import os
+import time
+import random
 
 from unicorn import Uc
-from unicorn.arm_const import *
-
-import random
 
 from .....const.android import *
 from .....const.linux import *
 from .....const import emu_const
-from .....const.metatags import *
 from .....utils.memory import memory_helpers
 from .helpers.prctl import PrctlHandler
-
-from unicorn import *
 
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .....emulator import Emulator
 
+
 class SystemSyscalls:
+
+    # =========================================================
+    # INIT
+    # =========================================================
+
     def __init__(self, emulator: 'Emulator'):
+        self.__emu = emulator
 
         cfg = emulator.config
+        dev = cfg.pkg.device
 
-        self.__emu: 'Emulator' = emulator
+        self.__kernel = dev.kernel
+        self.__mem_cfg = dev.memory
 
-        self.__device_cfg = cfg.pkg.device
-        self.__kernel_cfg = self.__device_cfg.kernel
-        self.__mem_cfg = self.__device_cfg.memory
+        self.__prctl = PrctlHandler(emulator.mu, cfg.pkg.pkg_name, emulator.ptr_size)
 
-        self._clock_start = time.time()
-        self._clock_offset = random.randint(50000, 100000)
+        self._t0 = time.time()
+        self._uptime_bias = random.randint(50000, 100000)
 
-        self.__prctl_handler = PrctlHandler(self.__emu.mu, cfg.pkg.pkg_name, self.__emu.ptr_size)
+    # =========================================================
+    # PRCTL
+    # =========================================================
 
-    @PROXY
     def _prctl(self, mu, option, arg2, arg3, arg4, arg5):
-        """
-        int prctl(int option, unsigned long arg2, unsigned long arg3, unsigned long arg4, unsigned long arg5);
-        See:
-        - https://linux.die.net/man/2/prctl
-        - https://github.com/torvalds/linux/blob/master/include/uapi/linux/prctl.h
+        return self.__prctl.handle(option, arg2, arg3, arg4, arg5)
 
-        For PR_SET_VMA:
-        - https://android.googlesource.com/platform/bionic/+/263325d/libc/include/sys/prctl.h
-        - https://sourceforge.net/p/strace/mailman/message/34329772/
-        """
-        self.__prctl_handler.handle(option, arg2, arg3, arg4, arg5)
+    # =========================================================
+    # CPU / RANDOM
+    # =========================================================
 
-    def _getcpu(self, mu, _cpu, node, cache):
-        if _cpu != 0:
-            #unsigned *指针，写4没问题
-            mu.mem_write(_cpu, int(1).to_bytes(4, byteorder='little'))
+    def _getcpu(self, mu, cpu_ptr, node_ptr, cache):
+        if cpu_ptr:
+            mu.mem_write(cpu_ptr, (1).to_bytes(4, "little"))
         return 0
-    
-    def _getrandom(self, mu, buf_addr, count, flags):
-        """
-        size_t getrandom(void *buf, size_t buflen, unsigned int flags);
-        """
+
+    def _getrandom(self, mu, buf, count, flags):
         try:
-            rand_bytes = os.urandom(count)
-            
-            mu.mem_write(buf_addr, rand_bytes)
-            
-            logging.debug("getrandom size=%d flags=%#x", count, flags)
+            data = os.urandom(count)
+            mu.mem_write(buf, data)
+            logging.debug("getrandom n=%d flags=%x", count, flags)
             return count
         except Exception as e:
             logging.error("getrandom failed: %s", e)
-            return -1 # EFAULT
+            return -EPERM
+
+    # =========================================================
+    # UNAME
+    # =========================================================
 
     def _uname(self, mu, buf):
-        is_32 = self.__emu.arch == emu_const.ARCH_ARM32
-        
-        sysname = self.__kernel_cfg.sysname
-        nodename = self.__kernel_cfg.nodename
-        release = self.__kernel_cfg.release
-        version = self.__kernel_cfg.version
-        machine = "armv8l" if is_32 else "aarch64"
-        domain = self.__kernel_cfg.domain
+        is32 = self.__emu.arch == emu_const.ARCH_ARM32
 
-        memory_helpers.write_utf8(mu, buf + 0, sysname)
-        memory_helpers.write_utf8(mu, buf + 65, nodename)
-        memory_helpers.write_utf8(mu, buf + 130, release)
-        memory_helpers.write_utf8(mu, buf + 195, version)
-        memory_helpers.write_utf8(mu, buf + 260, machine)
-        memory_helpers.write_utf8(mu, buf + 325, domain)
-        
+        fields = [
+            self.__kernel.sysname,
+            self.__kernel.nodename,
+            self.__kernel.release,
+            self.__kernel.version,
+            "armv8l" if is32 else "aarch64",
+            self.__kernel.domain,
+        ]
+
+        offsets = [0, 65, 130, 195, 260, 325]
+
+        for off, val in zip(offsets, fields):
+            memory_helpers.write_utf8(mu, buf + off, val)
+
         return 0
 
-    def _sysinfo(self, mu: 'Uc', info_ptr):
-        '''
-        si = {sysinfo} 
-        uptime = {__kernel_long_t} 91942
-        loads = {__kernel_ulong_t [3]} 
-        [0] = {__kernel_ulong_t} 503328
-        [1] = {__kernel_ulong_t} 504576
-        [2] = {__kernel_ulong_t} 537280
-        totalram = {__kernel_ulong_t} 1945137152
-        freeram = {__kernel_ulong_t} 47845376
-        sharedram = {__kernel_ulong_t} 0
-        bufferram = {__kernel_ulong_t} 169373696
-        totalswap = {__kernel_ulong_t} 0
-        freeswap = {__kernel_ulong_t} 0
-        procs = {__u16} 1297
-        pad = {__u16} 0
-        totalhigh = {__kernel_ulong_t} 1185939456
-        freehigh = {__kernel_ulong_t} 1863680
-        mem_unit = {__u32} 1
-        f = 0 char[8]
-        '''
+    # =========================================================
+    # SYSINFO MODEL
+    # =========================================================
 
+    def _build_sysinfo_model(self):
         total_mb = self.__mem_cfg.ram_total_mb
-        total_ram = total_mb * 1024 * 1024
-        
-        free_percent = self.__mem_cfg.ram_free_percent_start
-        free_percent += (random.randint(-100, 100) / 100.0) 
-        free_ram = int(total_ram * (free_percent / 100.0))
-        
-        uptime = int(self._clock_offset + time.time() - self._clock_start)
+        total_bytes = total_mb * 1024 * 1024
 
-        mem_unit = 1024 
-        total_units = total_mb * 1024
-        free_units  = int(total_units * (free_percent / 100.0))
+        mem_unit = 1024
 
-        total_ram_units = total_mb * 1024 
+        base_free_pct = self.__mem_cfg.ram_free_percent_start
+        jitter = random.uniform(-1.0, 1.0)
+        free_pct = max(0.0, min(100.0, base_free_pct + jitter))
 
-        # loads = [503328, 504576, 537280] # Load avg 1/5/15 min
-        loads = [int(x * (0.8 + 0.4 * random.random())) for x in [503328, 504576, 537280]]
+        free_bytes = int(total_bytes * (free_pct / 100.0))
 
-        high_limit_units = 896 * 1024
-        total_high_units = (total_units - high_limit_units) if total_units > high_limit_units else 0
+        uptime = int(self._uptime_bias + (time.time() - self._t0))
 
-        if self.__emu.arch == emu_const.ARCH_ARM32:
-            mu.mem_write(info_ptr + 0, int(uptime).to_bytes(4, 'little'))
-            
-            for i in range(3):
-                mu.mem_write(info_ptr + 4 + (i*4), int(loads[i]).to_bytes(4, 'little'))
-            
-            mu.mem_write(info_ptr + 16, int(total_units).to_bytes(4, 'little'))
-            mu.mem_write(info_ptr + 20, int(free_units).to_bytes(4, 'little'))
-            mu.mem_write(info_ptr + 24, int(0).to_bytes(4, 'little'))             # shared
-            mu.mem_write(info_ptr + 28, int(total_units // 20).to_bytes(4, 'little')) # buffer
-            mu.mem_write(info_ptr + 32, int(0).to_bytes(4, 'little'))             # totalswap
-            mu.mem_write(info_ptr + 36, int(0).to_bytes(4, 'little'))             # freeswap
-            mu.mem_write(info_ptr + 40, int(random.randint(500, 1500)).to_bytes(2, 'little'))
-            mu.mem_write(info_ptr + 42, int(0).to_bytes(2, 'little'))
-            mu.mem_write(info_ptr + 44, int(total_high_units).to_bytes(4, 'little'))
-            mu.mem_write(info_ptr + 48, int(total_high_units // 2).to_bytes(4, 'little'))
-            mu.mem_write(info_ptr + 52, int(mem_unit).to_bytes(4, 'little'))
-                        
+        loads_base = (503328, 504576, 537280)
+        loads = [
+            int(x * (0.8 + random.random() * 0.4))
+            for x in loads_base
+        ]
+
+        buffer_ram = total_bytes // 20
+        shared_ram = 0
+        swap_total = 0
+        swap_free = 0
+
+        procs = random.randint(500, 1500)
+
+        high_threshold = 896 * 1024
+        high_total = max(total_bytes - high_threshold, 0)
+
+        return {
+            "uptime": uptime,
+            "loads": loads,
+
+            "total": total_bytes,
+            "free": free_bytes,
+
+            "shared": shared_ram,
+            "buffer": buffer_ram,
+
+            "swap_total": swap_total,
+            "swap_free": swap_free,
+
+            "procs": procs,
+            "mem_unit": mem_unit,
+
+            "high_total": high_total,
+        }
+
+    # =========================================================
+    # SYSINFO SERIALIZER
+    # =========================================================
+
+    def _sysinfo(self, mu: Uc, ptr):
+        m = self._build_sysinfo_model()
+        arch32 = self.__emu.arch == emu_const.ARCH_ARM32
+
+        def w(off, val, size):
+            mu.mem_write(ptr + off, int(val).to_bytes(size, "little", signed=False))
+
+        if arch32:
+            w(0, m["uptime"], 4)
+
+            for i, v in enumerate(m["loads"]):
+                w(4 + i * 4, v, 4)
+
+            w(16, self._u32(m["total"] // 1024), 4)
+            w(20, self._u32(m["free"] // 1024), 4)
+            w(24, self._u32(m["shared"]), 4)
+            w(28, self._u32(m["buffer"] // 1024), 4)
+
+            w(32, self._u32(m["swap_total"]), 4)
+            w(36, self._u32(m["swap_free"]), 4)
+
+            w(40, self._u16(m["procs"]), 2)
+
+            w(44, self._u32(m["high_total"] // 1024), 4)
+            w(48, self._u32(m["high_total"] // 2048), 4)
+
+            w(52, self._u32(m["mem_unit"]), 4)
+
         else:
-            # ARM64 (Longs are 8 bytes)
-            mu.mem_write(info_ptr + 0, int(uptime).to_bytes(8, 'little'))
-             # Loads
-            for i in range(3):
-                mu.mem_write(info_ptr + 8 + (i*8), int(loads[i]).to_bytes(8, 'little'))
-                
-            mu.mem_write(info_ptr + 32, int(total_ram).to_bytes(8, 'little'))
-            mu.mem_write(info_ptr + 40, int(free_ram).to_bytes(8, 'little'))
-            mu.mem_write(info_ptr + 48, int(0).to_bytes(8, 'little'))
-            mu.mem_write(info_ptr + 56, int(total_ram // 20).to_bytes(8, 'little'))
-            mu.mem_write(info_ptr + 64, int(0).to_bytes(8, 'little'))
-            mu.mem_write(info_ptr + 72, int(0).to_bytes(8, 'little'))
-            mu.mem_write(info_ptr + 80, int(random.randint(500, 1500)).to_bytes(2, 'little'))
-            mu.mem_write(info_ptr + 82, int(0).to_bytes(6, 'little')) # pad
-    
-            mu.mem_write(info_ptr + 88, int(0).to_bytes(8, 'little'))
-            mu.mem_write(info_ptr + 96, int(0).to_bytes(8, 'little'))
-            mu.mem_write(info_ptr + 104, int(mem_unit).to_bytes(4, 'little'))
+            w(0, m["uptime"], 8)
 
-        if logging.root.level <= logging.DEBUG:
-            f_mb = free_ram // 1024 // 1024
-            t_mb = total_ram // 1024 // 1024
-            logging.debug("sysinfo: TotalRAM=%d MB FreeRAM=%d MB", t_mb, f_mb)
+            for i, v in enumerate(m["loads"]):
+                w(8 + i * 8, v, 8)
+
+            w(32, m["total"], 8)
+            w(40, m["free"], 8)
+            w(48, m["shared"], 8)
+            w(56, m["buffer"], 8)
+
+            w(64, m["swap_total"], 8)
+            w(72, m["swap_free"], 8)
+
+            w(80, self._u16(m["procs"]), 2)
+
+            w(104, m["mem_unit"], 4)
+
         return 0
+    
+    # =========================================================
+    # UTILS
+    # =========================================================
+    def _u32(self, v):
+        return min(v, 0xFFFFFFFF)
+
+    def _u16(self, v):
+        return min(v, 0xFFFF)

@@ -2,7 +2,7 @@ import logging
 import posixpath
 import sys
 import unittest
-from androidemu.internal.elf_reader import ELFReader
+from androidemu.utils.parsers.elf import ELFReader
 
 # OUTDATED
 

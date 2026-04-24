@@ -1,10 +1,11 @@
 import os
 import re
 import random
-import logging
+import struct
 import io
 
 from ...const import emu_const
+from ...const.linux import *
 
 from typing import TYPE_CHECKING, Tuple, Optional, Callable, Dict, Any
 
@@ -84,39 +85,90 @@ class ContentGenerator:
             r'^/proc/(self|\d+)/cmdline$': self._gen_cmdline,
             r'^/proc/(self|\d+)/cgroup$': self._gen_cgroup,
             r'^/sys/devices/system/cpu/online$': self._gen_cpu_online,
+            r'^/proc/(self|\d+)/fd/\d+$': self._gen_fd_link,
             r'^/dev/u?random$': self._dev_urandom,
             r'^/dev/(null|binder)$': self._dev_virtual,
         }
 
-    def prepare_path(self, virt_path: str, host_path: str, ignore_handler: bool = False, **kwargs) -> Tuple[bool, Any]:
-        """
-        Returns bool if it's virutal directory and its content
-        If it's not virtual directory, returns False and path to file
-        """
-        handler = None
+    @staticmethod
+    def _align8(x: int) -> int:
+        return (x + 7) & ~7
 
-        def find_pattern():
-            for pattern, h in self.routes.items():
-                if re.match(pattern, virt_path):
-                    return h
 
-        if ignore_handler:
-            founded = find_pattern()
-            if founded:
-                return True, None
+    def _serialize_dirents(self, entries: list):
+        """
+        entries: List[str] | List[Tuple[name, type]]
+        """
+        buf = bytearray()
+        offset = 0
+
+        for entry in entries:
+            if isinstance(entry, tuple):
+                name, d_type = entry
             else:
-                return False, None
-            
-        handler = find_pattern()
+                name = entry
+                d_type = DT_UNKNOWN
 
+            name_bytes = name.encode() + b'\x00'
+
+            reclen = 8 + 8 + 2 + 1 + len(name_bytes)  # fields + name
+            reclen = self._align8(reclen)
+
+            padding = reclen - (8 + 8 + 2 + 1 + len(name_bytes))
+
+            packed = struct.pack(
+                "<QqHB",   # little-endian
+                1,         # d_ino fake
+                offset,    # d_off
+                reclen,
+                d_type
+            )
+
+            buf += packed
+            buf += name_bytes
+            buf += b'\x00' * padding
+
+            offset += reclen
+
+        return bytes(buf)
+    
+    def _find_handler(self, virt_path: str) -> Optional[Callable]:
+        for pattern, h in self.routes.items():
+            if re.match(pattern, virt_path):
+                return h
+        return None
+    
+    def is_virtual(self, virt_path: str) -> bool:
+        return self._find_handler(virt_path) is not None
+
+    def resolve_dir_entries(self, virt_path: str, host_path: str, **kwargs) -> Optional[bytes]:
+        """
+        Generating directory content
+        """        
+        handler = self._find_handler(virt_path)
+
+        if handler:
+            content = handler(virt_path=virt_path, **kwargs)
+
+            if content is None:
+                return None
+
+            if isinstance(content, bytes):
+                return content
+
+            return self._serialize_dirents(content)
+
+        if os.path.isdir(host_path):
+            entries = os.listdir(host_path)
+            return self._serialize_dirents(entries)
+
+        return None
+
+    def generate(self, virt_path: str, **kwargs) -> Optional[Any]:
+        handler = self._find_handler(virt_path)
         if not handler:
-            if os.path.exists(host_path):
-                return os.path.isdir(host_path), host_path
-            return False, None
-
-        content = handler(virt_path=virt_path, **kwargs)
-        
-        return True, content
+            return None
+        return handler(virt_path=virt_path, **kwargs)
 
     # removed writing virtual files to disk
 
@@ -255,7 +307,17 @@ class ContentGenerator:
                 
             buf.write(line + "\n")
         return buf.getvalue()
-
+    
+    def _gen_fd_link(self, virt_path: str, **kwargs):
+        try:
+            fd_num = int(virt_path.split('/')[-1])
+            vfile = self.pcb.virtual_files.get_fd_detail(fd_num)
+            if vfile:
+                return vfile.name
+        except (ValueError, IndexError):
+            pass
+        return None
+    
     def _gen_cmdline(self, **kwargs):
         return "%s\x00"%self.cfg.pkg.pkg_name
     

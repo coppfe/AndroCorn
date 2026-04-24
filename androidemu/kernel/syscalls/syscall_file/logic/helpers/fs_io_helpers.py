@@ -4,8 +4,9 @@ import platform
 import select
 
 
-from ......utils import misc_utils
 from ......utils.generators.vfs_content import ContentGenerator
+from ......objects.virtual_file import VirtualFile
+from ......const.linux import *
 
 from unicorn import Uc
 from unicorn.arm_const import *
@@ -13,7 +14,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ......emulator import Emulator
-    from .....pcb import Pcb
+    from ......pcb import Pcb
     from .fs_helpers import FSHelpers
 
 class FSIOHelpers:
@@ -74,35 +75,16 @@ class FSIOHelpers:
     
     def _open_file(self, mu, filename, flags):
         file_path = self.__fs_helpers._translate_path(filename)
+        if os.path.isdir(file_path):
+            logging.warning("Failed to open file '%s'! It's a directory", filename)
+            # WARNING! If you in this branch -> your lib maybe work not correct or it's env check!
+            # If you here because of test_native, it's ok (not actually), bcs vfs util named as gen_map
+            # Does not return correct address and path of app_process. I don't know why.
+            return -EISDIR
         
-        is_virtual, path_info = self.__generator.prepare_path(filename, file_path, ignore_handler=True)
-        if is_virtual:
-            return self.__pcb.virtual_files.add_virtual_fd(filename, path_info)
-
-        original_flags = flags
-        access_mode = original_flags & 3
-        real_flags = {0: os.O_RDONLY, 1: os.O_WRONLY, 2: os.O_RDWR}.get(access_mode, os.O_RDONLY)
-
-        if (original_flags & 0o100):      real_flags |= os.O_CREAT
-        if (original_flags & 0o2000):     real_flags |= os.O_APPEND
-        if (original_flags & 0o40000):    real_flags |= getattr(os, 'O_DIRECTORY', 0)
-        if (original_flags & 0o10000000): real_flags |= getattr(os, 'O_PATH', 0)
-
-        try:
-            host_fd = misc_utils.my_open(file_path, real_flags)
-        except PermissionError:
-            return -21 if os.path.isdir(file_path) else -13
-        except FileNotFoundError:
-            return -2
-
-        guest_fd = self.__pcb.virtual_files.add_fd(filename, file_path, host_fd)
-        
-        logging.debug("open [%s] HostFD:%d -> GuestFD:%d", filename, host_fd, guest_fd)
-        
-        self.__create_fd_link(guest_fd, file_path)
-        
-        return guest_fd
-        
+        is_virtual = self.__generator.is_virtual(filename)
+        return VirtualFile.open(self.__emu, filename, file_path, flags, is_virtual)
+    
     def _close_file(self, mu, fd):
         vfs = self.__pcb.virtual_files
         
@@ -118,34 +100,20 @@ class FSIOHelpers:
             return 0
     
     def __create_fd_link(self, guest_fd, target):
-        if self.g_isWin or guest_fd < 0:
-            return
-
-        pid = self.__pcb.pid
-        fdbase = self.__fs_helpers._translate_path(f"/proc/{pid}/fd/")
+        return 0
         
-        if not os.path.exists(fdbase):
-            os.makedirs(fdbase, exist_ok=True)
+        # if not os.path.exists(fdbase):
+        #     os.makedirs(fdbase, exist_ok=True)
 
-        link_path = os.path.join(fdbase, str(guest_fd))
-        if os.path.exists(link_path):
-            os.remove(link_path)
+        # link_path = os.path.join(fdbase, str(guest_fd))
+        # if os.path.exists(link_path):
+        #     os.remove(link_path)
 
-        try:
-            full_target = os.path.abspath(target)
-            os.symlink(full_target, link_path)
-        except OSError:
-            pass
+        # try:
+        #     full_target = os.path.abspath(target)
+        #     os.symlink(full_target, link_path)
+        # except OSError:
+        #     pass
 
     def _del_fd_link(self, fd):
-        if (self.g_isWin):
-            # TODO?
-            return 
-
-        if (fd >= 0):
-            pid = self.__pcb.pid
-            fdbase = "/proc/%d/fd/"%pid
-            fdbase = self.__fs_helpers._translate_path(fdbase)
-            p = "%s/%d"%(fdbase, fd)
-            if (os.path.exists(p)):
-                os.remove(p)
+        return 0

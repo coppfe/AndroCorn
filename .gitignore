@@ -13,3 +13,8 @@ fix.txt
 test.py
 keystone_in/
 androidemu/highlevel/host
+
+tests/bin/*
+tests/bin64/
+
+!tests/bin/libcms.so

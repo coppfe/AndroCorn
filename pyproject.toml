@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "androidemu"
-version = "2026.04.19"
+version = "2026.04.24"
 dependencies = [
     "lief==0.17.6",
     "unicorn==2.1.4",

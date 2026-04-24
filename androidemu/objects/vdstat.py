@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
-    from ..kernel.state.time_manager import TimeManager
+    from ..utils.state.time_manager import TimeManager
 
 class VirtualDeviceStat:
     def __init__(self, 
@@ -60,6 +60,7 @@ class VirtualDeviceStat:
         )
 
     @classmethod
+    
     def create_directory(cls, time_manager: 'TimeManager', uid: int = 0, gid: int = 0, permissions: int = 0o755, **kwargs):
         return cls(
             st_mode=(0o040000 | permissions),

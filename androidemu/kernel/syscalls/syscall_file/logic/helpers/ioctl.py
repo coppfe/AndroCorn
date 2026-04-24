@@ -1,6 +1,7 @@
 import logging
 
 from ......const.android import *
+from ......const.linux import *
 
 class IoctlHandler:
     def __init__(self, mu):
@@ -17,7 +18,7 @@ class IoctlHandler:
     def _handle_tcgets(self, fd, arg1, *args):
         if fd in (1, 2): 
             return 0  # TTY
-        return -25 # ENOTTY
+        return -ENOTTY # ENOTTY
 
     def _handle_binder_version(self, fd, arg1, *args):
         binder_version = 8
@@ -26,7 +27,7 @@ class IoctlHandler:
 
     def _handle_siocgifconf(self, fd, arg1, *args):
         logging.warning("SIOCGIFCONF: struct ifconf is not yet implemented")
-        return -1 # EPERM
+        return -EPERM
 
     def handle(self, fd, cmd, arg1, arg2, arg3, arg4):
         logging.debug("ioctl: fd=%#x cmd=%#x arg1=%#x arg2=%#x arg3=%#x arg4=%#x", fd, cmd, arg1, arg2, arg3, arg4)
@@ -37,7 +38,7 @@ class IoctlHandler:
                 return handler(fd, arg1, arg2, arg3, arg4)
             except Exception as e:
                 logging.error("Error in ioctl handler %#x: %s", cmd, e)
-                return -22 # EINVAL
+                return -EINVAL
         
         logging.warning("Unknown ioctl cmd 0x%#x for fd %d", cmd, fd)
-        return -22 # EINVAL
+        return -EINVAL

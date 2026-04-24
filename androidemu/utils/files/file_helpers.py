@@ -42,7 +42,7 @@ def stat_to_memory2(uc: 'Uc', buf_ptr: int, stat: 'stat_result', uid: int, st_mo
     Total Size: 104 bytes (usually)
     '''
     
-    st_dev = (253 << 8) | 0  
+    st_dev = (253 << 8) | 0
     st_ino = stat.st_ino & 0xFFFFFFFF if hasattr(stat, "st_ino") else 12345
     st_rdev = stat.st_rdev if hasattr(stat, "st_rdev") else 0
     

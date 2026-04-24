@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, cast
 if TYPE_CHECKING:
     from ......emulator import Emulator
     from ......objects.virtual_file import VirtualFile
-    from .....pcb import Pcb
+    from ......pcb import Pcb
     from ......utils.generators.vfs_content import ContentGenerator
 
 class FSHelpers:
@@ -43,7 +43,15 @@ class FSHelpers:
     def _make_stat_object(self, filename, vfile=None, follow_links=True):
         uid, gid = self._get_path_owners(filename)
         tm = self.__emu.time_manager
-
+        
+        is_virtual_dev = self.__generator.is_virtual(filename)
+        if is_virtual_dev:
+            if "random" in filename: major, minor = 1, 8
+            elif "null" in filename: major, minor = 1, 3
+            elif "zero" in filename: major, minor = 1, 5
+            else: major, minor = 10, 200
+            return VirtualDeviceStat.create_char_device(major, minor, tm, uid, gid)
+        
         if not vfile:
             vfile = self.__pcb.virtual_files.get_fd_by_name(filename)
 
@@ -55,14 +63,6 @@ class FSHelpers:
                 uid=uid, gid=gid,
                 st_ino=vfile.descriptor
             )
-
-        is_virtual_dev, _ = self.__generator.prepare_path(filename, "", ignore_handler=True)
-        if is_virtual_dev:
-            if "random" in filename: major, minor = 1, 8
-            elif "null" in filename: major, minor = 1, 3
-            elif "zero" in filename: major, minor = 1, 5
-            else: major, minor = 10, 200
-            return VirtualDeviceStat.create_char_device(major, minor, tm, uid, gid)
 
         try:
             if vfile and not vfile.is_virtual:
@@ -85,7 +85,7 @@ class FSHelpers:
         
     def _internal_path_stat_handler(self, mu, filename, buf_ptr, follow_links=True):
         stats = self._make_stat_object(filename, follow_links=follow_links)
-        if not stats: return -1
+        if not stats: return -linux.EPERM
 
         is_arm32 = self.__emu.arch == emu_const.ARCH_ARM32
         write_func = file_helpers.stat_to_memory2 if is_arm32 else file_helpers.stat_to_memory64

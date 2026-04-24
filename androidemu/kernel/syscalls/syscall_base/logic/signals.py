@@ -1,117 +1,101 @@
 import logging
-import os
-import ctypes
-import time
 import sys
-import socket
-from random import randint
 
 from unicorn import Uc
-from unicorn.arm_const import *
 
-from .....const.android import *
-from .....const.linux import *
-from .....const import emu_const
-from .....const.metatags import *
-from ...syscall_handlers import SyscallHandlers
 from .....utils.memory import memory_helpers
-from .....objects.virtual_file import VirtualFile
-from unicorn import *
-
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from .....emulator import Emulator
 
 
 class SignalSyscalls:
-    def __init__(self, emulator: 'Emulator'):
-        self.__emu: 'Emulator' = emulator
 
-        self.__ptr_sz = self.__emu.ptr_size
-        self.__pid = self.__emu.pcb.pid
-        # self.__tid = self.__emu.scheduler.get_current_tid()
-        self._sig_maps = {}
+    def __init__(self, emulator):
+        self.__emu = emulator
+        self.__pcb = emulator.pcb
+
+        self.__ptr_sz = emulator.ptr_size
+        self.__pid = emulator.pcb.pid
+
+        self._signals = {}  # sig -> SigAction
+
+    # =========================================================
+    # KILL / TGKILL
+    # =========================================================
 
     def _kill(self, mu, pid, sig):
-        logging.debug("kill is call pid=0x%x sig=%d"%(pid, sig))
-        if (pid == self.__pid):
-            logging.error("process 0x%x is killing self!!! maybe encounter anti-debug!!!"%pid)
+        logging.debug("kill pid=%d sig=%d", pid, sig)
+
+        if pid == self.__pid:
+            logging.error("self-kill detected (anti-debug?)")
             sys.exit(-10)
 
+        return 0
+
     def _tgkill(self, mu, tgid, tid, sig):
-        if (tgid ==  self.__pid and sig == 6):
-            raise RuntimeError("tgkill abort self....")
-        return 0
-        # if (tgid == self.__pid and tid == self.__tid):
-        #     if (sig in self._sig_maps):
+        logging.debug("tgkill tgid=%d tid=%d sig=%d", tgid, tid, sig)
 
-        #         sigact = self._sig_maps[sig]
-        #         addr = sigact[0]
-        #         #TODO implement signal handling
-        #         return 0
-        #     #
-        # #
-        # raise NotImplementedError()
-        # return 0
+        if tgid == self.__pid and sig == 6:
+            raise RuntimeError("abort signal")
 
-    def _sigaction(self, mu: 'Uc', sig: int, act: int, oact: int):
-        '''
-        struct sigaction {
-            union {
-                void     (*sa_handler)(int);
-                void     (*sa_sigaction)(int, siginfo_t *, void *);
-            },
-            sigset_t   sa_mask;
-            int        sa_flags;
-            void     (*sa_restorer)(void);
-        };
-        '''
-        act_off = act
-        sa_handler = memory_helpers.read_ptr_sz(mu, act_off, self.__ptr_sz)
-        act_off+=self.__ptr_sz
-        sa_mask = memory_helpers.read_ptr_sz(mu, act_off, self.__ptr_sz)
-        act_off+=self.__ptr_sz
-        sa_flag = memory_helpers.read_ptr_sz(mu, act_off, self.__ptr_sz)
-        act_off+=self.__ptr_sz
-        sa_restorer = memory_helpers.read_ptr_sz(mu, act_off, self.__ptr_sz)
+        return 0
 
-        logging.debug("sa_handler [0x%08X] sa_mask [0x%08X] sa_flag [0x%08X] sa_restorer [0x%08X]"%(sa_handler, sa_mask, sa_flag, sa_restorer))
-        self._sig_maps[sig] = (sa_handler, sa_mask, sa_flag, sa_restorer)
-        return 0
-    
-    def _rt_sigaction(self, mu: 'Uc', sig, act, oact, sigsetsize):
-        '''
-        struct sigaction {
-            union {
-                void     (*sa_handler)(int);
-                void     (*sa_sigaction)(int, siginfo_t *, void *);
-            },
-            sigset_t   sa_mask;
-            int        sa_flags;
-            void     (*sa_restorer)(void);
-        };
-        '''
-        act_off = act
-        sa_handler = memory_helpers.read_ptr_sz(mu, act_off, self.__ptr_sz)
-        act_off+=self.__ptr_sz
-        #sigsetsize是sa_mask的大小，64位下一般位8，see https://man7.org/linux/man-pages/man2/sigaction.2.html
-        sa_mask = memory_helpers.read_ptr_sz(mu, act_off, sigsetsize)
-        act_off+=sigsetsize
-        sa_flag = memory_helpers.read_ptr_sz(mu, act_off, self.__ptr_sz)
-        act_off+=self.__ptr_sz
-        sa_restorer = memory_helpers.read_ptr_sz(mu, act_off, self.__ptr_sz)
+    # =========================================================
+    # SIGACTION
+    # =========================================================
 
-        logging.debug("sa_handler [0x%08X] sa_mask [0x%08X] sa_flag [0x%08X] sa_restorer [0x%08X]"%(sa_handler, sa_mask, sa_flag, sa_restorer))
-        self._sig_maps[sig] = (sa_handler, sa_mask, sa_flag, sa_restorer)
+    def _sigaction(self, mu: Uc, sig, act, oact):
+        handler = memory_helpers.read_ptr_sz(mu, act, self.__ptr_sz)
+        mask = memory_helpers.read_ptr_sz(mu, act + self.__ptr_sz, self.__ptr_sz)
+        flags = memory_helpers.read_ptr_sz(mu, act + 2 * self.__ptr_sz, self.__ptr_sz)
+        rest = memory_helpers.read_ptr_sz(mu, act + 3 * self.__ptr_sz, self.__ptr_sz)
+
+        self._signals[sig] = (handler, mask, flags, rest)
+
+        logging.debug("sigaction sig=%d handler=0x%x", sig, handler)
         return 0
-    
-    def _sigprocmask(self, mu: 'Uc', how, set, oset):
+
+    # =========================================================
+    # RT_SIGACTION
+    # =========================================================
+
+    def _rt_sigaction(self, mu: Uc, sig, act, oact, sigsetsize):
+        handler = memory_helpers.read_ptr_sz(mu, act, self.__ptr_sz)
+
+        mask = memory_helpers.read_ptr_sz(
+            mu,
+            act + self.__ptr_sz,
+            sigsetsize
+        )
+
+        flags = memory_helpers.read_ptr_sz(
+            mu,
+            act + self.__ptr_sz + sigsetsize,
+            self.__ptr_sz
+        )
+
+        rest = memory_helpers.read_ptr_sz(
+            mu,
+            act + self.__ptr_sz + sigsetsize + self.__ptr_sz,
+            self.__ptr_sz
+        )
+
+        self._signals[sig] = (handler, mask, flags, rest)
+
+        logging.debug("rt_sigaction sig=%d handler=0x%x", sig, handler)
         return 0
-    
+
+    # =========================================================
+    # MASK OPS
+    # =========================================================
+
+    def _sigprocmask(self, mu, how, set, oset):
+        return 0
+
     def _rt_sigprocmask(self, mu, how, set, oset, sigsetsize):
         return 0
-    
+
+    # =========================================================
+    # ALTSTACK
+    # =========================================================
+
     def _sigaltstack(self, mu, uss, ouss):
-        #TODO implment
         return 0

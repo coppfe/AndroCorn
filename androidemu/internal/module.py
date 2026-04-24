@@ -6,7 +6,7 @@ import lief
 if TYPE_CHECKING:
     from ..emulator import Emulator
     from unicorn import Uc
-    from .elf_reader import ELFReader
+    from ..utils.parsers.elf import ELFReader
 
 logger = logging.getLogger(__name__)
 

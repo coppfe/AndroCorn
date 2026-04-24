@@ -1,5 +1,6 @@
 import unittest
 import time
+import logging
 
 from androidemu.emulator import Emulator
 from androidemu.java.java_class_def import JavaClassDef
@@ -118,13 +119,12 @@ def init():
 class TestLeviathanJNI(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        # logging.getLogger().setLevel(logging.INFO) # set debug level if u want to die
+        # logging.getLogger().setLevel(logging.DEBUG) # set debug level if u want to die
         cls.emulator = init()
 
     def test_leviathan_standard_call(self):
         test_time = 1
         test_payload = b'{"os":"Android","version":"9","fake_device_id":"123456789"}'
-        
         result = call_leviathan(
             self.emulator, 
             i1=-1, 
@@ -167,11 +167,8 @@ if __name__ == '__main__':
 
     pr = cProfile.Profile()
     pr.enable()
-
     unittest.main(exit=False)
-
     pr.disable()
-
     s = io.StringIO()
     ps = pstats.Stats(pr, stream=s).sort_stats('cumulative')
     ps.print_stats(40)

@@ -11,8 +11,8 @@ logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from ....emulator import Emulator
-    from ...pcb import Pcb
-    from ..syscall_handlers import SyscallHandlers
+    from ....pcb import Pcb
+    from ....handlers.syscall import SyscallHandlers
     from ....utils.memory.memory_map import MemoryMap
 
 class MemorySyscallHandler:
@@ -44,7 +44,7 @@ class MemorySyscallHandler:
             self._syscall_handler.set_handler(0x10E, "process_vm_readv",    6, self._handle_process_vm_readv)
 
     def _handle_munmap(self, uc, addr, len_in):
-        # self.__emu.tls_utils.set_errno(0)
+        # self.__emu.tls_utils.set_errno(0) # libc set it.
         return self._memory.unmap(addr, len_in)
     
     def _handle_brk(self, mu, brk_addr):
@@ -96,10 +96,10 @@ class MemorySyscallHandler:
         for j in range(0, liovcnt):
             lbase = memory_helpers.read_ptr_sz(mu, off_l, self.__emu.ptr_size)
             liov_len = memory_helpers.read_ptr_sz(mu, off_l+self.__emu.ptr_size, self.__emu.ptr_size)
-            tmp = b[has_read:liov_len]
+            tmp = b[has_read : has_read + liov_len] 
             mu.mem_write(lbase, tmp)
             has_read += len(tmp)
-            off_l += 2*self.__emu.ptr_size
+            off_l += 2 * self.__emu.ptr_size
 
         return has_read
 

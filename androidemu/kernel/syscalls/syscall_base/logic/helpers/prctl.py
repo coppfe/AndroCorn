@@ -2,6 +2,7 @@ import logging
 
 from ......utils.memory import memory_helpers
 from ......const.android import *
+from ......const.linux import *
 
 logging.getLogger(__name__)
 
@@ -31,7 +32,9 @@ class PrctlHandler:
         return 0
 
     def _get_dumpable(self, mu, arg2, *args):
-        return 1
+        if arg2:
+            mu.mem_write(arg2, (1).to_bytes(4, "little"))
+        return 0
 
     def _get_name(self, mu, arg2, *args):
         if arg2 != 0:
@@ -45,15 +48,15 @@ class PrctlHandler:
         return 0
 
     def handle(self, option, arg2, arg3, arg4, arg5):
-        logging.debug("prctl: option=%#x arg2=%x arg3=%x arg4=%x arg5=%x", option, arg2, arg3, arg4, arg5)
-
-        get_options = {PR_GET_DUMPABLE, PR_GET_NAME, PR_GET_UNALIGN, PR_GET_FPEMU}
-        if option in get_options and arg2 == 0:
-            return 1
+        logging.debug(
+            "prctl: option=%#x arg2=%x arg3=%x arg4=%x arg5=%x",
+            option, arg2, arg3, arg4, arg5
+        )
 
         handler = self._dispatch_table.get(option)
+
         if handler:
             return handler(self.__mu, arg2, arg3, arg4, arg5)
 
         logging.warning("Unsupported prctl option %#x", option)
-        return -22
+        return -EPERM

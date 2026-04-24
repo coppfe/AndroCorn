@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ....emulator import Emulator
-    from ..syscall_handlers import SyscallHandlers
+    from ....handlers.syscall import SyscallHandlers
 
 class VirtualFileSystem:
     def __init__(self, emu: 'Emulator', root_path: str, syscall_handler: 'SyscallHandlers'):
@@ -60,6 +60,7 @@ class VirtualFileSystem:
             
             syscall_handler.set_handler(0x143, "mkdirat", 3, self.__system_calls._mkdirat)
             syscall_handler.set_handler(0x147, "fstatat64", 4, self.__system_calls._fstatat64)
+            syscall_handler.set_handler(0x149, "linkat", 4, self.__system_calls._linkat)
             syscall_handler.set_handler(0x148, "unlinkat", 3, self.__system_calls._unlinkat)
             syscall_handler.set_handler(0x14c, "readlinkat", 4, self.__system_calls._readlinkat)
             syscall_handler.set_handler(0x14e, "faccessat", 4, self.__system_calls._faccessat)

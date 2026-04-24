@@ -2,254 +2,283 @@ import logging
 import os
 import platform
 import struct
-import random
 
 from .....utils.memory import memory_helpers
-from .....utils.generators.vfs_content import ContentGenerator
-
-from .....objects.vdstat import VirtualDeviceStat
 from .....utils.files import file_helpers
-
-from .....const.linux import *
 from .....const.metatags import *
 from .....const import emu_const
+from .....const.linux import *
+
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .....emulator import Emulator
-    from ....pcb import Pcb
+    from .....pcb import Pcb
+    from .....utils.generators.vfs_content import ContentGenerator
     from .helpers.fs_helpers import FSHelpers
 
 if platform.system() == "Linux":
     import fcntl
 
-class VirtualFileSystemCalls:
 
+class VirtualFileSystemCalls:
     def __init__(self, emulator: 'Emulator', content_generator: 'ContentGenerator', fs_helper: 'FSHelpers'):
         self.__emu: 'Emulator' = emulator
-        self.__pcb: 'Pcb' = self.__emu.pcb
+        self.__pcb: 'Pcb' = emulator.pcb
 
         self.__generator = content_generator
-        self.__fs_helpers = fs_helper
+        self.__fs = fs_helper
 
-        # self.__tid = self.__emu.scheduler.get_current_tid()
-        
-        self.g_isWin = platform.system() == "Windows"
+        self._is_win = platform.system() == "Windows"
+
+    # =========================================================
+    # PATH RESOLUTION CORE
+    # =========================================================
+
+    def _resolve(self, dfd, path_ptr):
+        path = memory_helpers.read_utf8(self.__emu.mu, path_ptr)
+        return self.__fs._dirfd_2_path(dfd, path)
+
+    def _host(self, virt_path: str):
+        return self.__fs._translate_path(virt_path)
+
+    # =========================================================
+    # SYMLINK LAYER HELPERS
+    # =========================================================
+
+    def _symlink_get(self, path: str):
+        return self.__pcb.virtual_files.get_symlink_target(path)
+
+    def _symlink_set(self, src: str, dst: str):
+        self.__pcb.virtual_files.add_symlink(dst, src)
+
+    def _symlink_remove(self, path: str):
+        self.__pcb.virtual_files.remove_symlink(path)
+
+    # =========================================================
+    # STAT FAMILY
+    # =========================================================
 
     @PROXY
-    def _stat64(self, mu, filename_ptr, buf_ptr): # # VFS manager
-        return self.__fs_helpers._internal_path_stat_handler(mu, memory_helpers.read_utf8(mu, filename_ptr), buf_ptr, True)
+    def _stat64(self, mu, filename_ptr, buf_ptr):
+        path = memory_helpers.read_utf8(mu, filename_ptr)
+        return self.__fs._internal_path_stat_handler(mu, path, buf_ptr, True)
 
     @PROXY
-    def _lstat64(self, mu, filename_ptr, buf_ptr): # # VFS manager
-        return self.__fs_helpers._internal_path_stat_handler(mu, memory_helpers.read_utf8(mu, filename_ptr), buf_ptr, False)
+    def _lstat64(self, mu, filename_ptr, buf_ptr):
+        path = memory_helpers.read_utf8(mu, filename_ptr)
+        return self.__fs._internal_path_stat_handler(mu, path, buf_ptr, False)
 
     @PROXY
-    def _fcntl(self, mu, fd, cmd, arg1, arg2, arg3, arg4):
-        if (self.g_isWin):
-            return 0
-        try: r = fcntl.fcntl(fd, cmd, arg1)
-        except OSError: r = 0 # in windows same shit so why not to do same thing in linux
-        return r
+    def _fstat64(self, mu, fd, stat_ptr):
+        vf = self.__pcb.virtual_files.get_fd_detail(fd)
+        if not vf:
+            return -EBADF
+
+        stats = self.__fs._make_stat_object(vf.name, vfile=vf)
+        if not stats:
+            return -EPERM
+
+        is_arm32 = self.__emu.arch == emu_const.ARCH_ARM32
+        writer = file_helpers.stat_to_memory2 if is_arm32 else file_helpers.stat_to_memory64
+
+        writer(mu, stat_ptr, stats, stats.st_uid, stats.st_mode, self.__emu.config)
+        return 0
 
     @PROXY
     def _fstatat64(self, mu, dirfd, pathname_ptr, buf, flags):
-        path = self.__fs_helpers._dirfd_2_path(dirfd, memory_helpers.read_utf8(mu, pathname_ptr))
-        if path is None: return -1
-        follow = not (flags & 0x100) # AT_SYMLINK_NOFOLLOW
+        path = self._resolve(dirfd, pathname_ptr)
+        if not path:
+            return -EPERM
 
-        return self.__fs_helpers._internal_path_stat_handler(mu, path, buf, follow)
-    
+        follow = not (flags & 0x100)  # AT_SYMLINK_NOFOLLOW
+        return self.__fs._internal_path_stat_handler(mu, path, buf, follow)
+
+    # =========================================================
+    # FILE CONTROL
+    # =========================================================
+
+    @PROXY
+    def _fcntl(self, mu, fd, cmd, arg1, arg2, arg3, arg4):
+        if self._is_win:
+            return 0
+
+        try:
+            return fcntl.fcntl(fd, cmd, arg1)
+        except OSError:
+            return 0
+
+    # =========================================================
+    # UNLINK FAMILY (CLEAN VFS)
+    # =========================================================
+
+    def _unlinkat(self, mu, dfd, path_ptr, flags):
+        virt = self._resolve(dfd, path_ptr)
+        if not virt:
+            return -ENOENT  # ENOENT
+
+        return self._unlink_virtual(virt)
+
     def _unlink(self, mu, path_ptr):
         path = memory_helpers.read_utf8(mu, path_ptr)
-        logging.debug("unlink call path [%s]"%path)
+        return self._unlink_virtual(path)
+
+    def _unlink_virtual(self, virt_path: str):
+        # symlink removal
+        if self._symlink_get(virt_path):
+            self._symlink_remove(virt_path)
+            return 0
+
+        # fd = self.__pcb.virtual_files.get_fd_by_name(virt_path)
+        # if fd is not None:
+        #     self.__pcb.virtual_files.remove_fd(fd)
+        #     return 0
+
+        return -EPERM
+
+    # =========================================================
+    # READLINK FAMILY
+    # =========================================================
+
+    def _readlinkat(self, mu, dfd, path_ptr, buf, bufsz):
+        virt = self._resolve(dfd, path_ptr)
+        if not virt:
+            return -ENOENT
+
+        target = self._symlink_get(virt)
+        if not target:
+            # maybe then it's a virtual?
+            is_virtual = self.__generator.is_virtual(virt)
+            if is_virtual:
+                target = self.__generator.generate(virt)
+            else:
+                return -ENOENT
+
+        data = target.encode("utf-8")
+        size = min(len(data), bufsz)
+
+        mu.mem_write(buf, data[:size])
+        logging.debug("readlinkat: %s -> %s", virt, target)
+        return size
+
+    # =========================================================
+    # LINK FAMILY
+    # =========================================================
+
+    def _linkat(self, mu, olddirfd, oldpath_ptr, newdirfd, newpath_ptr, flags):
+        old = self._resolve(olddirfd, oldpath_ptr)
+        new = self._resolve(newdirfd, newpath_ptr)
+
+        if not old or not new:
+            return -EPERM
+
+        self._symlink_set(old, new)
+
+        logging.debug("linkat: %s -> %s", old, new)
         return 0
 
-    def _fstat64(self, mu, fd, stat_ptr):
-        vf = self.__pcb.virtual_files.get_fd_detail(fd)
-        if not vf: return -9 # EBADF
+    # =========================================================
+    # DIRECTORY ENTRIES
+    # =========================================================
 
-        stats = self.__fs_helpers._make_stat_object(vf.name, vfile=vf)
-        if not stats: return -1
-
-        is_arm32 = self.__emu.arch == emu_const.ARCH_ARM32
-        write_func = file_helpers.stat_to_memory2 if is_arm32 else file_helpers.stat_to_memory64
-        write_func(mu, stat_ptr, stats, stats.st_uid, stats.st_mode, self.__emu.config)
-        return 0
-
-    def _getdents64(self, mu, fd, linux_dirent64_ptr, count):
+    def _getdents64(self, mu, fd, ptr, count):
         entry = self.__pcb.virtual_files.get_fd_detail(fd)
         if not entry:
-            return -1  # EBADF
+            return -EBADF
 
-        if hasattr(entry, 'offset') and entry.offset > 0:
+        if entry.offset > 0:
             return 0
 
-        is_dir, content = self.__generator.prepare_path(entry.name, entry.name_in_system, fd=fd)
-        if not is_dir or content is None:
+        data = self.__generator.resolve_dir_entries(
+            entry.name,
+            entry.name_in_system,
+            fd=fd
+        )
+
+        if not data:
             return 0
 
-        if isinstance(content, bytes):
-            mu.mem_write(linux_dirent64_ptr, content[:count])
-            entry.offset = len(content)
-            return len(content[:count])
-        
-        entry.offset = count
-        return count
+        chunk = data[:count]
+        mu.mem_write(ptr, chunk)
 
-    def _statfs64(self, mu, path_ptr, sz, buf):        
-        path = memory_helpers.read_utf8(mu, path_ptr)
-        logging.debug("statfs64 path %s"%path)
-        path = self.__fs_helpers._translate_path(path)
-        if (not os.path.exists(path)):
-            return -1
-        #
-        statv = os.statvfs(path)
-        '''
-        f_type = {uint32_t} 61267
-        f_bsize = {uint32_t} 4096
-        f_blocks = {uint64_t} 3290543
-        f_bfree = {uint64_t} 2499155
-        f_bavail = {uint64_t} 2499155
-        f_files = {uint64_t} 838832
-        f_ffree = {uint64_t} 828427
-        f_fsid = {fsid_t} 
-            __val = {int [2]} 
-        f_namelen = {uint32_t} 255
-        f_frsize = {uint32_t} 4096
-        f_flags = {uint32_t} 1062
-        f_spare = {uint32_t [4]} 
-        '''
-        f_fsid = 0
-        if (hasattr(statv, "f_fsid")):
-            print(statv)
-            f_fsid = statv.f_fsid
-        #
-        if (self.__emu.arch == emu_const.ARCH_ARM32):
-            mu.mem_write(buf, int(0xef53).to_bytes(4, 'little'))
-            mu.mem_write(buf+4, int(statv.f_bsize).to_bytes(4, 'little'))
-            mu.mem_write(buf+8, int(statv.f_blocks).to_bytes(8, 'little'))
-            mu.mem_write(buf+16, int(statv.f_bfree).to_bytes(8, 'little'))
-            mu.mem_write(buf+24, int(statv.f_bavail).to_bytes(8, 'little'))
-            mu.mem_write(buf+32, int(statv.f_files).to_bytes(8, 'little'))
-            mu.mem_write(buf+40, int(statv.f_ffree).to_bytes(8, 'little'))
-            mu.mem_write(buf+48, int(f_fsid).to_bytes(8, 'little'))
-            mu.mem_write(buf+56, int(statv.f_namemax).to_bytes(4, 'little'))
-            mu.mem_write(buf+60, int(statv.f_frsize).to_bytes(4, 'little'))
-            mu.mem_write(buf+64, int(statv.f_flag).to_bytes(4, 'little'))
-            mu.mem_write(buf+68, int(0).to_bytes(16, 'little'))
-        else:
-            #arm64
-            mu.mem_write(buf, int(0xef53).to_bytes(8, 'little'))
-            mu.mem_write(buf+8, int(statv.f_bsize).to_bytes(8, 'little'))
-            mu.mem_write(buf+16, int(statv.f_blocks).to_bytes(8, 'little'))
-            mu.mem_write(buf+24, int(statv.f_bfree).to_bytes(8, 'little'))
-            mu.mem_write(buf+32, int(statv.f_bavail).to_bytes(8, 'little'))
-            mu.mem_write(buf+40, int(statv.f_files).to_bytes(8, 'little'))
-            mu.mem_write(buf+48, int(statv.f_ffree).to_bytes(8, 'little'))
-            mu.mem_write(buf+56, int(f_fsid).to_bytes(8, 'little'))
-            mu.mem_write(buf+64, int(statv.f_namemax).to_bytes(8, 'little'))
-            mu.mem_write(buf+72, int(statv.f_frsize).to_bytes(8, 'little'))
-            mu.mem_write(buf+80, int(statv.f_flag).to_bytes(8, 'little'))
-            mu.mem_write(buf+88, int(0).to_bytes(32, 'little'))
+        entry.offset = len(chunk)
+        return len(chunk)
 
-        return 0
+    # =========================================================
+    # ACCESS / FS OPERATIONS
+    # =========================================================
 
+    def _do_access(self, path: str, mode: int):
+        if not path:
+            return -EPERM
 
+        if self.__generator.is_virtual(path):
+            return 0
+
+        host = self._host(path)
+        return 0 if os.access(host, mode) else -EPERM
+    
     def _access(self, mu, filename_ptr, flags):
-        filename = memory_helpers.read_utf8(mu, filename_ptr)
-        is_virtual, _ = self.__generator.prepare_path(filename, "", ignore_handler=True)
-
-        if is_virtual:
-            logging.debug("access '%s' (virtual) -> 0", filename)
-            return 0
-        
-        vfs_path = self.__fs_helpers._translate_path(filename)
-        rc = os.access(vfs_path, flags)
-        r = -1
-        if (rc):
-            r = 0
-    
-        logging.debug("access '%s' return %d" %(filename, r))
-        return r
-    
-    def _mkdir(self, mu, path_ptr, mode):
-        path = memory_helpers.read_utf8(mu, path_ptr)
-        vfs_path = self.__fs_helpers._translate_path(path)
-
-        logging.debug("mkdir call path [%s]"%path)
-        if (not os.path.exists(vfs_path)):
-            os.makedirs(vfs_path)
-        return 0
-
-    def _mkdirat(self, mu, dfd, path_ptr, mode):
-        path = memory_helpers.read_utf8(mu, path_ptr)
-
-        path = self.__fs_helpers._dirfd_2_path(dfd, path)
-        if (path == None):
-            return -1
-
-        vfs_path = self.__fs_helpers._translate_path(path)
-
-        logging.debug("mkdirat call path [%s]"%path)
-        if (not os.path.exists(vfs_path)):
-            os.makedirs(vfs_path)
-
-        return 0
-
-    def _unlinkat(self, mu, dfd, path_ptr, flag):
-        path = memory_helpers.read_utf8(mu, path_ptr)
-        logging.debug("unlinkat call dfd [%d] path [%s]"%(dfd, path))
-
-        path = self.__fs_helpers._dirfd_2_path(dfd, path)
-        if (path == None):
-            return -1
-        vfs_path = self.__fs_helpers._translate_path(path)
-        #TODO delete real file
-
-    def _readlinkat(self, mu, dfd, path, buf, bufsz):
-        path_utf8 = memory_helpers.read_utf8(mu, path)
-        logging.debug("readed linkat dfd %x path %s buf %x bufsz %r", dfd, path_utf8, buf, bufsz)
-        path_utf8 =  self.__fs_helpers._dirfd_2_path(dfd, path_utf8)
-        if (path_utf8 == None):
-            return -1
-
-        pobj = self.__pcb
-        pid = pobj.pid
-
-        path_std_utf = path_utf8.replace(str(pid), "self")
-        fd_base = "/proc/self/fd/"
-
-        if (path_std_utf.startswith(fd_base)):
-            
-            fd_str = os.path.basename(path_std_utf)
-            fd = int(fd_str)
-            detail = self.__pcb.virtual_files.get_fd_detail(fd)
-            name = detail.name
-            n = len(name)
-
-            if (n <= bufsz):
-                memory_helpers.write_utf8(mu, buf, name)
-                return 0
-
-            else:
-                raise RuntimeError("buffer overflow!!!")
-
-        else:
-            raise NotImplementedError()
-
-        return -1
+        path = self._resolve(0, filename_ptr)
+        return self._do_access(path, flags)
 
     def _faccessat(self, mu, dirfd, pathname_ptr, mode, flag):
         filename = memory_helpers.read_utf8(mu, pathname_ptr)
-        logging.debug("faccessat filename:[%s]"%filename)
-        filename = self.__fs_helpers._dirfd_2_path(dirfd, filename)
-        if (filename == None):
-            return -1
 
-        name_in_host = self.__fs_helpers._translate_path(filename)
-        if (os.access(name_in_host, mode)):
-            return 0
-        else:
-            logging.debug("faccessat filename:[%s] not exist"%filename)
-            return -1
+        logging.debug("faccessat filename:[%s]", filename)
+
+        path = self.__fs._dirfd_2_path(dirfd, filename)
+        if path is None:
+            return -EPERM
+
+        return self._do_access(path, mode)
+
+    def _mkdir(self, mu, path_ptr, mode):
+        path = memory_helpers.read_utf8(mu, path_ptr)
+        host = self._host(path)
+
+        if not os.path.exists(host):
+            os.makedirs(host)
+
+        return 0
+
+    def _mkdirat(self, mu, dfd, path_ptr, mode):
+        path = self._resolve(dfd, path_ptr)
+        if not path:
+            return -EPERM
+
+        host = self._host(path)
+
+        if not os.path.exists(host):
+            os.makedirs(host)
+
+        return 0
+
+    # =========================================================
+    # STATFS
+    # =========================================================
+
+    def _statfs64(self, mu, path_ptr, sz, buf):
+        path = memory_helpers.read_utf8(mu, path_ptr)
+        host = self._host(path)
+
+        if not os.path.exists(host):
+            return -EPERM
+
+        statv = os.statvfs(host)
+
+        mu.mem_write(buf, struct.pack(
+            "<QQQQQQQQQQ",
+            0xef53,
+            statv.f_bsize,
+            statv.f_blocks,
+            statv.f_bfree,
+            statv.f_bavail,
+            statv.f_files,
+            statv.f_ffree,
+            getattr(statv, "f_fsid", 0),
+            statv.f_namemax,
+            statv.f_frsize
+        ))
+
+        return 0

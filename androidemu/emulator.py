@@ -16,19 +16,19 @@ from .config import Config
 from .data import mem_map as config
 from .const import emu_const
 
-from .kernel.syscalls.syscall_handlers import SyscallHandlers
+from .handlers.syscall import SyscallHandlers
 from .kernel.syscalls.syscall_base.syscall_hooks import SyscallHooks
 from .kernel.syscalls.syscall_file.file_system import VirtualFileSystem
 from .kernel.syscalls.syscall_memory.memory_syscall_handler import MemorySyscallHandler
 
-from .kernel.state.time_manager import TimeManager
+from .utils.state.time_manager import TimeManager
 
-from .kernel.pcb import Pcb
+from .pcb import Pcb
 from .hooker import Hooker
 from .scheduler import Scheduler
 
 from .native_hook_utils import FuncHooker
-from .native.symbol_hooks import SymbolHooks
+from .native.init_hooks import HooksInitializer
 
 from .internal.linker import AndroidLinker
 
@@ -260,7 +260,7 @@ class Emulator:
 
         # Hooks
         self.func_hooker = FuncHooker(self)
-        self.sym_hooks = SymbolHooks(self)
+        self.sym_hooks = HooksInitializer(self)
 
         self.__init_utils()
 
@@ -296,7 +296,7 @@ class Emulator:
         """
         return self.__cpu_utils._write_sys_reg(reg, val)
 
-    def load_library(self, filename, do_init: bool = True, main_lib: bool = False, demangle: bool = False) -> 'Module':
+    def load_library(self, filename, do_init: bool = True, main_lib: bool = False, demangle: bool = False, use_cache: bool = True) -> 'Module':
         """
         Load a dynamic library from disk.
 
@@ -304,11 +304,13 @@ class Emulator:
         :param do_init: Whether to initialize the library with init_array
         :param main_lib: Whether this is the main executable
         :param demangle: Whether to demangle symbols (functions, exported symbols, etc.)
+        :param use_cache: Whether to use cache
         :return: The loaded module
 
         WARNING: Demangle option can increase memory consumption for store more symbols.
+        Off this option if you don't want to hook for "beautify" symbols in code.
         """
-        libmod = self.linker.load_module(filename, do_init, main_lib, demangle)
+        libmod = self.linker.load_module(filename, do_init, main_lib, demangle, use_cache)
         return libmod
 
     # alias-like
