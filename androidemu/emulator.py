@@ -296,7 +296,7 @@ class Emulator:
         """
         return self.__cpu_utils._write_sys_reg(reg, val)
 
-    def load_library(self, filename, do_init: bool = True, main_lib: bool = False, demangle: bool = False, use_cache: bool = True) -> 'Module':
+    def load_library(self, filename, do_init: bool = True, main_lib: bool = False, demangle: bool = False) -> 'Module':
         """
         Load a dynamic library from disk.
 
@@ -310,7 +310,7 @@ class Emulator:
         WARNING: Demangle option can increase memory consumption for store more symbols.
         Off this option if you don't want to hook for "beautify" symbols in code.
         """
-        libmod = self.linker.load_module(filename, do_init, main_lib, demangle, use_cache)
+        libmod = self.linker.load_module(filename, do_init, main_lib, demangle)
         return libmod
 
     # alias-like

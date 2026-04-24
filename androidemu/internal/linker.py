@@ -105,14 +105,13 @@ class AndroidLinker:
 
         return None
 
-    def load_module(self, filename: str, do_init: bool, main_lib: bool , demangle: bool, use_cache: bool) -> Module:
+    def load_module(self, filename: str, do_init: bool, main_lib: bool , demangle: bool) -> Module:
         """
         Main entry point called by Emulator.
         Handles both the initial executable load and subsequent dlopens.
         """
         logger.info("[Linker] Request to load: %s (do_init=%s) (main=%s)", filename, do_init, main_lib)
         self.__demangle = demangle
-        self.__cache = use_cache
 
         if not self.tls_initialized:
             lib = self._pipeline_load_executable(filename)
