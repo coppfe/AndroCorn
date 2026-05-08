@@ -2,6 +2,8 @@ import sys
 import os
 from ..debug_utils import *
 
+# TODO: move to androcorn native tools
+
 class MemoryMonitor:
     def __init__(self, emu):
         self.__emu = emu

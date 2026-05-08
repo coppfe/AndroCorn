@@ -25,26 +25,15 @@ class BionicTLS_ARM32(BionicTLS):
         super().__init__(emu)
 
         self.dtv_builder = DTVBuilderARM32(emu, self)
-        self.pthread_builder = PThreadBuilderARM32(emu, self)
-
-        # self.at_rand = b'0\x1bK\xf1\xef\xc8)\xc3\xce>\x94Q\xcf\x98\xff3'
-        self.at_rand = b"\42" * 16
-        
-    def mem_reserve(self, size: int, align: int = 0x10) -> int:
-        base = (self.counter_memory + (align - 1)) & ~(align - 1)
-        end = base + size
-        map_start = base & ~(PAGE_SIZE - 1)
-        map_end = (end + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1)
-        try:
-            self.mu.mem_map(map_start, map_end - map_start)
-        except: pass
-        self.counter_memory = end
-        return base
+        self.pthread_builder = PThreadBuilderARM32(emu)
 
     def bootstrap(self, phdr_addr, phnum, entry_point):
         logger.info("[TLS-7.1-ARM32] Bootstrapping Legacy Layout")
 
-        self.tp = self.mem_reserve(PAGE_SIZE, align=PAGE_SIZE)
+        size = PAGE_SIZE
+        self.tp = self.emu.memory.static_alloc(size, addr=self.counter_memory, align=PAGE_SIZE)
+
+        self.counter_memory = self.tp + size
 
         self.kernel_args_base = self._init_kernel_args(phdr_addr, phnum, entry_point)
 
@@ -55,6 +44,7 @@ class BionicTLS_ARM32(BionicTLS):
         self._write_ptr(self.tp + ARM32_TLS_PTHREAD_T, self.pthread_internal)      # Slot 1: pthread_t
         self._write_ptr(self.tp + ARM32_TLS_ERRNO, 0)                              # Slot 2: __errno
         self._write_ptr(self.tp + ARM32_TLS_KAB, self.kernel_args_base)            # Slot 3: Kernel Argument Block (AUXV, argc, argv)
+
         # ------------ LIBC SLOTS END HERE ----------------------------
         # self._write_ptr(self.tp + ARM32_TLS_SSP, self.at_rand)                   # Slot 4: Stack Guard (SSP)
         # self._write_ptr(self.tp + ARM32_TLS_LOCALE, 0)                           # Slot 5: Locale
@@ -69,7 +59,7 @@ class BionicTLS_ARM32(BionicTLS):
 
     def setup_static_tls(self, reader, bias):
         loader = TLSModuleLoader(self.emu, self)
-        module_id = loader.register_module(reader, bias)
+        module_id = loader.register_module(reader)
         if module_id == 0:
             return 0
         tls_block = self.dtv_builder.get_tls_block(module_id)
@@ -77,17 +67,21 @@ class BionicTLS_ARM32(BionicTLS):
 
     
     def _init_kernel_args(self, phdr_addr, phnum, entry_point):
-        writer = StructWriter(self.emu, self.mem_reserve(0x4000))
+        reserver = self.emu.memory
+        addr = reserver.static_alloc(0x4000, addr=self.counter_memory)
+        self.counter_memory = addr + 0x4000
 
+        writer = StructWriter(self.emu)
+        
         # Kernel args
         bin_name_ptr = writer.write_utf8("/system/bin/app_process")
 
         # Stack guard / AT_RANDOM
-        rand_ptr = writer.reserve_bytes(16)
+        rand_ptr = reserver.dynamic_alloc(16, is_ptr_array=True)
         self.mu.mem_write(rand_ptr, self.at_rand)
 
         # argv
-        argv_ptr = writer.reserve(8)
+        argv_ptr = reserver.dynamic_alloc(8)
         self._write_ptr(argv_ptr, bin_name_ptr)
         self._write_ptr(argv_ptr + 4, 0)
 
@@ -113,13 +107,13 @@ class BionicTLS_ARM32(BionicTLS):
             ptr = writer.write_utf8(s)
             env_str_ptrs.append(ptr)
 
-        envp_ptr = writer.reserve((len(env_str_ptrs) + 1) * 4)
+        envp_ptr = reserver.dynamic_alloc((len(env_str_ptrs) + 1) * 4)
         for i, ptr in enumerate(env_str_ptrs):
             self._write_ptr(envp_ptr + i*4, ptr)
         self._write_ptr(envp_ptr + len(env_str_ptrs)*4, 0)  # NULL-terminated
 
         # auxv
-        auxv_ptr = writer.reserve(64)
+        auxv_ptr = reserver.static_alloc(64)
         auxv = [
             (linux.AT_PHDR, phdr_addr),
             (linux.AT_PHNUM, phnum),
@@ -137,7 +131,7 @@ class BionicTLS_ARM32(BionicTLS):
             curr_auxv += 8
 
         # Kernel Argument Block
-        kab_base = writer.reserve(16)
+        kab_base = reserver.dynamic_alloc(16)
         self._write_ptr(kab_base + ARM32_KAB_ARGC, 1)         # argc
         self._write_ptr(kab_base + ARM32_KAB_ARGV, argv_ptr)  # argv
         self._write_ptr(kab_base + ARM32_KAB_ENVP, envp_ptr)  # envp

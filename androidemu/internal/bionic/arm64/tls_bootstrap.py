@@ -9,55 +9,35 @@ from ..tls_bionic import BionicTLS
 from ....data.mem_map import PAGE_SIZE, TLS_BASE
 from ....const.offsets.arm64 import *
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ....emulator import Emulator
+
 logger = logging.getLogger(__name__)
 
 class BionicTLS_ARM64(BionicTLS):
 
     def __init__(self, emu):
-        self.emu = emu
-        self.mu = emu.mu
-        self.ptr_sz = 8
+        super().__init__(emu)
         
-        self.counter_memory = TLS_BASE
-
-        self.tp = 0
-        self.dtv = 0
-        self.pthread_internal = 0
-        self.errno_ptr = 0
-
         self.dtv_builder = DTVBuilderARM64(emu, self)
-        self.pthread_builder = PThreadBuilderARM64(emu, self)
-
-        # Stack guard / AT_RANDOM
-        self.at_rand = b"\x42" * 16
-
-    def mem_reserve(self, size: int, align: int = 0x10) -> int:
-        base = (self.counter_memory + (align - 1)) & ~(align - 1)
-        end = base + size
-        map_start = base & ~(PAGE_SIZE - 1)
-        map_end = (end + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1)
-        try:
-            self.mu.mem_map(map_start, map_end - map_start)
-        except: 
-            pass
-        self.counter_memory = end
-        return base
+        self.pthread_builder = PThreadBuilderARM64(emu)
 
     def bootstrap(self, phdr_addr, phnum, entry_point):
         logger.info("[TLS-ARM64] Bootstrapping Modern Layout")
 
-        self.tp = self.mem_reserve(PAGE_SIZE, align=PAGE_SIZE)
+        size = PAGE_SIZE
+        self.tp = self.emu.memory.static_alloc(size, addr=self.counter_memory, align=PAGE_SIZE)
 
-        # Bionic TLS (Slot 5)
-        # bionic_tls = self.mem_reserve(0x3000)
-        # self.mu.mem_write(bionic_tls, b"\x00" * 0x3000)
+        self.counter_memory = self.tp + size
 
         self.dtv = self.dtv_builder.build()
         self.pthread_internal = self.pthread_builder.build()
         
         self.errno_ptr = self.pthread_internal + ARM64_TLS_ERRNO_PTR
 
-        kab_base = self._init_kernel_args(phdr_addr, phnum, entry_point)      # Kernel Argument Block
+        kab_base = self._init_kernel_args(phdr_addr, phnum, entry_point)        # Kernel Argument Block
 
         self._write_ptr(self.tp + ARM64_TLS_BASE, self.tp)                      # Slot 0: SELF
         self._write_ptr(self.tp + ARM64_TLS_PTHREAD_T, self.pthread_internal)   # Slot 1: pthread_internal / TID
@@ -74,17 +54,22 @@ class BionicTLS_ARM64(BionicTLS):
         logger.info("[TLS-ARM64] Bootstrap Done. TP=%#x, KAB=%#x, DTV=%#x, Pthread=%#x", self.tp, kab_base, self.dtv, self.pthread_internal)
 
     def _init_kernel_args(self, phdr_addr, phnum, entry_point):
-        writer = StructWriter(self.emu, self.mem_reserve(0x4000))
+        reserver = self.emu.memory
+
+        addr = reserver.static_alloc(0x4000, addr=self.counter_memory)
+        self.counter_memory = addr + 0x4000
+
+        writer = StructWriter(self.emu)
 
         # 1. bin_name
         bin_name_ptr = writer.write_utf8("/system/bin/app_process")
 
         # 2. Stack guard / AT_RANDOM
-        rand_ptr = writer.reserve_bytes(16)
+        rand_ptr = reserver.dynamic_alloc(16, is_ptr_array=True)
         self.mu.mem_write(rand_ptr, self.at_rand)
 
         # 3. argv
-        argv_ptr = writer.reserve(16)
+        argv_ptr = reserver.dynamic_alloc(16)
         self._write_ptr(argv_ptr, bin_name_ptr)
         self._write_ptr(argv_ptr + 8, 0)
 
@@ -110,13 +95,13 @@ class BionicTLS_ARM64(BionicTLS):
             ptr = writer.write_utf8(s)
             env_str_ptrs.append(ptr)
 
-        envp_ptr = writer.reserve((len(env_str_ptrs) + 1) * 8)
+        envp_ptr = reserver.dynamic_alloc((len(env_str_ptrs) + 1) * 8)
         for i, ptr in enumerate(env_str_ptrs):
             self._write_ptr(envp_ptr + i*8, ptr)
         self._write_ptr(envp_ptr + len(env_str_ptrs)*8, 0)  # NULL-terminated
 
         # 5. auxv
-        auxv_ptr = writer.reserve(128) # update value for more auxv
+        auxv_ptr = reserver.static_alloc(128) # update value for more auxv
         auxv = [
             (linux.AT_PHDR, phdr_addr),
             (linux.AT_PHNUM, phnum),
@@ -134,7 +119,7 @@ class BionicTLS_ARM64(BionicTLS):
             curr_auxv += 16 
 
         # 6. Kernel Argument Block
-        kab_base = writer.reserve(32)
+        kab_base = reserver.dynamic_alloc(32)
         self._write_ptr(kab_base + ARM64_KAB_ARGC, 1)          # argc
         self._write_ptr(kab_base + ARM64_KAB_ARGV, argv_ptr)   # argv
         self._write_ptr(kab_base + ARM64_KAB_ENVP, envp_ptr)   # envp
@@ -144,7 +129,7 @@ class BionicTLS_ARM64(BionicTLS):
 
     def setup_static_tls(self, reader, bias):
         loader = TLSModuleLoader(self.emu, self)
-        module_id = loader.register_module(reader, bias)
+        module_id = loader.register_module(reader)
         tls_block = self.dtv_builder.get_tls_block(module_id)
         return tls_block - self.tp
 

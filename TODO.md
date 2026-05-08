@@ -1,18 +1,18 @@
 1. Nested calls
 
-2. Refactor module names and paths
-
-3. Optimizations
-
-4. execve -1 and -2 implementation
+2. execve -1 and -2 implementation
    In real Linux, if the path is not found, it returns -2 and doesn't kill current process.
 
-~~5. Improve find_symbol_globally in linker.~~
+3. Collect offsets to offset_cfg.py
 
-6. Collect offsets to offset_cfg.py
+4. Add regular expressions in const/devices.py
 
-7. soinfo Symbol & Relocation table implementation
+~~Refactor module names and paths~~
 
-8. Move Linux errors to constants
+~~Improve find_symbol_globally in linker.~~
 
-9. Check more tests
+~~Move Linux errors to constants~~
+
+~~Check more tests~~
+
+~~Rename symbol hooks and fun hooks to stub_addr and hook_addr~~

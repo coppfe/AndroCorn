@@ -1,19 +1,19 @@
 # something will be here. Maybe. I don't know.
 
-from .base_sym import BaseSymbolHooks
+from .base import StubAddress
 
 from typing import TYPE_CHECKING
 
 from unicorn import *
 
-from ...java.helpers.native_method import native_method
+from ..helpers.native_method import native_method
 
 if TYPE_CHECKING:
     from unicorn import Uc
     from ...emulator import Emulator
 
 
-class LibCPPSymbolHooks(BaseSymbolHooks):
+class LibCPPSymbolHooks(StubAddress):
 
     def __init__(self, emu: 'Emulator'):
         super().__init__(emu)

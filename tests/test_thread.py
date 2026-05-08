@@ -1,10 +1,8 @@
 import logging
-import posixpath
-import sys
 import unittest
 from androidemu.const import emu_const
 from androidemu.emulator import Emulator
-from androidemu.native_hook_utils import FuncHooker
+from androidemu.utils.hookers.hook_addr import AddressHooker
 
 class TestThread(unittest.TestCase):
     def __init__(self, methodName):
@@ -39,7 +37,7 @@ class TestThread(unittest.TestCase):
         )
         libcm = emulator.load_library("vfs/system/lib/libc.so")
         sym = libcm.find_symbol("pthread_create")
-        h = FuncHooker(emulator)
+        h = AddressHooker(emulator)
         h.fun_hook(sym, 4, self.__pthread_create32_before_hook, self.__pthread_create32_after_hook)
         libdemo = emulator.load_library("tests/bin/libdemo.so")
         r = emulator.call_symbol(libdemo, "test_thread", 3)
@@ -74,7 +72,7 @@ class TestThread(unittest.TestCase):
         libcm = emulator.load_library("vfs/system/lib64/libc.so")
         sym = libcm.find_symbol("pthread_create")
         #print("sym : %s"%hex(sym))
-        h = FuncHooker(emulator)
+        h = AddressHooker(emulator)
         h.fun_hook(sym, 4, self.__pthread_create64_before_hook, self.__pthread_create64_after_hook)
         #emulator.mu.hook_add(UC_HOOK_CODE, hook_code, emulator)
         libdemo = emulator.load_library("tests/bin64/libdemo.so")
@@ -88,6 +86,8 @@ class TestThread(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+# In new version it's will be return a deadlock!
 
 # WARNING:androidemu.native.sym_hooks.libdl_sym:[!] dlopen: library 'libnetd_client.so' NOT FOUND
 # WARNING:root:pthread_create call thread:[0x107FBBDC] attr:[0x107FBBE0] start_routine:[0x400A5081] arg:[0x00000000]

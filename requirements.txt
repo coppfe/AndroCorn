@@ -1,3 +1,2 @@
 unicorn==2.1.4
 lief==0.17.6
-cpp_demangle

@@ -9,20 +9,9 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 class PThreadBuilder(ABC):
-    def __init__(self, emu: 'Emulator', state: 'BionicTLS'):
+    def __init__(self, emu: 'Emulator'):
         self.emu = emu
-        self.mu = emu.mu
-        self.state = state
-        self.ptr_sz = emu.ptr_size
 
     @abstractmethod
-    def build(self, tls_slots_ptr: int = 0, bionic_tls_ptr: int = 0, dtv_ptr: int = 0) -> int:
+    def build(self) -> int:
         raise NotImplementedError()
-
-    # --- Helpers ---
-
-    def _write_ptr(self, addr, val: int):
-        self.mu.mem_write(addr, val.to_bytes(self.ptr_sz, 'little'))
-
-    def _write32(self, addr, val: int):
-        self.mu.mem_write(addr, val.to_bytes(4, 'little'))

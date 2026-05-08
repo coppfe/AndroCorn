@@ -1,8 +1,6 @@
 # For code beauty
 # Contains void decorators
 
-from __future__ import annotations
-
 def PROXY(func):
     """
     Function with this tag calling another function

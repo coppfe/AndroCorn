@@ -12,7 +12,8 @@ build
 .vscode/
 
 *.log
-fix.txt
+
+notes.txt
 test.py
 keystone_in/
 androidemu/highlevel/host

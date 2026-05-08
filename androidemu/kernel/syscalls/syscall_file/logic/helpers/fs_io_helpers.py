@@ -4,7 +4,6 @@ import platform
 import select
 
 
-from ......utils.generators.vfs_content import ContentGenerator
 from ......objects.virtual_file import VirtualFile
 from ......const.linux import *
 
@@ -14,6 +13,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ......emulator import Emulator
+    from ......utils.generators.vfs_content import ContentGenerator
     from ......pcb import Pcb
     from .fs_helpers import FSHelpers
 

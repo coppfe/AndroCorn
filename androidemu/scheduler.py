@@ -11,7 +11,7 @@ from unicorn.arm64_const import *
 from .const.linux import *
 from .data import mem_map as config
 from .const import emu_const
-from .java.helpers.native_method import native_write_args
+from .native.helpers.native_method import native_write_args
 
 if TYPE_CHECKING:
     from .emulator import Emulator
@@ -25,13 +25,18 @@ class Task:
         self.tls_ptr = 0
         self.stack_base = 0
         self.stack_size = 0
-        # self.is_forked_stack = False
         self.is_init = True
         self.is_main = False
         self.is_exit = False
         self.wakeup_time_us = -1 
 
 class Scheduler:
+    """
+    Scheduler class is working with threads and process so some syscalls are implemented here, like fork, clone, wait4.
+
+    Most of this public function just to get acquainted with their operating principle, not for direct calls in your scripts!
+    """
+
     def __init__(self, emu: 'Emulator'):
         self.__emu = emu
         self.__mu = self.__emu.mu
@@ -93,21 +98,6 @@ class Scheduler:
             if cpsr & (1 << 5): pc |= 1
         return pc
 
-    def __find_free_region(self, size, start_search):
-        page_size = 0x1000
-        size = (size + page_size - 1) & ~(page_size - 1)
-        
-        regions = sorted(self.__mu.mem_regions())
-        
-        current_addr = start_search
-        for begin, end, prot in regions:
-            if begin > current_addr and (begin - current_addr) >= size:
-                return current_addr
-            if end + 1 > current_addr:
-                current_addr = (end + 1 + page_size - 1) & ~(page_size - 1)
-        
-        return current_addr
-
     def __create_task(self, tid, stack_ptr, context, is_main, tls_ptr):
         t = Task()
         t.tid = tid
@@ -124,7 +114,15 @@ class Scheduler:
         self.__tasks_map[tid] = t
         self.__ready_queue.append(tid)
 
-    def fork_task(self):
+    def fork_task(self) -> int:
+        """
+        Imitation of os.fork. Works on vfork, fork
+
+        As we have only one thread we just copy all registers and mapping new stack to avoid parent stack corruption.
+        But childs need to know parent stack it's doesn't wipe, so we need to copy it to child stack.
+        So i implement here is a Linear Deep Stack Copy. That's not the best way, but it works.
+        Short description of this method: Just check is current addr in parent stack in STACK_BASE values. If yes -> address and value will be relocated to child stack
+        """        
         parent_tid = self.__cur_tid
         child_tid = self.__next_sub_tid
         self.__next_sub_tid += 1
@@ -146,10 +144,10 @@ class Scheduler:
 
         stack_size = (used_stack_size + 0xFFF) & ~0xFFF
         stack_size = max(0x100000, stack_size)
-        
-        child_stack_base = self.__find_free_region(stack_size, config.CHILD_STACK_ADDR)
-        self.__mu.mem_map(child_stack_base, stack_size, UC_PROT_READ | UC_PROT_WRITE)
-        
+
+        child_stack_base = self.__emu.memory.find_free_region(stack_size, config.CHILD_STACK_ADDR)
+        self.__emu.memory.map(child_stack_base, stack_size, UC_PROT_READ | UC_PROT_WRITE)
+
         child_stack_top = child_stack_base + stack_size
         child_sp = child_stack_top - ((p_stack_end + 1) - parent_sp)
         
@@ -199,7 +197,15 @@ class Scheduler:
         self.yield_task()
         return child_tid
     
-    def add_sub_task(self, stack_ptr, tls_ptr=0):
+    def add_sub_task(self, stack_ptr: int, tls_ptr: int = 0) -> int:
+        """
+        Adding a new thread. Imitation of a clone syscall
+
+        :param stack_ptr: Stack pointer
+        :param tls_ptr: Thread local storage
+
+        :return: Thread ID
+        """
         tid = self.__next_sub_tid
         self.__next_sub_tid += 1
         
@@ -221,7 +227,15 @@ class Scheduler:
         
         return tid
     
-    def wait4_task(self, target_tid, wstatus_ptr, options=0):
+    def wait4_task(self, target_tid: int, wstatus_ptr: int, options: int = 0) -> int:
+        """
+        Imitation of wait4 syscall
+
+        :param target_tid: Target thread ID
+        :param wstatus_ptr: Pointer to wait status
+
+        :return: 0 or errno
+        """
         WNOHANG = 1
         
         if target_tid == -1:
@@ -272,27 +286,38 @@ class Scheduler:
 
         return -ECHILD
 
-    def get_current_tid(self):
+    def get_current_tid(self) -> int:
         return self.__cur_tid
 
-    def exit_current_task(self):
+    def exit_current_task(self) -> None:
         if self.__cur_tid in self.__tasks_map:
             self.__tasks_map[self.__cur_tid].is_exit = True
             self.__tid_2_remove.add(self.__cur_tid)
         self.__emu.pcb.virtual_files.remove_task(self.__cur_tid)
         self.yield_task()
 
-    def yield_task(self):
+    def yield_task(self) -> None:
         self.__mu.emu_stop()
 
-    def sleep(self, ms):
+    def sleep(self, ms: int) -> None:
+        """
+        Imitation of nanosleep syscall
+
+        We are not actually sleeping! We just set the wakeup time
+        """
         tid = self.__cur_tid
         self.__blocking_set.add(tid)
         curr_time = self.__emu.time_manager.get_current_time_us()
         self.__tasks_map[tid].wakeup_time_us = curr_time + int(ms * 1000)
         self.yield_task()
 
-    def futex_wait(self, futex_ptr, timeout=-1):
+    def futex_wait(self, futex_ptr: int, timeout: int = -1) -> None:
+        """
+        Imitation of futex_wait syscall
+
+        :param futex_ptr: Pointer to futex
+        :param timeout: Timeout
+        """
         block_set = self.__futex_blocking_map.setdefault(futex_ptr, set())
         tid = self.__cur_tid
         block_set.add(tid)
@@ -304,7 +329,12 @@ class Scheduler:
             self.__tasks_map[tid].wakeup_time_us = -1
         self.yield_task()
 
-    def futex_wake(self, futex_ptr):
+    def futex_wake(self, futex_ptr) -> bool:
+        """
+        Wake futex
+
+        :param futex_ptr: Pointer to futex
+        """
         cur_tid = self.__cur_tid
         block_set = self.__futex_blocking_map.get(futex_ptr)
         if block_set and len(block_set) > 0:
@@ -317,7 +347,14 @@ class Scheduler:
             return True
         return False
 
-    def exec(self, main_entry, clear_task_when_return=True):
+    def exec(self, main_entry: int, clear_task_when_return: bool = True) -> None:
+        """
+        Start the scheduler
+
+        :param main_entry: Entry point
+        :param clear_task_when_return: Clear tasks
+
+        """
         if self.__is_running:
             raise RuntimeError("Scheduler is already running!")
         
@@ -334,7 +371,15 @@ class Scheduler:
                 self.__ready_queue.clear()
                 self.__blocking_set.clear()
 
-    def call_native(self, addr, *args):
+    def call_native(self, addr: int, *args) -> int:
+        """
+        Flexability layer. Writing args and call proxy func `exec`
+
+        :param addr: Entry point
+        :param *args: Arguments
+
+        :return: Return value
+        """
         if not self.__is_running:
             native_write_args(self.__emu, *args)
             self.exec(addr)

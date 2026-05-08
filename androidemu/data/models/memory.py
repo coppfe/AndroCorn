@@ -8,6 +8,6 @@ from dataclasses import dataclass
 
 @dataclass
 class Memory:
-    ram_total_mb: int = 8192
-    ram_free_percent_start: int = 45
-    swap_total_mb: int = 2048
+    ram_total_mb: 				int = 8192
+    ram_free_percent_start: 	int = 45
+    swap_total_mb: 				int = 2048

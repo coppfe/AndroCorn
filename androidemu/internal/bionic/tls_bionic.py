@@ -25,14 +25,12 @@ class BionicTLS(ABC):
         self.dtv_builder: 'DTVBuilder' = None
         self.pthread_builder: 'PThreadBuilder' = None
 
+        self.at_rand = b"\x42" * 16
+
     @abstractmethod
     def setup_static_tls(self, reader, bias):
         raise NotImplementedError
 
     @abstractmethod
     def bootstrap(self, phdr_addr, phnum, entry_point):
-        raise NotImplementedError
-
-    @abstractmethod
-    def mem_reserve(self, size: int, align: int = 0x10) -> int:
         raise NotImplementedError

@@ -24,7 +24,7 @@ R_AARCH64_COPY = Relocation.TYPE.AARCH64_COPY
 R_AARCH64_GLOB_DAT = Relocation.TYPE.AARCH64_GLOB_DAT
 R_AARCH64_JUMP_SLOT = Relocation.TYPE.AARCH64_JUMP_SLOT
 R_AARCH64_RELATIVE = Relocation.TYPE.AARCH64_RELATIVE
-R_AARCH64_TLS_TPREL64 = Relocation.TYPE.AARCH64_TLS_DTPREL64
+R_AARCH64_TLS_TPREL64 = Relocation.TYPE.AARCH64_TLS_TPREL64
 R_AARCH64_IRELATIVE = Relocation.TYPE.AARCH64_IRELATIVE
 
 logger = logging.getLogger(__name__)
@@ -47,66 +47,87 @@ class Relocator:
         return int.from_bytes(self.emu.mu.mem_read(addr, self.word_size), 'little')
 
 class ARM32Relocator(Relocator):
-    def apply(self, r_type, r_addr, sym_addr, sym_name, addend, tls_info=None):
+
+    def apply(self, r_type, r_addr, sym_addr, sym_name, addend, tls_info=None, is_ifunc=False):
         implicit = self.read_val(r_addr)
         new_val = None
-
-        # 1. Hooks
+        
+        # Hooks
         if sym_name in self.emu.linker.symbol_hooks:
             hook_addr = self.emu.linker.symbol_hooks[sym_name]
             self.write_val(r_addr, hook_addr)
             return
 
-        # 2. R_ARM_RELATIVE (B + A)
+        # R_ARM_RELATIVE (B + A)
         if r_type == R_ARM_RELATIVE:
             new_val = self.load_bias + implicit
             self.write_val(r_addr, new_val)
 
-        # 3. SYM RELOC (S + A)
+        # SYM RELOC (S + A)
         elif r_type in (R_ARM_GLOB_DAT, R_ARM_JUMP_SLOT):
             if sym_addr:
-                self.write_val(r_addr, sym_addr)
+                if is_ifunc:
+                    self.emu.mu.reg_write(UC_ARM_REG_R0, 0x3FF) # HWCAP
+                    new_val = self.emu.call_native(sym_addr)
+                    self.write_val(r_addr, new_val)
+                else:
+                    self.write_val(r_addr, sym_addr)
             else:
                 self.write_val(r_addr, 0)
 
-        # 2. ABS32 (implicit) (S + A)
+        # ABS32 (implicit) (S + A)
         elif r_type == R_ARM_ABS32:
             if sym_addr:
-                self.write_val(r_addr, sym_addr + implicit)
+                if is_ifunc:
+                    self.emu.mu.reg_write(UC_ARM_REG_R0, 0x3FF)
+                    new_val = self.emu.call_native(sym_addr)
+                    self.write_val(r_addr, new_val + implicit)
+                else:
+                    self.write_val(r_addr, sym_addr + implicit)
             else:
                 self.write_val(r_addr, implicit)
 
-        # 4. IRELATIVE
+        # IRELATIVE
         elif r_type == R_ARM_IRELATIVE:
             resolver_addr = self.load_bias + implicit
             self.emu.mu.reg_write(UC_ARM_REG_R0, 0x3FF) # HWCAP
             new_val = self.emu.call_native(resolver_addr)
             self.write_val(r_addr, new_val)
+
+        elif r_type == R_ARM_TLS_TPOFF32:
+            if tls_info:
+                self.write_val(r_addr, tls_info['offset'])
+            else:
+                self.write_val(r_addr, 0)
         
         else:
             logger.warning("[ARM32Relocator] Unsupported relocation type: %s" % r_type)
 
 class ARM64Relocator(Relocator):
-    def apply(self, r_type, r_addr, sym_addr, sym_name, addend, tls_info=None):
+    def apply(self, r_type, r_addr, sym_addr, sym_name, addend, tls_info=None, is_ifunc=False):
         if sym_name in self.emu.linker.symbol_hooks:
             hook_addr = self.emu.linker.symbol_hooks[sym_name]
             self.write_val(r_addr, hook_addr)
             return
 
-        # 2. RELATIVE: B + A
+        # RELATIVE: B + A
         if r_type == R_AARCH64_RELATIVE:
             val = self.load_bias + addend
             self.write_val(r_addr, val)
 
-        # 3. ABS64 / GLOB_DAT / JUMP_SLOT: S + A
+        # ABS64 / GLOB_DAT / JUMP_SLOT: S + A
         elif r_type in (R_AARCH64_ABS64, R_AARCH64_GLOB_DAT, R_AARCH64_JUMP_SLOT):
             if sym_addr:
-                val = sym_addr + addend
+                if is_ifunc:
+                    self.emu.mu.reg_write(UC_ARM64_REG_X0, 0xFF) # HWCAP
+                    val = self.emu.call_native(sym_addr) + addend
+                else:
+                    val = sym_addr + addend
             else:
                 val = self.load_bias + addend
             self.write_val(r_addr, val)
 
-        # 4. IRELATIVE: B + A -> call IFUNC resolver
+        # IRELATIVE: B + A -> call IFUNC resolver
         elif r_type == R_AARCH64_IRELATIVE:
             resolver_addr = self.load_bias + addend
             self.emu.mu.reg_write(UC_ARM64_REG_X0, 0xFF) # HWCAP
@@ -115,10 +136,8 @@ class ARM64Relocator(Relocator):
 
         # 5. TLS (TPREL64)
         elif r_type == R_AARCH64_TLS_TPREL64:
-            offset = tls_info['offset'] if tls_info else 0
-            # S + A + TP_OFFSET
-            val = (sym_addr if sym_addr else 0) + addend + offset
-            self.write_val(r_addr, val)
+            tp = self.emu.mu.reg_read(UC_ARM64_REG_TPIDR_EL0)
+
+            val = (sym_addr if sym_addr else 0) + addend - tp
             
-        else:
-            logger.warning("[ARM64Relocator] Unsupported relocation type: %s" % r_type)
+            self.write_val(r_addr, val)

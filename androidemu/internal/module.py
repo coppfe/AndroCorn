@@ -1,16 +1,16 @@
 import logging
-import struct
 from typing import List, Dict, Optional, TYPE_CHECKING
-import lief
 
 if TYPE_CHECKING:
     from ..emulator import Emulator
-    from unicorn import Uc
     from ..utils.parsers.elf import ELFReader
 
 logger = logging.getLogger(__name__)
 
 class Module:
+    """
+    Class representing a loaded module
+    """
     def __init__(self, 
                  filename: str, 
                  load_base: int,
@@ -42,20 +42,40 @@ class Module:
             self.symbol_lookup[abs_addr] = name
 
     def find_symbol(self, name: str) -> Optional[int]:
+        """
+        Find a symbol by name
+
+        :param name: Name of the symbol
+        """
         offset = self.symbols.get(name)
         return (self.bias + offset) if offset is not None else None
     
     def find_function(self, name: str) -> Optional[int]:
+        """
+        Find a function by name
+
+        :param name: Name of the function
+        """
         offset = self.reader.functions.get(name)
         return (self.bias + offset) if offset is not None else None
 
     def find_symbol_name(self, addr: int) -> Optional[str]:
+        """
+        Find a symbol by address
+
+        :param addr: Address of the symbol
+        """
         for target in [addr, addr | 1, addr & ~1]:
             if target in self.symbol_lookup:
                 return self.symbol_lookup[target]
         return None
 
-    def call_init(self, emu: 'Emulator'):
+    def call_init(self, emu: 'Emulator') -> None:
+        """
+        Init the module
+
+        :param emu: The emulator
+        """
         init_funcs = self.init_array
         if not init_funcs:
             return

@@ -1,5 +1,5 @@
 from typing import TYPE_CHECKING
-from ...java.helpers.native_method import native_method
+from ...native.helpers.native_method import native_method
 
 if TYPE_CHECKING:
     from ...emulator import Emulator
@@ -39,7 +39,7 @@ class TLSSymbolResolver:
         memsz = meta["memsz"]
         tdata = meta["tdata"]
         
-        addr = self.state.mem_reserve(memsz, align=0x10)
+        addr = self.emu.memory.static_alloc(memsz, align=0x10)
 
         if tdata:
             self.mu.mem_write(addr, tdata)

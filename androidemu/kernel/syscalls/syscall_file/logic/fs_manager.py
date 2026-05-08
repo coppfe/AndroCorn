@@ -26,8 +26,8 @@ class VirtualFileSystemCalls:
         self.__emu: 'Emulator' = emulator
         self.__pcb: 'Pcb' = emulator.pcb
 
-        self.__generator = content_generator
-        self.__fs = fs_helper
+        self.__generator: 'ContentGenerator' = content_generator
+        self.__fs: 'FSHelpers' = fs_helper
 
         self._is_win = platform.system() == "Windows"
 
@@ -69,7 +69,6 @@ class VirtualFileSystemCalls:
         path = memory_helpers.read_utf8(mu, filename_ptr)
         return self.__fs._internal_path_stat_handler(mu, path, buf_ptr, False)
 
-    @PROXY
     def _fstat64(self, mu, fd, stat_ptr):
         vf = self.__pcb.virtual_files.get_fd_detail(fd)
         if not vf:

@@ -3,13 +3,13 @@ import logging
 from typing import TYPE_CHECKING
 
 
-from ..java.helpers.native_method import native_method
+from .helpers.native_method import native_method
 from ..utils.memory import memory_helpers
 from ..java.jni_env import JNIEnv
 from unicorn import *
 
 if TYPE_CHECKING:
-    from ..hooker import Hooker
+    from ..utils.hooker import Hooker
     from ..internal.linker import AndroidLinker
     from ..emulator import Emulator
     

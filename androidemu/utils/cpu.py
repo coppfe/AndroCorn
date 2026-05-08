@@ -20,7 +20,7 @@ class CPU_Utils:
     TYPE_MRC = 0   # 32-bit
     TYPE_MRRC = 1  # 64-bit
 
-    MRS_BASE_64 = 0xD5300000 # move from system register
+    MRS_BASE_64 = 0xD5300000  # move from system register
     MSR_BASE_64 = 0xD5100000  # move to system register
     
     MRC_BASE_32  = 0xEE100F10 # move from coprocessor

@@ -12,17 +12,17 @@ from .net import Net
 class Device:
     android_id: str = field(default_factory=lambda: ''.join(random.choice('0123456789abcdef') for _ in range(16)))
     
-    memory: Memory = field(init=False)
-    kernel: Kernel = field(init=False)
-    net: Net       = field(init=False)
+    memory: Memory          = field(init=False)
+    kernel: Kernel          = field(init=False)
+    net:    Net             = field(init=False)
 
-    memory: Any = field(default_factory=dict) 
-    kernel: Any = field(default_factory=dict)
-    net: Any    = field(default_factory=dict)
+    memory: Any             = field(default_factory=dict) 
+    kernel: Any             = field(default_factory=dict)
+    net:    Any             = field(default_factory=dict)
 
-    config: Any = field(default_factory=dict)
+    config: Any             = field(default_factory=dict)
 
-    extra: Dict[str, Any] = field(default_factory=dict)
+    extra: Dict[str, Any]   = field(default_factory=dict)
 
     def __post_init__(self):
         if isinstance(self.memory, dict):

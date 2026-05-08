@@ -1,87 +1,82 @@
 import struct
 import logging
-import lief
 import os
 
-from typing import List, TYPE_CHECKING
-
-from ..utils.parsers import elf
-from ..utils.memory import memory_helpers
-from ..const.emu_const import *
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ..emulator import Emulator
-    from unicorn import Uc
     from .module import Module
     from ..utils.parsers.elf import ELFReader
 
-logging.getLogger(__name__)
-
-# shit?
+logger = logging.getLogger(__name__)
 
 class SoinfoWriter:
+    """
+    Soinfo builder specifically for Android 7.1.2 (Nougat, API 25).
+    In Nougat, soinfo layout is more strict and includes a version field.
+    """
+
     def __init__(self, emu: 'Emulator'):
-        self.emu: 'Emulator' = emu
-        self.is_64bit = (emu.arch == ARCH_ARM64)
-        self.ptr_sz = self.emu.ptr_size
-        self.ptr_fmt = "<Q" if self.is_64bit else "<I"
+        self.emu = emu
+        self.is_64 = (emu.ptr_size == 8)
+        self.ptr_sz = emu.ptr_size
+        self.fmt = "<Q" if self.is_64 else "<I"
 
-    def write_soinfo(self, module: 'Module', reader: 'ELFReader') -> int:
-
-        mu = self.emu.mu
-        base = module.base
-        bias = module.bias
-        
-        start_offset = 128 if not self.is_64bit else 0
-        
+    def write_soinfo(self, module: 'Module', reader: 'ELFReader', addr: int) -> int:
         struct_size = 0x300
-        data = bytearray(struct_size)
 
-        def p(offset, val):
-            try:
-                struct.pack_into(self.ptr_fmt, data, start_offset + offset, val)
-            except struct.error:
-                logging.error("[Soinfo] Pack error at offset 0x%x, val 0x%x", offset, val)
+        buffer = bytearray(struct_size)
 
-        def tag(name):
-            val = reader._dynamic_tags.get(name)
-            return val if val is not None else 0
+        def safe_32(val):
+            return val & 0xFFFFFFFF
 
-        if not self.is_64bit:
-            name_bytes = os.path.basename(module.filename).encode('utf-8')[:127]
-            struct.pack_into("128s", data, 0, name_bytes)
-
-        # ptr_t phdr;
-        phdr_addr = base + reader.phoff
-        p(0x00, phdr_addr)
+        def write_ptr(offset: int, val: int):
+            struct.pack_into(self.fmt, buffer, offset, safe_32(val))
         
-        # size_t phnum;
-        p(self.ptr_sz, reader.phdr_num)
-        
-        # ptr_t base;
-        off_base = 0x0C if not self.is_64bit else 0x18
-        p(off_base, base)
-        
-        # size_t size;
-        p(off_base + self.ptr_sz, module.size)
-        
-        # ptr_t dynamic;
-        dyn_val = tag("DT_NULL_ADDR")
+        def write_u32(offset: int, val: int):
+            struct.pack_into("<I", buffer, offset, safe_32(val))
 
-        if dyn_val == 0: 
-            for seg in reader.segments:
-                if seg['p_type'] == 'DYNAMIC':
-                    dyn_val = bias + seg['p_vaddr']
-                    break
-        p(off_base + 2 * self.ptr_sz + 4, dyn_val)
+        dynamic_addr = reader.dyn_addr
 
-        # ptr_t next; 
-        next_offset = 0x24 if not self.is_64bit else 0x38
+        if not self.is_64:
+            # --- Android 7.1.2 ARM32 soinfo layout ---
+            # 0x00: name[128] (Inline string)
+            name = os.path.basename(module.filename).encode('utf-8')[:127]
+            buffer[0:len(name)] = name
+            
+            off = 0x80
+            write_ptr(off + 0x00, module.base + reader.header.program_header_offset) # phdr
+            write_ptr(off + 0x04, reader.header.numberof_segments)                   # phnum
+            write_ptr(off + 0x08, module.base + reader.header.entrypoint)            # entry
+            write_ptr(off + 0x0C, module.base)                                       # base
+            write_ptr(off + 0x10, module.size)                                       # size
+            write_ptr(off + 0x14, dynamic_addr)                                      # dynamic
+            write_ptr(off + 0x18, 0)                                                 # next (ptr)
+            write_u32(off + 0x1C, 0x00000000)                                        # flags 
+            write_u32(off + 0x3C, 2)                                                 # version
+            
+            module.soinfo_ptr = addr
 
-        p(next_offset, 0) # Placeholder
+            self.emu.mu.mem_write(addr, bytes(buffer))
+            return addr + off + 0x18
+        else:
+            # --- Android 7.1.2 ARM64 soinfo layout ---
+            name_ptr = self.emu.memory.static_alloc(len(module.filename) + 1)
+            self.emu.mu.mem_write(name_ptr, module.filename.encode() + b'\x00')
+            
+            write_ptr(0x00, name_ptr)                                                # name ptr
+            write_ptr(0x08, module.base + reader.header.program_header_offset)       # phdr
+            write_ptr(0x10, reader.header.numberof_segments)                         # phnum
+            write_ptr(0x18, module.base + reader.header.entrypoint)                  # entry
+            write_ptr(0x20, module.base)                                             # base
+            write_ptr(0x28, module.size)                                             # size
+            write_ptr(0x30, dynamic_addr)                                            # dynamic
+            write_ptr(0x38, 0)                                                       # next ptr
+            write_u32(0x40, 0x00000000)                                              # flags (uint32_t)
+            write_u32(0x90, 2)                                                       # version
 
-        # TODO: --- 2.0 Symbol & Relocation tables ---
-
-        mu.mem_write(module.soinfo_ptr, bytes(data))
-        
-        return module.soinfo_ptr + start_offset + next_offset
+            module.soinfo_ptr = addr
+            
+            self.emu.mu.mem_write(addr, bytes(buffer))
+            return addr + 0x38

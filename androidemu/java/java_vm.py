@@ -1,8 +1,6 @@
 import logging
-import traceback
 
-from ..hooker import Hooker
-from .helpers.native_method import native_method
+from ..native.helpers.native_method import native_method
 from .constants.jni_const import *
 from .jni_env import JNIEnv
 

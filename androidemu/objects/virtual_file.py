@@ -9,11 +9,14 @@ from ..utils import misc_utils
 
 if TYPE_CHECKING:
     from ..emulator import Emulator
-
+    from ..utils.generators.vfs_content import ContentGenerator
 
 logging.getLogger(__name__)
 
 class VirtualFile:
+    """
+    Provider with real (or virtual) file (descriptor)
+    """
     def __init__(self, emulator: 'Emulator', name, host_fd, name_in_system, is_virtual=False):
         self.__emulator: 'Emulator' = emulator
 
@@ -30,11 +33,21 @@ class VirtualFile:
         self.__buffer = bytearray()
 
         if is_virtual:
-            from ..utils.generators.vfs_content import ContentGenerator
-            self.__content_generator = ContentGenerator(emulator)
+            self.__content_generator: 'ContentGenerator' = self.__emulator.content_generator
     
     @staticmethod
-    def open(emulator: 'Emulator', filename: str, file_path: str, flags: int,  is_virtual: bool = False):
+    def open(emulator: 'Emulator', filename: str, file_path: str, flags: int,  is_virtual: bool = False) -> int:
+        """
+        Open real or virtual file
+
+        :param emulator: The emulator
+        :param filename: The name of the file
+        :param file_path: The path to the file
+        :param flags: The flags
+        :param is_virtual: Whether the file is virtual
+
+        :return: The file descriptor
+        """
         if is_virtual:
             guest_fd = emulator.pcb.virtual_files.add_virtual_fd(filename, file_path)
             logging.debug("open virtual [%s] GuestFD:%d", filename, guest_fd)
@@ -61,7 +74,15 @@ class VirtualFile:
 
         return guest_fd
 
-    def read(self, buf_addr, count):
+    def read(self, buf_addr: int, count: int) -> int:
+        """
+        Read data from the file
+
+        :param buf_addr: The address of the buffer
+        :param count: The number of bytes to read
+
+        :return: The number of bytes read
+        """
         try:
             if self.is_virtual:
                 if len(self.__buffer) > 0:
@@ -84,6 +105,9 @@ class VirtualFile:
                 data = os.read(self.descriptor, count)
                 self.offset += len(data)
 
+            if isinstance(data, bytearray):
+                data = bytes(data)
+
             actual_size = len(data)
             if actual_size > 0:
                 self.__emulator.mu.mem_write(buf_addr, data)
@@ -91,10 +115,19 @@ class VirtualFile:
             return actual_size
 
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             logging.error("Read error on fd %d (%s): %s", self.descriptor, self.name, e)
             return -EPERM
         
-    def write(self, data):
+    def write(self, data: bytes) -> int:
+        """
+        Write data to the file
+
+        :param data: The data to write
+
+        :return: The number of bytes written
+        """
         if self.is_virtual:
             end_pos = self.offset + len(data)
             if end_pos > len(self.__buffer):
@@ -122,7 +155,12 @@ class VirtualFile:
             return -EPERM
         return r
     
-    def close(self):
+    def close(self) -> bool:
+        """
+        Close the file
+
+        :return: True if the file was closed
+        """
         self.ref_count -= 1
         if self.ref_count <= 0:
             if not self.is_virtual and self.descriptor > 2:
@@ -134,7 +172,15 @@ class VirtualFile:
             return True
         return False
 
-    def seek(self, offset, whence):
+    def seek(self, offset: int, whence: int) -> int:
+        """
+        Seek the file
+
+        :param offset: The offset
+        :param whence: The whence
+
+        :return: The new offset
+        """
         if whence == 0: # SEEK_SET
             self.offset = offset
         elif whence == 1: # SEEK_CUR
@@ -144,7 +190,12 @@ class VirtualFile:
             self.offset = size + offset
         return self.offset
     
-    def get_size(self):
+    def get_size(self) -> int:
+        """
+        Get the size of the file
+
+        :return: The size
+        """
         if self.is_virtual:
             return len(self.__buffer)
         else:

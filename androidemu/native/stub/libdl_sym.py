@@ -1,4 +1,4 @@
-from .base_sym import BaseSymbolHooks
+from .base import StubAddress
 
 from typing import TYPE_CHECKING
 
@@ -7,7 +7,7 @@ import os
 
 from unicorn import *
 
-from ...java.helpers.native_method import native_method
+from ..helpers.native_method import native_method
 from ...utils.memory import memory_helpers
 
 
@@ -17,10 +17,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-class LibDLSymbolHooks(BaseSymbolHooks):
+class LibDLSymbolHooks(StubAddress):
 
     def __init__(self, emu: 'Emulator'):
-        super().__init__(emu)
+        super().__init__()
         
         self._emu: 'Emulator' = emu
         

@@ -1,5 +1,7 @@
 from .jni_ref import *
 
+from typing import Dict, Union
+
 
 class ReferenceTable:
 
@@ -7,9 +9,9 @@ class ReferenceTable:
     :type _table dict[int, jobject|None]
     """
     def __init__(self, start=1, max_entries=1024):
-        self._table = dict()
-        self._start = start
-        self._size = max_entries
+        self._table: Dict[int, Union[jobject, None]] = dict()
+        self._start: int = start
+        self._size:  int = max_entries
 
     def set(self, idx, newobj):
         if not isinstance(newobj, jobject):
@@ -19,7 +21,6 @@ class ReferenceTable:
             raise ValueError('Expected a index.')
 
         self._table[idx] = newobj
-    #
 
     def add(self, obj):
         if not isinstance(obj, jobject):
@@ -34,10 +35,8 @@ class ReferenceTable:
         self._table[index] = obj
 
         return index
-    #
 
     def remove(self, obj):
-        # TODO: Test
         index = None
         for i in range(self._start, self._start + len(self._table)):
             if self._table[i] is obj:
@@ -55,7 +54,6 @@ class ReferenceTable:
             return None
         r = self._table[idx]
         return r
-    #
     
     def in_range(self, idx):
         return self._start <= idx < self._start + self._size

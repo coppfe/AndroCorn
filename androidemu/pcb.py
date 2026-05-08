@@ -11,7 +11,7 @@ class Pcb:
     """
     Pcb - Process Control Block
 
-    Have all info about process
+    Have all info about process. Here is stored a virtual file table worker
     """
     def __init__(self, emulator: 'Emulator', cfg: 'Config') -> None:
         self._cfg = cfg
@@ -31,9 +31,7 @@ class Pcb:
         self._uc_to_tid = {} 
 
     def post_init(self):
-        """
-        Post Init for methods with recursive dependency
-        """
+        # Post Init for methods with recursive dependency
         self.virtual_files = VirtualFileTable(self.__emu)
         
     @property

@@ -24,14 +24,14 @@
 ---
 
 ## 🚀 Overview
-**AndroCorn** is a sophisticated Android Emulation framework powered by the Unicorn Engine, designed for high-fidelity native library analysis. Unlike basic wrappers, AndroCorn focuses on bypassing modern anti-analysis techniques and providing a complete system environment.
+**AndroCorn** is a **Android Nougat** Emulation framework powered by the Unicorn Engine, designed for high-fidelity native library analysis. Unlike basic wrappers, AndroCorn focuses on bypassing modern anti-analysis techniques and providing a complete system environment.
 Key Features:
 
 * Architecture Support: Full ARM32 (v7-a) and ARM64 (v8-a) execution.
 
-* Advanced Memory Introspection: First-class support for process_vm_readv and vectorized I/O, enabling bypasses for self-integrity checks and inline-hook detection.
+* Advanced Memory Introspection: Enabling bypasses for self-integrity checks and inline-hook detection.
 
-* System Register Magic: Implements a custom ASM-based mechanism to read/write ARM System Registers (CP15/SysRegs) — overcoming a major native Unicorn limitation.
+* System Register Magic: Implements a custom ASM-based mechanism to read/write ARM System Registers (SysRegs) — overcoming a major native Unicorn limitation.
 
 * Bionic-Compliant TLS: Meticulous emulation of Android's Bionic TLS slots and offsets, allowing libc and libc++ to initialize their own internal structures naturally.
 
@@ -39,7 +39,7 @@ Key Features:
 
 * Isolated VFS: A completely sandboxed Virtual File System with support for:
 
-    - Virtual Devices: /dev/urandom, /dev/null, /dev/zero with correct major/minor IDs and st_mode.
+    - Device supports
 
     - ProcFS Emulation: Dynamic generation of /proc/self/maps and /proc/self/status to satisfy anti-debug scans.
 
@@ -47,13 +47,15 @@ Key Features:
 
 * Security & Life-cycle: Experimental fork() and execve() support, primitive Copy-On-Write (CoW) memory optimization, and Yama ptrace scope integration.
 
-* Reverse Engineering Ready: * Automatic symbol demangling ([cpp_demangle](https://github.com/gimli-rs/cpp_demangle)).
+* Reverse Engineering Ready:
 
     - Unmapped QEMU register manipulation via ASM code generation.
 
-    - Integration with Ghidra and custom native tools.
+    - Integration with Ghidra and custom native tools in future
     
 It is designed for security researchers, malware analysts, and developers who need to run complex Android NDK binaries (like TikTok Metasec, game engines, or obfuscated protectors) with surgical accuracy.
+
+Also AndroCorn have a [Utils Repo for debugging, parsing, patching and others](https://github.com/coppfe/androcorn_native_tools)
 
 ## ✨ Key Improvements over AndroidNativeEmu
 
@@ -93,7 +95,7 @@ from androidemu.emulator import Emulator
 from androidemu.const import emu_const
 
 # Initialize AndroCorn
-emulator = Emulator(vfs_root="vfs", arch=emu_const.ARCH_ARM32, muti_task=True)
+emulator = Emulator(vfs_root="vfs", arch=emu_const.ARCH_ARM32)
 
 # Load your library with the next-gen linker
 libc = emulator.load_library("vfs/system/lib/libc.so", do_init=True)

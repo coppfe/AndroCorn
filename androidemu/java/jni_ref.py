@@ -5,7 +5,7 @@ if TYPE_CHECKING:
 class jobject:
 
     def __init__(self, value = None):
-        self.value = value
+        self.value: 'Class' = value
 
 class jclass(jobject):
 

@@ -1,4 +1,4 @@
-from .base_fun import BaseFuncHooks
+from .base import HookAddress
 
 from typing import TYPE_CHECKING
 
@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-class LibCFunHooks(BaseFuncHooks):
+class LibCFunHooks(HookAddress):
 
     def __init__(self, emu: 'Emulator'):
         super().__init__(emu)
@@ -21,8 +21,13 @@ class LibCFunHooks(BaseFuncHooks):
         
         self._func_table = [
             # ("__libc_write_log", 2, self.libc_log, None)
+            ("malloc", 1, self.hook_malloc, None)
         ] # name, num_args, before, after
         # not used anymore. All logs coming into writev syscall as logcat
 
         for hook in self._func_table:
             self.global_func_table.append(hook)
+    
+    def hook_malloc(self, emu, size):
+        if size > 128:
+            print(f"[*] Malloc: {size}")

@@ -1,4 +1,3 @@
-import logging
 import struct
 
 from ..jni_ref import *

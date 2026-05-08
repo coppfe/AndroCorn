@@ -1,55 +1,63 @@
-import logging
-import os
-import importlib
-import inspect
-import pkgutil
-import os.path
+import      logging
+import      os
+import      importlib
+import      inspect
+import      pkgutil
+import      os.path
 
-from pathlib import Path
+from        pathlib                                                 import Path
 
-from unicorn import *
-from unicorn.arm_const import *
-from unicorn.arm64_const import *
+from        unicorn                                                 import *
+from        unicorn.arm_const                                       import *
+from        unicorn.arm64_const                                     import *
 
-from .config import Config
+from        .config                                                 import Config
 
-from .data import mem_map as config
-from .const import emu_const
+from        .data                                                   import mem_map as config
+from        .const                                                  import emu_const
 
-from .handlers.syscall import SyscallHandlers
-from .kernel.syscalls.syscall_base.syscall_hooks import SyscallHooks
-from .kernel.syscalls.syscall_file.file_system import VirtualFileSystem
-from .kernel.syscalls.syscall_memory.memory_syscall_handler import MemorySyscallHandler
+from        .pcb                                                    import Pcb
+from        .utils.hooker                                           import Hooker
+from        .scheduler                                              import Scheduler
+from        .native.init_hooks                                      import HooksInitializer
 
-from .utils.state.time_manager import TimeManager
+from        .utils.hookers.hook_addr                                import AddressHooker
+from        .utils.memory.memory_map                                import MemoryMap
+from        .utils                                                  import misc_utils
+from        .utils.generators                                       import build_prop
+from        .utils.cpu                                              import CPU_Utils
+from        .utils.tls                                              import BionicTLSUtils
+from        .utils.state.time_manager                               import TimeManager
+from        .utils.generators.vfs_content                           import ContentGenerator
 
-from .pcb import Pcb
-from .hooker import Hooker
-from .scheduler import Scheduler
+from        .handlers.syscall                                       import SyscallHandlers
+from        .kernel.syscalls.syscall_base.syscall_hooks             import SyscallHooks
+from        .kernel.syscalls.syscall_file.file_system               import VirtualFileSystem
+from        .kernel.syscalls.syscall_memory.memory_syscall_handler  import MemorySyscallHandler
 
-from .native_hook_utils import FuncHooker
-from .native.init_hooks import HooksInitializer
+from        .internal.bionic.tls_factory                            import create_tls_backend
+from        .internal.bionic.tls_bionic                             import BionicTLS
+from        .internal.linker                                        import AndroidLinker
 
-from .internal.linker import AndroidLinker
+from        .java.java_classloader                                  import JavaClassLoader
+from        .java.java_vm                                           import JavaVM
+from        .java.java_class_def                                    import JavaClassDef
 
-from .java.java_classloader import JavaClassLoader
-from .java.java_vm import JavaVM
-from .java.java_class_def import JavaClassDef
+from        typing                                                  import TYPE_CHECKING
 
-from .internal.bionic.tls_factory import create_tls_backend
-from .internal.bionic.tls_bionic import BionicTLS
-
-from .utils.memory.memory_map import MemoryMap
-from .utils import misc_utils
-from .utils.generators import build_prop
-from .utils.cpu import CPU_Utils
-from .utils.tls import BionicTLSUtils
-
-from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .internal.module import Module
 
 class Emulator:
+    """
+    God class of the Emulator
+
+    :param vfs_root: The root of the virtual file system
+    :param config_path: The path to the configuration package
+    :param vfp_inst_set: Enable VFP instructions
+    :param arch: Current architecture (32 or 64 bit). 1 (ARM32) or 2 (ARM64) (default: 1)
+    :param init_sys_libs: Initialize system libraries
+    """
 
     def __add_classes(self):
         """
@@ -75,7 +83,7 @@ class Emulator:
         for clz in preload_classes:
             self.java_classloader.add_class(clz)
 
-        #also add classloader as java class
+        # also add classloader as java class
         self.java_classloader.add_class(JavaClassLoader)
 
     def __init_properties(self):
@@ -174,11 +182,10 @@ class Emulator:
 
         Load libc.so from "system/lib" or "system/lib64" depending on the current arch
         """
-        prefix = "system/" + ("lib64/" if self.__arch == emu_const.ARCH_ARM64 else "lib/")
         syslibs = ["libc.so"]
 
         for lib in syslibs:
-            self.load_library(prefix + lib)
+            self.load_library(lib)
 
     def __init_utils(self):
         """
@@ -186,7 +193,8 @@ class Emulator:
         """
         self.time_manager = TimeManager(start_timestamp=self.config.pkg.start_timestamp)
         self.tls_utils = BionicTLSUtils(self)
-
+        self.content_generator = ContentGenerator(self)
+        
     def __init__(self, 
                  vfs_root="vfs",
                  config_path="androidemu/emu_cfg/default.json",
@@ -238,8 +246,8 @@ class Emulator:
             elif self.__arch == emu_const.ARCH_ARM64:
                 self.__cpu_utils._enable_vfp64()
 
-        self.memory = MemoryMap(self.mu, config.MAP_ALLOC_BASE, config.MAP_ALLOC_BASE+config.MAP_ALLOC_SIZE)
-
+        self.memory = MemoryMap(self.mu, config.MAP_ALLOC_BASE, config.MAP_ALLOC_BASE+config.MAP_ALLOC_SIZE, self.__ptr_sz)
+        
         # Stack init
         self.memory.map(config.STACK_ADDR, config.STACK_SIZE, UC_PROT_READ | UC_PROT_WRITE)
         self.mu.reg_write(self.__sp_reg, (config.STACK_ADDR + config.STACK_SIZE) - 0x4000)
@@ -259,8 +267,8 @@ class Emulator:
         self.linker = AndroidLinker(self, self.__vfs_root)
 
         # Hooks
-        self.func_hooker = FuncHooker(self)
-        self.sym_hooks = HooksInitializer(self)
+        self.address_hooker = AddressHooker(self)
+        self.hooks = HooksInitializer(self)
 
         self.__init_utils()
 
@@ -284,39 +292,55 @@ class Emulator:
             self.__init_properties()
             self.__init_syslibs()
     
-    def sys_reg_read(self, reg):
+    def sys_reg_read(self, reg) -> int:
         """
         Read Non-Implement System Registers
+
+        :type reg: int
+
+        :param reg: The register to read
+
+        :return: The value of the register
         """
         return self.__cpu_utils._read_sys_reg(reg)
 
-    def sys_reg_write(self, reg, val):
+    def sys_reg_write(self, reg, val) -> None:
         """
         Write Non-Implement System Registers
+
+        :type reg: int
+        :type val: int
+
+        :param reg: The register to write
+        :param val: The value to write
+
+        :return: None
         """
         return self.__cpu_utils._write_sys_reg(reg, val)
 
-    def load_library(self, filename, do_init: bool = True, main_lib: bool = False, demangle: bool = False) -> 'Module':
+    def load_library(self, filename: str, do_init: bool = True, main_lib: bool = False) -> 'Module':
         """
         Load a dynamic library from disk.
 
+        :type filename: str
+        :type do_init: bool
+        :type main_lib: bool
+        
         :param filename: The name of the library (e.g. libfoo.so)
         :param do_init: Whether to initialize the library with init_array
         :param main_lib: Whether this is the main executable
-        :param demangle: Whether to demangle symbols (functions, exported symbols, etc.)
-        :param use_cache: Whether to use cache
-        :return: The loaded module
 
-        WARNING: Demangle option can increase memory consumption for store more symbols.
-        Off this option if you don't want to hook for "beautify" symbols in code.
+        :return: The loaded module
         """
-        libmod = self.linker.load_module(filename, do_init, main_lib, demangle)
+        libmod = self.linker.load_module(filename, do_init, main_lib)
         return libmod
 
     # alias-like
-    def get_library(self, filename) -> 'Module':
+    def get_library(self, filename: str) -> 'Module':
         """
         Get a loaded library.
+
+        :type filename: str
 
         :param filename: The name of the library
         :return: The loaded module, or None if the library is not loaded.
@@ -329,6 +353,9 @@ class Emulator:
     def call_symbol(self, module: 'Module', symbol_name: str, *argv) -> int:
         """
         Call a symbol in a module.
+        
+        :type module: Module
+        :type symbol_name: str
 
         :param module: The module containing the symbol
         :param symbol_name: The name of the symbol
@@ -345,6 +372,14 @@ class Emulator:
     def call_function(self, module: 'Module', function_name: str, *argv) -> int:
         """
         Use it for non-export functions, like in libc
+
+        :type module:        Module
+        :type function_name: str
+
+        :param module: The module containing the function
+        :param function_name: The name of the function
+        :param *argv: The arguments to pass to the function
+        :return: The return value of the function
         """
         symbol_addr = module.find_function(function_name)
         if symbol_addr is None:
@@ -353,9 +388,12 @@ class Emulator:
 
         return self.call_native(symbol_addr, *argv)
     
-    def call_native(self, addr, *argv) -> int:
+    def call_native(self, addr: int, *argv) -> int:
         """
+        Proxy call. Implementation is on Scheduler
         Call a native function with the given address and arguments.
+
+        :type addr: int
 
         :param addr: The address of the native function
         :param *argv: The arguments to pass to the native function
@@ -365,7 +403,7 @@ class Emulator:
         return self.__sch.call_native(addr, *argv)
 
     # The 8-byte return value is split across two registers.
-    def __call_native_return_2reg32(self, addr, *argv) -> int:
+    def __call_native_return_2reg32(self, addr: int, *argv) -> int:
         """
         The 8-byte return value is split across two registers.
         The high 4 bytes are stored in R1 and the low 4 bytes are stored in the return value.
@@ -381,11 +419,14 @@ class Emulator:
         return (res_high << 32) | res
 
     # The 16-byte return value is split across two registers.
-    def __call_native_return_2reg64(self, addr, *argv) -> int:
+    def __call_native_return_2reg64(self, addr: int, *argv) -> int:
         """
         The 16-byte return value is split across two registers.
         The high 8 bytes are stored in X1 and the low 8 bytes are stored in the return value.
         This function combines the two parts of the return value into a single 16-byte value.
+        
+        :type addr: int
+
         :param addr: The address of the native function
         :param *argv: The arguments to pass to the native function
         :return: The return value of the native function

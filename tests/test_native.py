@@ -18,15 +18,15 @@ class com_ss_sys_ces_a(metaclass=JavaClassDef, jvm_name='com/ss/sys/ces/a'):
     def meta(self, *args): pass
     
     @staticmethod
-    @java_method_def(name='leviathan', args_list=["jint", "jint", "jbyteArray"], signature='(II[B)[B', native=True)
+    @java_method_def(name='leviathan', args_list=["jint", "jint", "jobject"], signature='(II[B)[B', native=True)
     def leviathan(self, *args): pass
 
     @staticmethod
-    @java_method_def(name='decode', args_list=["jint", "jbyteArray"], signature='(I[B)[B', native=True)
+    @java_method_def(name='decode', args_list=["jint", "jobject"], signature='(I[B)[B', native=True)
     def decode(self, *args): pass
     
     @staticmethod
-    @java_method_def(name='encode', args_list=["jbyteArray"], signature='([B)[B', native=True)
+    @java_method_def(name='encode', args_list=["jobject"], signature='([B)[B', native=True)
     def encode(self, *args): pass
 
     @staticmethod
@@ -64,6 +64,9 @@ class java_lang_Thread(metaclass=JavaClassDef, jvm_name='java/lang/Thread'):
     @java_method_def(name="getStackTrace", signature='()[Ljava/lang/StackTraceElement;', native=False)
     def getStackTrace(self, s):
         return List([])
+    
+def malloc_handler(emu, size):
+    print(f"[*] Malloc: {size}")
 
 def call_leviathan(emulator: Emulator, i1, timestamp, payload_bytes):
     jni_env = emulator.java_vm.jni_env
@@ -171,76 +174,82 @@ if __name__ == '__main__':
     pr.disable()
     s = io.StringIO()
     ps = pstats.Stats(pr, stream=s).sort_stats('cumulative')
-    ps.print_stats(40)
-
     print(s.getvalue())
 
 # Execve hit log level changed to debug
 
-# WARNING:root:Multi-Task argument is deprecated. Scheduler works in multi-task mode by default.
+# Fork Task is TOOOOOOOOOOOOOOOOOOO SLOW
+
 # WARNING:androidemu.native.sym_hooks.libdl_sym:[!] dlopen: library 'libnetd_client.so' NOT FOUND
-# [*] Base address libcms: 0x400a0000
+# [*] Base address libcms: 0x400c0000
 # [*] Calling leviathan Args: i1=-1, time=123456789, payload_len=13
 # [*] Calling leviathan Args: i1=-1, time=123456789, payload_len=13
-# Results for identical inputs: bytearray(b'\x04\x04 \xe0\x00\x10\x08\x8c9\xeb\xd5i\xdd\x03v}\xa6g\x06y\x86\r\x1a\xbbv\x10') bytearray(b'\x04\x04 \xe0\x00\x10\x08\x8c9\xeb\xd5i\xdd\x03v}\xa6g\x06y\x86\r\x1a\xbbv\x10')
-# .[*] Calling leviathan Args: i1=-1, time=1776543462, payload_len=0
-# WARNING:root:'pipe2' not support. Using 'pipe'
-# WARNING:root:'pipe2' not support. Using 'pipe'
-# WARNING:root:'pipe2' not support. Using 'pipe'
-# WARNING:root:'pipe2' not support. Using 'pipe'
-# WARNING:root:'pipe2' not support. Using 'pipe'
-# Result with empty payload: JavaArray(bytearray(b'\x04\x04 \xe0\x00\x10\xfc}\x06`\xd5i\xdd\x03v}\xa6g\x06y\x86{`\xbe\xf4\xc3'))
+# Results for identical inputs: bytearray(b'\x04\x04\x00\xe0\x00\x10=\xcf\xf2A\xa5\xbbu[\xd3p\xc9OZj\xc3m\xd1(\x9cU') bytearray(b'\x04\x04\x00\xe0\x00\x10=\xcf\xf2A\xa5\xbbu[\xd3p\xc9OZj\xc3m\xd1(\x9cU')
+# .[*] Calling leviathan Args: i1=-1, time=1777585171, payload_len=0
+# WARNING:root:syscall clone do fork...
+# WARNING:root:syscall clone do fork...
+# WARNING:root:syscall clone do fork...
+# WARNING:root:syscall clone do fork...
+# WARNING:root:syscall clone do fork...
+# WARNING:root:syscall clone do fork...
+# WARNING:root:syscall clone do fork...
+# WARNING:root:syscall clone do fork...
+# WARNING:root:Failed to open file ''! It's a directory
+# WARNING:root:Failed to open file ''! It's a directory
+# WARNING:root:syscall clone do fork...
+# WARNING:root:Failed to open file ''! It's a directory
+# WARNING:root:Failed to open file ''! It's a directory
+# Result with empty payload: JavaArray(bytearray(b'\x04\x04 \xe0\x00\x10\xfc}\x06`\xd5i\xdd\x03v}\xa6g\x06y\x86{hj\x1e9'))
 # .[*] Calling leviathan Args: i1=-1, time=1, payload_len=59
 # Result: bytearray(b"\x04\x04 \xe0\x00\x10;\'1\xaf\xff)\xf9a\xc8\xb66\xc8\x06y\x86\xed\xce\xa5e^")
 # .
 # ----------------------------------------------------------------------
-# Ran 3 tests in 0.482s
+# Ran 3 tests in 0.814s
 
 # OK
-#          271064 function calls (270746 primitive calls) in 0.486 seconds
+#          315539 function calls (315200 primitive calls) in 0.819 seconds
 
 #    Ordered by: cumulative time
-#    List reduced from 1027 to 40 due to restriction <40>
+#    List reduced from 1105 to 40 due to restriction <40>
 
 #    ncalls  tottime  percall  cumtime  percall filename:lineno(function)
-#         1    0.000    0.000    0.486    0.486 C:\Users\Kirill\AppData\Local\Programs\Python\Python38\lib\unittest\main.py:65(__init__)
-#         1    0.000    0.000    0.482    0.482 C:\Users\Kirill\AppData\Local\Programs\Python\Python38\lib\unittest\main.py:246(runTests)
-#         1    0.000    0.000    0.482    0.482 C:\Users\Kirill\AppData\Local\Programs\Python\Python38\lib\unittest\runner.py:151(run)
-#       2/1    0.000    0.000    0.482    0.482 C:\Users\Kirill\AppData\Local\Programs\Python\Python38\lib\unittest\suite.py:83(__call__)
-#       2/1    0.000    0.000    0.482    0.482 C:\Users\Kirill\AppData\Local\Programs\Python\Python38\lib\unittest\suite.py:102(run)
-#        16    0.000    0.000    0.382    0.024 c:\Users\Kirill\Desktop\androidemu\androidemu\emulator.py:285(call_native)
-#        16    0.000    0.000    0.382    0.024 c:\Users\Kirill\Desktop\androidemu\androidemu\scheduler.py:337(call_native)
-#        16    0.000    0.000    0.382    0.024 c:\Users\Kirill\Desktop\androidemu\androidemu\scheduler.py:320(exec)
-#        16    0.001    0.000    0.381    0.024 c:\Users\Kirill\Desktop\androidemu\androidemu\scheduler.py:345(__run_scheduler_loop)
-#        46    0.283    0.006    0.379    0.008 C:\Users\Kirill\AppData\Local\Programs\Python\Python38\lib\site-packages\unicorn\unicorn.py:315(emu_start)
-#         3    0.000    0.000    0.308    0.103 C:\Users\Kirill\AppData\Local\Programs\Python\Python38\lib\unittest\case.py:735(__call__)
-#         3    0.000    0.000    0.308    0.103 C:\Users\Kirill\AppData\Local\Programs\Python\Python38\lib\unittest\case.py:641(run)
-#         3    0.000    0.000    0.308    0.103 C:\Users\Kirill\AppData\Local\Programs\Python\Python38\lib\unittest\case.py:632(_callTestMethod)
-#         4    0.000    0.000    0.307    0.077 c:/Users/Kirill/Desktop/androidemu/test_native.py:67(call_leviathan)
-#         1    0.000    0.000    0.292    0.292 c:/Users/Kirill/Desktop/androidemu/test_native.py:141(test_leviathan_empty_payload)
-#         3    0.000    0.000    0.174    0.058 C:\Users\Kirill\AppData\Local\Programs\Python\Python38\lib\unittest\suite.py:142(_handleClassSetUp)
-#         1    0.000    0.000    0.174    0.174 c:/Users/Kirill/Desktop/androidemu/test_native.py:119(setUpClass)
-#         1    0.000    0.000    0.174    0.174 c:/Users/Kirill/Desktop/androidemu/test_native.py:105(init)
-#         2    0.000    0.000    0.151    0.076 c:\Users\Kirill\Desktop\androidemu\androidemu\internal\linker.py:117(load_module)
-#         1    0.000    0.000    0.095    0.095 c:\Users\Kirill\Desktop\androidemu\androidemu\emulator.py:144(__init__)
-#         1    0.000    0.000    0.076    0.076 c:\Users\Kirill\Desktop\androidemu\androidemu\emulator.py:133(__init_syslibs)
-#         1    0.000    0.000    0.076    0.076 c:\Users\Kirill\Desktop\androidemu\androidemu\internal\linker.py:133(_pipeline_load_executable)
-#         1    0.000    0.000    0.075    0.075 c:\Users\Kirill\Desktop\androidemu\androidemu\emulator.py:255(load_library)
-#         1    0.000    0.000    0.075    0.075 c:\Users\Kirill\Desktop\androidemu\androidemu\internal\linker.py:154(_pipeline_dlopen)
-#       862    0.001    0.000    0.073    0.000 C:\Users\Kirill\AppData\Local\Programs\Python\Python38\lib\site-packages\unicorn\unicorn.py:492(_hook_intr_cb)
-#       862    0.001    0.000    0.072    0.000 c:\Users\Kirill\Desktop\androidemu\androidemu\kernel\syscalls\interrupt_handler.py:25(_hook_interrupt)
-#       862    0.004    0.000    0.071    0.000 c:\Users\Kirill\Desktop\androidemu\androidemu\kernel\syscalls\syscall_handlers.py:34(_handle_syscall)
-#         2    0.000    0.000    0.071    0.036 c:\Users\Kirill\Desktop\androidemu\androidemu\internal\linker.py:285(_initialize_graph)
-#      12/2    0.000    0.000    0.071    0.036 c:\Users\Kirill\Desktop\androidemu\androidemu\internal\linker.py:289(visit)
-#         6    0.000    0.000    0.071    0.012 c:\Users\Kirill\Desktop\androidemu\androidemu\internal\linker.py:302(_call_constructors)
-#      12/2    0.000    0.000    0.045    0.022 c:\Users\Kirill\Desktop\androidemu\androidemu\internal\linker.py:189(_load_recursive)
-#         6    0.005    0.001    0.040    0.007 c:\Users\Kirill\Desktop\androidemu\androidemu\internal\elf_reader.py:11(__init__)
-#         6    0.008    0.001    0.035    0.006 c:\Users\Kirill\Desktop\androidemu\androidemu\internal\linker.py:245(_relocate_module)
-#         6    0.031    0.005    0.034    0.006 c:\Users\Kirill\Desktop\androidemu\androidemu\internal\elf_reader.py:93(_parse_functions)
-#      1061    0.001    0.000    0.023    0.000 C:\Users\Kirill\AppData\Local\Programs\Python\Python38\lib\site-packages\unicorn\unicorn.py:477(_hookcode_cb)
-#      1061    0.001    0.000    0.023    0.000 c:\Users\Kirill\Desktop\androidemu\androidemu\hooker.py:85(_hook)
-#        10    0.000    0.000    0.022    0.002 c:\Users\Kirill\Desktop\androidemu\androidemu\kernel\syscalls\syscall_base\logic\process.py:163(_clone)
-#         9    0.000    0.000    0.022    0.002 c:\Users\Kirill\Desktop\androidemu\androidemu\kernel\syscalls\syscall_base\logic\helpers\process_helper.py:21(_do_fork)
-#         9    0.014    0.002    0.022    0.002 c:\Users\Kirill\Desktop\androidemu\androidemu\scheduler.py:127(fork_task)
-#      1061    0.002    0.000    0.022    0.000 c:\Users\Kirill\Desktop\androidemu\androidemu\java\helpers\native_method.py:106(native_method_wrapper)
-
+#         1    0.000    0.000    0.819    0.819 /home/coppfe/.pyenv/versions/3.11.6/lib/python3.11/unittest/main.py:66(__init__)
+#         1    0.000    0.000    0.814    0.814 /home/coppfe/.pyenv/versions/3.11.6/lib/python3.11/unittest/main.py:249(runTests)
+#         1    0.000    0.000    0.814    0.814 /home/coppfe/.pyenv/versions/3.11.6/lib/python3.11/unittest/runner.py:192(run)
+#       2/1    0.000    0.000    0.814    0.814 /home/coppfe/.pyenv/versions/3.11.6/lib/python3.11/unittest/suite.py:83(__call__)
+#       2/1    0.000    0.000    0.814    0.814 /home/coppfe/.pyenv/versions/3.11.6/lib/python3.11/unittest/suite.py:102(run)
+#        16    0.000    0.000    0.714    0.045 /home/coppfe/Desktop/androidemu/androidemu/emulator.py:382(call_native)
+#        16    0.000    0.000    0.714    0.045 /home/coppfe/Desktop/androidemu/androidemu/scheduler.py:374(call_native)
+#        16    0.000    0.000    0.714    0.045 /home/coppfe/Desktop/androidemu/androidemu/scheduler.py:350(exec)
+#        16    0.001    0.000    0.713    0.045 /home/coppfe/Desktop/androidemu/androidemu/scheduler.py:390(__run_scheduler_loop)
+#        46    0.543    0.012    0.707    0.015 /home/coppfe/.pyenv/versions/3.11.6/lib/python3.11/site-packages/unicorn/unicorn_py3/unicorn.py:748(emu_start)
+#         3    0.000    0.000    0.564    0.188 /home/coppfe/.pyenv/versions/3.11.6/lib/python3.11/unittest/case.py:677(__call__)
+#         3    0.000    0.000    0.564    0.188 /home/coppfe/.pyenv/versions/3.11.6/lib/python3.11/unittest/case.py:589(run)
+#         3    0.000    0.000    0.564    0.188 /home/coppfe/.pyenv/versions/3.11.6/lib/python3.11/unittest/case.py:578(_callTestMethod)
+#         4    0.000    0.000    0.564    0.141 /home/coppfe/Desktop/androidemu/test_native.py:68(call_leviathan)
+#         1    0.000    0.000    0.548    0.548 /home/coppfe/Desktop/androidemu/test_native.py:141(test_leviathan_empty_payload)
+#         3    0.000    0.000    0.249    0.083 /home/coppfe/.pyenv/versions/3.11.6/lib/python3.11/unittest/suite.py:142(_handleClassSetUp)
+#         1    0.000    0.000    0.249    0.249 /home/coppfe/Desktop/androidemu/test_native.py:120(setUpClass)
+#         1    0.000    0.000    0.249    0.249 /home/coppfe/Desktop/androidemu/test_native.py:106(init)
+#         2    0.000    0.000    0.227    0.113 /home/coppfe/Desktop/androidemu/androidemu/emulator.py:312(load_library)
+#         2    0.000    0.000    0.227    0.113 /home/coppfe/Desktop/androidemu/androidemu/internal/linker.py:104(load_module)
+#      1875    0.002    0.000    0.164    0.000 /home/coppfe/.pyenv/versions/3.11.6/lib/python3.11/site-packages/unicorn/unicorn_py3/unicorn.py:360(wrapper)
+#         2    0.000    0.000    0.146    0.073 /home/coppfe/Desktop/androidemu/androidemu/internal/linker.py:280(_initialize_graph)
+#      12/2    0.000    0.000    0.146    0.073 /home/coppfe/Desktop/androidemu/androidemu/internal/linker.py:284(visit)
+#         6    0.000    0.000    0.146    0.024 /home/coppfe/Desktop/androidemu/androidemu/internal/linker.py:297(_call_constructors)
+#         1    0.000    0.000    0.144    0.144 /home/coppfe/Desktop/androidemu/androidemu/internal/linker.py:143(_pipeline_dlopen)
+#       814    0.000    0.000    0.117    0.000 /home/coppfe/.pyenv/versions/3.11.6/lib/python3.11/site-packages/unicorn/unicorn_py3/unicorn.py:1048(__hook_intr_cb)
+#       814    0.001    0.000    0.117    0.000 /home/coppfe/Desktop/androidemu/androidemu/handlers/interrupt.py:25(_hook_interrupt)
+#       814    0.006    0.000    0.116    0.000 /home/coppfe/Desktop/androidemu/androidemu/handlers/syscall.py:34(_handle_syscall)
+#         1    0.000    0.000    0.100    0.100 /home/coppfe/Desktop/androidemu/androidemu/emulator.py:189(__init__)
+#         1    0.000    0.000    0.083    0.083 /home/coppfe/Desktop/androidemu/androidemu/emulator.py:170(__init_syslibs)
+#         1    0.000    0.000    0.083    0.083 /home/coppfe/Desktop/androidemu/androidemu/internal/linker.py:122(_pipeline_load_executable)
+#      1061    0.000    0.000    0.044    0.000 /home/coppfe/.pyenv/versions/3.11.6/lib/python3.11/site-packages/unicorn/unicorn_py3/unicorn.py:1061(__hook_code_cb)
+#      1061    0.002    0.000    0.044    0.000 /home/coppfe/Desktop/androidemu/androidemu/hooker.py:96(_hook)
+#         6    0.010    0.002    0.042    0.007 /home/coppfe/Desktop/androidemu/androidemu/internal/linker.py:240(_relocate_module)
+#      1061    0.004    0.000    0.042    0.000 /home/coppfe/Desktop/androidemu/androidemu/java/helpers/native_method.py:106(native_method_wrapper)
+#      12/2    0.001    0.000    0.037    0.018 /home/coppfe/Desktop/androidemu/androidemu/internal/linker.py:178(_load_recursive)
+#        10    0.000    0.000    0.036    0.004 /home/coppfe/Desktop/androidemu/androidemu/kernel/syscalls/syscall_base/logic/process.py:85(_clone)
+#        10    0.000    0.000    0.036    0.004 /home/coppfe/Desktop/androidemu/androidemu/kernel/syscalls/syscall_base/logic/helpers/process_helper.py:39(_clone)
+#         9    0.000    0.000    0.034    0.004 /home/coppfe/Desktop/androidemu/androidemu/kernel/syscalls/syscall_base/logic/helpers/process_helper.py:20(_do_fork)
+#         9    0.021    0.002    0.034    0.004 /home/coppfe/Desktop/androidemu/androidemu/scheduler.py:117(fork_task)

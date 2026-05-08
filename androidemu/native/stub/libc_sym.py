@@ -1,4 +1,4 @@
-from .base_sym import BaseSymbolHooks
+from .base import StubAddress
 
 from typing import TYPE_CHECKING
 
@@ -8,7 +8,7 @@ from unicorn.arm_const import *
 
 from unicorn import *
 
-from ...java.helpers.native_method import native_method
+from ..helpers.native_method import native_method
 from ...utils.memory import memory_helpers
 
 
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 # actually, i think most hooks is not needed anymore here.
 # but i leave this section
 
-class LibCSymbolHooks(BaseSymbolHooks):
+class LibCSymbolHooks(StubAddress):
 
     def __init__(self, emu: 'Emulator'):
         super().__init__(emu)

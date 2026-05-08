@@ -16,8 +16,8 @@
 		},
 
 		"kernel": {
-			"release": "5.10.43-android12-9-00001-g532147395026",
-			"version": "#1 SMP PREEMPT Wed Mar 15 12:41:09 UTC 2023"
+			"release": "3.18.31-g427242c",
+			"version": "#1 SMP PREEMPT Thu Mar 09 11:20:45 UTC 2017"
 		},
 
 		"net": {
@@ -27,6 +27,7 @@
 			"ssid": "Massive",
 			"gateway": "89.207.132.170"
 		},
+		
 		"config": "mcc250-mnc01-ru-rRU,ldltr,sw360dp,w360dp,h640dp,320dpi,nokeys,vga,notouch,keysasaccent\nabi: arm64-v8a,armeabi-v7a,armeabi"
 	}
-	}
+}

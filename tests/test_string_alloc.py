@@ -16,7 +16,7 @@ class TestLibCppSharedCall(unittest.TestCase):
         vfs_path = emulator.vfs_root
 
         libc = emulator.get_library(f"{vfs_path}/system/lib/libc.so")
-        libcpp = emulator.load_library(f"{vfs_path}/system/lib/libc++_shared.so", do_init=True, demangle=False)
+        libcpp = emulator.load_library(f"{vfs_path}/system/lib/libc++_shared.so", do_init=True)
 
         symbol_name = "_ZNSt6__ndk112basic_stringIcNS_11char_traitsIcEENS_9allocatorIcEEEC2IPcvEET_S8_"
         # dmg_sym_name = "std::__ndk1::basic_string<char, std::__ndk1::char_traits<char>, std::__ndk1::allocator<char> >::basic_string<char*, void>(char*)"

@@ -5,95 +5,21 @@ import struct
 import io
 
 from ...const import emu_const
+from ...const.templates import STATUS_TEMPLATE
 from ...const.linux import *
 
-from typing import TYPE_CHECKING, Tuple, Optional, Callable, Dict, Any
+from typing import TYPE_CHECKING, Optional, Callable, Dict, Any
 
 if TYPE_CHECKING:
     from ...emulator import Emulator
 
-STATUS_TEMPLATE = """
-Name:\t{pkg_name}
-State:\tR (running)
-Tgid:\t{pid}
-Pid:\t{pid}
-PPid:\t{ppid}
-TracerPid:\t0
-Uid:\t{uid}\t{uid}\t{uid}\t{uid}
-Gid:\t{uid}\t{uid}\t{uid}\t{uid}
-FDSize:\t256
-Groups:\t3003 9997 20123 50123
-VmPeak:\t{vm_peak} kB
-VmSize:\t{vm_size} kB
-VmLck:\t0 kB
-VmPin:\t0 kB
-VmHWM:\t{vm_hwm} kB
-VmRSS:\t{vm_rss} kB
-VmData:\t{vm_data} kB
-VmStk:\t{vm_stk} kB
-VmExe:\t24 kB
-VmLib:\t{vm_lib} kB
-VmPTE:\t{vm_pte} kB
-VmPMD:\t12 kB
-VmSwap:\t0 kB
-Threads:\t{threads}
-SigQ:\t0/11500
-SigPnd:\t0000000000000000
-ShdPnd:\t0000000000000000
-SigBlk:\t0000000000001204
-SigIgn:\t0000000000000000
-SigCgt:\t00000002000094f8
-CapInh:\t0000000000000000
-CapPrm:\t0000000000000000
-CapEff:\t0000000000000000
-CapBnd:\t0000000000000000
-CapAmb:\t0000000000000000
-NoNewPrivs:\t0
-Seccomp:\t2
-Speculation_Store_Bypass:\tunknown
-Cpus_allowed:\t{cpus_mask}
-Cpus_allowed_list:\t0-{cpus_max}
-Mems_allowed:\t1
-Mems_allowed_list:\t0
-voluntary_ctxt_switches:\t{vol_switches}
-nonvoluntary_ctxt_switches:\t{nonvol_switches}
-"""
-
-OVERRIDE_URANDOM = False
-OVERRIDE_URANDOM_INT = 1
-
-IS_DIR = object()
-
-class ContentGenerator:
-    def __init__(self, emulator: 'Emulator'):
-        self.__emu: 'Emulator' = emulator
-        
-        self.cfg = emulator.config
-        self.pcb = emulator.pcb
-        self.memory_map = emulator.memory
-        
-        self._sim_vol_switches = random.randint(100, 1000)
-        self._sim_nonvol_switches = random.randint(10, 100)
-
-        self.routes: Dict[str, Callable] = {
-            r'^/proc$': self._gen_dir,
-            r'^/proc/(self|\d+)$': self._gen_dir,
-            r'^/proc/(self|\d+)/fd$': self._gen_dir,
-            r'^/proc/(self|\d+)/status$': self._gen_status,
-            r'^/proc/(self|\d+)/exe$': self._gen_exe,
-            r'^/proc/(self|\d+)/maps$': self._gen_maps,
-            r'^/proc/(self|\d+)/cmdline$': self._gen_cmdline,
-            r'^/proc/(self|\d+)/cgroup$': self._gen_cgroup,
-            r'^/sys/devices/system/cpu/online$': self._gen_cpu_online,
-            r'^/proc/(self|\d+)/fd/\d+$': self._gen_fd_link,
-            r'^/dev/u?random$': self._dev_urandom,
-            r'^/dev/(null|binder)$': self._dev_virtual,
-        }
-
+class Helpers:
+    def __init__(self):
+        pass
+    
     @staticmethod
     def _align8(x: int) -> int:
         return (x + 7) & ~7
-
 
     def _serialize_dirents(self, entries: list):
         """
@@ -131,6 +57,34 @@ class ContentGenerator:
             offset += reclen
 
         return bytes(buf)
+
+class ContentGenerator(Helpers):
+
+    def __init__(self, emulator: 'Emulator'):
+        self.__emu: 'Emulator' = emulator
+        
+        self.cfg = emulator.config
+        self.pcb = emulator.pcb
+        self.memory_map = emulator.memory
+        
+        self._sim_vol_switches = random.randint(100, 1000)
+        self._sim_nonvol_switches = random.randint(10, 100)
+
+        self.routes: Dict[str, Callable] = {        
+            re.compile(r'^/proc$'):                             self._gen_dir,
+            re.compile(r'^/proc/(self|\d+)$'):                  self._gen_dir,
+            re.compile(r'^/proc/(self|\d+)/fd$'):               self._gen_dir,
+            re.compile(r'^/proc/(self|\d+)/status$'):           self._gen_status,
+            re.compile(r'^/proc/(self|\d+)/exe$'):              self._gen_exe,
+            re.compile(r'^/proc/(self|\d+)/maps$'):             self._gen_maps,
+            re.compile(r'^/proc/(self|\d+)/cmdline$'):          self._gen_cmdline,
+            re.compile(r'^/proc/(self|\d+)/cgroup$'):           self._gen_cgroup,
+            re.compile(r'^/sys/devices/system/cpu/online$'):    self._gen_cpu_online,
+            re.compile(r'^/proc/(self|\d+)/fd/\d+$'):           self._gen_fd_link,
+            re.compile(r'^/dev/u?random$'):                     self._dev_urandom,
+            re.compile(r'^/dev/(null|binder)$'):                self._dev_virtual,
+            re.compile(r'std(in|out|err)$'):                    self._dev_virtual,
+        }
     
     def _find_handler(self, virt_path: str) -> Optional[Callable]:
         for pattern, h in self.routes.items():
@@ -169,57 +123,6 @@ class ContentGenerator:
         if not handler:
             return None
         return handler(virt_path=virt_path, **kwargs)
-
-    # removed writing virtual files to disk
-
-    # def prepare_path(self, virt_path: str, host_path: str, **kwargs) -> Tuple[bool, Optional[str]]:
-    #     handler = None
-    #     for pattern, h in self.routes.items():
-    #         if re.match(pattern, virt_path):
-    #             handler = h
-    #             break
-
-    #     if not handler:
-    #         if os.path.exists(host_path):
-    #             return os.path.isdir(host_path), host_path
-    #         return False, None
-
-    #     content = handler(virt_path=virt_path, **kwargs)
-
-    #     if isinstance(content, list):
-    #         if not os.path.exists(host_path):
-    #             os.makedirs(host_path, exist_ok=True)
-            
-    #         for fake_file in content:
-    #             fake_host_file = os.path.join(host_path, fake_file)
-    #             if not os.path.exists(fake_host_file):
-    #                 open(fake_host_file, 'a').close()
-            
-    #         return True, host_path
-
-    #     if content is None:
-    #         return False, virt_path
-
-    #     return False, self._smart_write(host_path, content, virt_path)
-
-    # def _smart_write(self, host_path: str, content: Any, virt_path: str) -> str:
-    #     parent = os.path.dirname(host_path)
-    #     if not os.path.exists(parent):
-    #         os.makedirs(parent, exist_ok=True)
-
-    #     mode = "wb" if isinstance(content, bytes) else "w"
-    #     encoded_content = content if isinstance(content, bytes) else content.encode()
-
-    #     if os.path.exists(host_path):
-    #         with open(host_path, "rb") as f:
-    #             if f.read() == encoded_content:
-    #                 if not any(x in virt_path for x in ["maps", "status"]):
-    #                     return host_path
-
-    #     with open(host_path, mode) as f:
-    #         f.write(content)
-        
-    #     return host_path
 
     def _gen_dir(self, virt_path: str, **kwargs):
 

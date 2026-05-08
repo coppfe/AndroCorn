@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "androidemu"
-version = "2026.04.24"
+version = "2026.05.08"
 description = "Android emulator for native library analysis and emulation"
 readme = "README.md"
 requires-python = ">=3.8"

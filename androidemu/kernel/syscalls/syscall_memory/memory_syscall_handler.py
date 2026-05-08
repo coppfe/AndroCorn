@@ -2,6 +2,9 @@ from typing import TYPE_CHECKING
 from unicorn import UC_PROT_READ, UC_PROT_WRITE
 
 from ....const import emu_const
+from ....const.flags import MAP_ANONYMOUS
+from ....const.linux import EBADF, ENODEV
+from ....data.mem_map import BRK_SIZE
 from ....utils.memory import memory_helpers
 
 import logging
@@ -54,7 +57,7 @@ class MemorySyscallHandler:
         """
         if not hasattr(self, '_brk_base'):
 
-            self._brk_size = 0x800000  # 8 MB
+            self._brk_size = BRK_SIZE
             self._brk_base = self._memory.map(0, self._brk_size, UC_PROT_READ | UC_PROT_WRITE)
             self._brk_current = self._brk_base
             self._brk_max = self._brk_base + self._brk_size
@@ -114,18 +117,17 @@ class MemorySyscallHandler:
         #define MAP_PRIVATE 0x02
         #define MAP_TYPE 0x0f
         #define MAP_FIXED 0x10
-        MAP_ANONYMOUS = 0x20
         #define MAP_UNINITIALIZED 0x0
+
         res = None
         if flags & MAP_ANONYMOUS:
             res = self._memory.map(addr, length, prot)
-        elif fd != 0xffffffff: # 如果有fd
+        elif fd != 0xffffffff: # If there is fd
             if fd <= 2:
                 raise NotImplementedError("Unsupported read operation for file descriptor %d.", fd)
-            #
+
             if not self.__pcb.virtual_files.has_fd(fd):
-                # TODO: Return valid error.
-                raise NotImplementedError()
+                return -EBADF
 
             vf = self.__pcb.virtual_files.get_fd_detail(fd)
             #mmap2 The last parameter of the system call differs from that of mmap; pay attention to the following sentence!
@@ -138,7 +140,7 @@ class MemorySyscallHandler:
             '''
             offset = pgoffset * 4096
             res = self._memory.map(addr, length, prot, vf, offset)
-        #
+
         else:
             res = self._memory.map(addr, length, prot)
     

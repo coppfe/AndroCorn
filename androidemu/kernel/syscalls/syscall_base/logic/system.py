@@ -2,6 +2,7 @@ import logging
 import os
 import time
 import random
+import struct
 
 from unicorn import Uc
 
@@ -45,7 +46,7 @@ class SystemSyscalls:
         return self.__prctl.handle(option, arg2, arg3, arg4, arg5)
 
     # =========================================================
-    # CPU / RANDOM
+    # GETTERS
     # =========================================================
 
     def _getcpu(self, mu, cpu_ptr, node_ptr, cache):
@@ -62,6 +63,27 @@ class SystemSyscalls:
         except Exception as e:
             logging.error("getrandom failed: %s", e)
             return -EPERM
+        
+    def _getrlimit(self, mu, resource, rlim_ptr):
+        # int getrlimit(int resource, struct rlimit *rlim);
+        # struct rlimit {
+        #     rlim_t rlim_cur;  // soft limit
+        #     rlim_t rlim_max;  // hard limit
+        # };
+
+        # resource 7 = RLIMIT_STACK
+        if resource == 7:
+            rlim_cur = 8 * 1024 * 1024  # 8MB
+            rlim_max = 8 * 1024 * 1024
+        else:
+            rlim_cur = 1024
+            rlim_max = 1024
+
+        data = struct.pack("<II", rlim_cur, rlim_max)
+
+        mu.mem_write(rlim_ptr, data)
+        return 0
+
 
     # =========================================================
     # UNAME

@@ -12,6 +12,13 @@ class ExecveHandler:
     def __init__(self, emulator: 'Emulator'):
         self.__emu: 'Emulator' = emulator
         self.pcb = emulator.pcb
+
+        self.patterns = [
+            (re.compile(r'^pm path (?P<pkg>[\w\.]+)'),              self._logic_pm_path),
+            (re.compile(r'^getprop (?P<prop>[\w\.]+)'),             self._logic_getprop),
+            (re.compile(r'^am get-config'),                         self._logic_am_get_config),
+            (re.compile(r'^ps\s+(-e\s+)?\|\s+grep\s+adbd'),         self._logic_ps_grep_adbd),
+        ]
         
         self.commands: Dict[str, Callable] = {
             "pm": self._handle_pm,
@@ -71,12 +78,7 @@ class ExecveHandler:
         return 0
 
     def _dispatch_shell_command(self, cmd_line: str) -> int:
-        patterns = [
-            (r'^pm path (?P<pkg>[\w\.]+)', self._logic_pm_path),
-            (r'^getprop (?P<prop>[\w\.]+)', self._logic_getprop),
-            (r'^am get-config', self._logic_am_get_config),
-            (r'^ps\s+(-e\s+)?\|\s+grep\s+adbd', self._logic_ps_grep_adbd),
-        ]
+        patterns = self.patterns
 
         for pattern, logic_func in patterns:
             match = re.match(pattern, cmd_line)

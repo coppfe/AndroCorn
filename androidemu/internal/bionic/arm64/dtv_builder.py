@@ -10,62 +10,58 @@ logger = logging.getLogger(__name__)
 
 class DTVBuilderARM64(DTVBuilder):
     """
-    Layout (64-bit):
-      [0] Generation
-      [1] Module Count
-      [2] Module 1 Ptr
-      [3] Module 2 Ptr
-      ...
+    Dumb & Fast DTV (Dynamic Thread Vector) Builder for ARM64.
+    
+    Layout:
+      dtv[0] : Generation
+      dtv[1] : Module Count
+      dtv[2..N] : Module Pointers
     """
 
     def __init__(self, emu: 'Emulator', tls: 'BionicTLS_ARM64') -> None:
         super().__init__(emu, tls)
 
     def build(self) -> int:
-        size = (2 + self.max_modules) * self.ptr_sz
-        base = self.state.mem_reserve(size, align=0x10)
+        """Allocate the entire DTV table once."""
+        # (2 header slots + MAX_MODULES) * 8 bytes
+        size = (2 + self.MAX_MODULES) * self.ptr_sz
+        
+        self.base = self.emu.memory.static_alloc(size, align=0x10)
 
-        self.base = base
-        self.dtv_generation = 1
-        self.module_count = 0
+        self._write_ptr(self.base, self.dtv_generation)
+        self._write_ptr(self.base + self.ptr_sz, self.module_count)
+        
+        self.state.dtv = self.base
+        logger.debug("[DTV-ARM64] Built at %#x", self.base)
+        return self.base
 
-        self._write_ptr(base, self.dtv_generation)
-        self._write_ptr(base + self.ptr_sz, self.module_count)
+    def register_module(self, tls_block_ptr: int) -> int:
+        """Register a module and update the DTV headers."""
+        if self.module_count >= self.MAX_MODULES:
+            raise RuntimeError("DTV ARM64: Out of slots (max 256)")
 
-        rest_size = size - (2 * self.ptr_sz)
-        if rest_size > 0:
-            self.mu.mem_write(base + 2 * self.ptr_sz, b'\x00' * rest_size)
-
-        self.state.dtv = base
-        logger.debug("[DTV-ARM64] Built at %#x", base)
-        return base
-
-    def register_module(self, tls_block: int) -> int:
         self.module_count += 1
         module_id = self.module_count
 
-        count_addr = self.base + self.ptr_sz
-        self._write_ptr(count_addr, self.module_count)
+        self._write_ptr(self.base + self.ptr_sz, self.module_count)
 
+        # (id + 1) because dtv[0]=gen, dtv[1]=count, dtv[2]=mod1...
         entry_addr = self.base + (module_id + 1) * self.ptr_sz
-        self._write_ptr(entry_addr, tls_block)
+        self._write_ptr(entry_addr, tls_block_ptr)
 
         self.dtv_generation += 1
         self._write_ptr(self.base, self.dtv_generation)
 
-        logger.debug("[DTV-ARM64] Registered mod_id=%d block=%#x at %#x", 
-                    module_id, 
-                    tls_block, 
-                    entry_addr)
+        logger.debug("[DTV-ARM64] Registered mod_id=%d -> block=%#x", module_id, tls_block_ptr)
         return module_id
 
     def get_tls_block(self, module_id: int) -> int:
-        # addr = base + (id + 1) * ptr_sz
+        """Read back a TLS block address from the DTV."""
         addr = self.base + (module_id + 1) * self.ptr_sz
         return self._read_ptr(addr)
 
-    def register_static(self, tls_block: int) -> int:
-        return self.register_module(tls_block)
+    def _write_ptr(self, addr: int, val: int):
+        self.mu.mem_write(addr, val.to_bytes(self.ptr_sz, 'little'))
 
-    def register_dynamic(self, tls_block: int) -> int:
-        return self.register_module(tls_block)
+    def _read_ptr(self, addr: int) -> int:
+        return int.from_bytes(self.mu.mem_read(addr, self.ptr_sz), 'little')

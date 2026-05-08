@@ -6,18 +6,18 @@ JNI_VERSION_1_2 = 0x00010002
 JNI_VERSION_1_4 = 0x00010004
 JNI_VERSION_1_6 = 0x00010006
 
-JNI_OK = 0  # no error
-JNI_ERR = -1  # generic error
-JNI_EDETACHED = -2  # thread detached from the VM
-JNI_EVERSION = -3  # JNI version error
-JNI_ENOMEM = -4  # Out of memory
-JNI_EEXIST = -5  # VM already created
-JNI_EINVAL = -6  # Invalid argument
+JNI_OK = 0                  # no error
+JNI_ERR = -1                # generic error
+JNI_EDETACHED = -2          # thread detached from the VM
+JNI_EVERSION = -3           # JNI version error
+JNI_ENOMEM = -4             # Out of memory
+JNI_EEXIST = -5             # VM already created
+JNI_EINVAL = -6             # Invalid argument
 
-JNI_COMMIT = 1  # copy content, do not free buffer
-JNI_ABORT = 2  # free buffer w/o copying back
+JNI_COMMIT = 1              # copy content, do not free buffer
+JNI_ABORT = 2               # free buffer w/o copying back
 
-JNI_InvalidRefType = 0
-JNI_LocalRefType = 1
-JNI_GlobalRefType = 2
-JNI_WeakGlobalRefType = 3
+JNI_InvalidRefType = 0      # invalid ref type
+JNI_LocalRefType = 1        # local ref
+JNI_GlobalRefType = 2       # global ref
+JNI_WeakGlobalRefType = 3   # weak global ref

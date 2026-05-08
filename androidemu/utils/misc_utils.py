@@ -9,6 +9,9 @@ from unicorn import *
 from unicorn.arm_const import *
 from unicorn.arm64_const import *
 
+from ..const.linux import *
+from ..data.mem_map import PAGE_SIZE
+
 g_isWin = platform.system() == "Windows"
 
 def vfs_path_to_system_path(vfs_root, path):
@@ -22,12 +25,6 @@ def vfs_path_to_system_path(vfs_root, path):
 def system_path_to_vfs_path(vfs_root, path):
     return "/"+os.path.relpath(path, vfs_root)
 #
-
-PF_X = 0x1  # Executable
-PF_W = 0x2  # Writable
-PF_R = 0x4  # Readable
-
-PAGE_SIZE=0x1000
 
 
 def page_start(addr):

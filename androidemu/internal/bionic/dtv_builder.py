@@ -9,6 +9,9 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 class DTVBuilder(ABC):
+
+    MAX_MODULES = 256 
+    
     def __init__(self, emu: 'Emulator', state):
         self.emu = emu
         self.mu = emu.mu
@@ -16,7 +19,6 @@ class DTVBuilder(ABC):
         self.ptr_sz = emu.ptr_size
         
         self.base = 0
-        self.max_modules = 64
         self.dtv_generation = 0
         self.module_count = 0
 
@@ -31,11 +33,3 @@ class DTVBuilder(ABC):
     @abstractmethod
     def get_tls_block(self, module_id: int) -> int:
         pass
-
-    # --- Helpers ---
-    
-    def _write_ptr(self, addr: int, val: int):
-        self.mu.mem_write(addr, val.to_bytes(self.ptr_sz, 'little'))
-
-    def _read_ptr(self, addr: int):
-        return int.from_bytes(self.mu.mem_read(addr, self.ptr_sz), 'little')

@@ -1,6 +1,5 @@
 from ....const.linux import *
 from ....const import emu_const
-from ....utils.generators.vfs_content import ContentGenerator
 
 from .logic.fs_io import VirtualFileIOCalls
 from .logic.fs_manager import VirtualFileSystemCalls
@@ -21,7 +20,7 @@ class VirtualFileSystem:
         self.__emu = emu
 
         # Utils
-        self.__generator = ContentGenerator(self.__emu)
+        self.__generator = self.__emu.content_generator
 
         self.__fs_helper = FSHelpers(emu, self.__generator, root_path)
         self.__fs_io_helper = FSIOHelpers(emu, self.__generator, self.__fs_helper)

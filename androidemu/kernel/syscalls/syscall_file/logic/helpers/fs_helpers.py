@@ -9,10 +9,11 @@ from ......objects.vdstat import VirtualDeviceStat
 from ......utils.files import file_helpers
 from ......const import emu_const
 from ......const import linux
+from ......const.devices import DEV
 
 from ......utils import misc_utils
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, cast, Set, List
 
 if TYPE_CHECKING:
     from ......emulator import Emulator
@@ -28,10 +29,10 @@ class FSHelpers:
 
         self.__generator: 'ContentGenerator' = content_generator
 
-        self.__root_list = set(["/dev/__properties__"])
-        self.__root_path = root_path
+        self.__root_list: Set[List[str]] = set(["/dev/__properties__"])
+        self.__root_path: str = root_path
 
-        self.g_isWin = platform.system() == "Windows"
+        self.g_isWin: bool = platform.system() == "Windows"
     
     def _get_path_owners(self, filename_in_vm):
         filename_norm = self._norm_file_name(filename_in_vm)
@@ -46,10 +47,7 @@ class FSHelpers:
         
         is_virtual_dev = self.__generator.is_virtual(filename)
         if is_virtual_dev:
-            if "random" in filename: major, minor = 1, 8
-            elif "null" in filename: major, minor = 1, 3
-            elif "zero" in filename: major, minor = 1, 5
-            else: major, minor = 10, 200
+            major, minor = DEV.get(filename, (10, 200))
             return VirtualDeviceStat.create_char_device(major, minor, tm, uid, gid)
         
         if not vfile:

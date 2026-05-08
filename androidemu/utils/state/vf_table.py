@@ -21,16 +21,19 @@ class Symlink:
 
 
 class SymlinkTable:
-    def __init__(self):
+    """
+    A table of symlinks
+    """
+    def __init__(self):        
         self._links: dict[str, Symlink] = {}
 
     # -------------------------
     # SETTERS
     # -------------------------
-    def create(self, path: str, target: str):
+    def create(self, path: str, target: str) -> None:
         self._links[path] = Symlink(target)
 
-    def remove(self, path: str):
+    def remove(self, path: str) -> None:
         self._links.pop(path, None)
 
     # -------------------------
@@ -49,6 +52,9 @@ class SymlinkTable:
 # =========================
 
 class VirtualFileTable:
+    """
+    A table of virtual files
+    """
     def __init__(self, emulator: 'Emulator'):
         self.__emu = emulator
 

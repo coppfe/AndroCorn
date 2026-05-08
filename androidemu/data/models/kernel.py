@@ -4,6 +4,6 @@ from dataclasses import dataclass
 class Kernel:
     sysname:    str = "Linux"
     nodename:   str = "localhost"
-    release:    str = "5.10.43-android12-9-00001-g532147395026"
+    release:    str = "3.18.31-g427242c"
     domain:     str = "localdomain"
-    version:    str = "#1 SMP PREEMPT Wed Mar 15 12:41:09 UTC 2023"
+    version:    str = "#1 SMP PREEMPT Thu Mar 09 11:20:45 UTC 2017"

@@ -50,6 +50,17 @@ class VirtualDeviceStat:
 
     @classmethod
     def create_regular_file(cls, size: int, time_manager: 'TimeManager', uid: int = 0, gid: int = 0, permissions: int = 0o644, **kwargs):
+        """
+        Create a regular file
+
+        :param size: The size of the file
+        :param time_manager: The time manager
+        :param uid: The uid
+        :param gid: The gid
+        :param permissions: The permissions
+
+        :return: The virtual device stat
+        """
         return cls(
             st_mode=(0o100000 | permissions),
             st_size=size,
@@ -60,8 +71,17 @@ class VirtualDeviceStat:
         )
 
     @classmethod
-    
     def create_directory(cls, time_manager: 'TimeManager', uid: int = 0, gid: int = 0, permissions: int = 0o755, **kwargs):
+        """
+        Create a directory
+
+        :param time_manager: The time manager
+        :param uid: The uid
+        :param gid: The gid
+        :param permissions: The permissions
+
+        :return: The virtual device stat
+        """
         return cls(
             st_mode=(0o040000 | permissions),
             st_size=4096,
@@ -74,6 +94,18 @@ class VirtualDeviceStat:
 
     @classmethod
     def create_char_device(cls, major: int, minor: int, time_manager: 'TimeManager', uid: int = 0, gid: int = 0, permissions: int = 0o666, **kwargs):
+        """
+        Create a character device
+
+        :param major: The major number
+        :param minor: The minor number
+        :param time_manager: The time manager
+        :param uid: The uid
+        :param gid: The gid
+        :param permissions: The permissions
+
+        :return: The virtual device stat
+        """
         return cls(
             st_mode=(0o020000 | permissions),
             st_size=0,

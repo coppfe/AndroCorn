@@ -1,7 +1,6 @@
-import lief
 import logging
-
 from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     from ...emulator import Emulator
     from ...utils.parsers.elf import ELFReader
@@ -10,57 +9,29 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 class TLSModuleLoader:
-
     def __init__(self, emu: 'Emulator', state: 'BionicTLS'):
         self.emu = emu
-        self.mu = emu.mu
-        self.ptr_sz = emu.ptr_size
-        self.state: 'BionicTLS' = state
+        self.state = state
 
-    def register_module(self, reader: 'ELFReader', load_bias: int) -> int:
-
-        seg = self._find_tls_segment(reader)
-        if not seg:
+    def register_module(self, reader: 'ELFReader') -> int:
+        """
+        Finds TLS segment, allocates memory, and registers it in DTV.
+        """
+        tls_seg = reader.tls_segment
+        
+        if not tls_seg or tls_seg.virtual_size == 0:
             return 0
 
-        tls_block = self._allocate_tls_block(seg)
-        
-        self._populate_tls_block(seg, tls_block)
+        memsz = tls_seg.virtual_size
+        tls_addr = self.emu.memory.static_alloc(memsz, align=0x10)
 
-        module_id = self.state.dtv_builder.register_module(tls_block)
-        
-        logger.debug("[TLSLoader] Registered module_id=%d at %#x", 
-            module_id, 
-            tls_block)
-        
-
-        if not hasattr(self.state, 'modules'):
-            self.state.modules = {}
-            
-        self.state.modules[module_id] = {
-            "memsz": seg.virtual_size,
-            "tdata": bytes(seg.content),
-            "bias": load_bias
-        }
-
-        return module_id
-    
-    def _find_tls_segment(self, reader: 'ELFReader'):
-        for seg in reader.segments:
-            if seg["p_type"] == "TLS":
-                if seg.virtual_size > 0:
-                    return seg
-        return None
-
-    def _allocate_tls_block(self, seg: lief.ELF.Segment):
-        memsz = seg.virtual_size
-        addr = self.state.mem_reserve(memsz, align=0x10)
-        return addr
-
-    def _populate_tls_block(self, seg: lief.ELF.Segment, addr: int):
-        content = bytes(seg.content)
+        content = bytes(tls_seg.content)
         if content:
-            self.mu.mem_write(addr, content)
-        if seg.virtual_size > len(content):
-            zero_sz = seg.virtual_size - len(content)
-            self.mu.mem_write(addr + len(content), b'\x00' * zero_sz)
+            self.emu.mu.mem_write(tls_addr, content)
+
+        module_id = self.state.dtv_builder.register_module(tls_addr)
+        
+        logger.debug("[TLS] Loaded module_id=%d: addr=%#x, size=%#x", 
+                     module_id, tls_addr, memsz)
+        
+        return module_id

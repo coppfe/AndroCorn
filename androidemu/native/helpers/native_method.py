@@ -7,10 +7,8 @@ from unicorn.arm_const import *
 from unicorn.arm64_const import *
 from ...const import emu_const
 
-from ..java_class_def import JavaClassDef
-from ..constants.jni_const import JNI_ERR
-from ..jni_ref import jobject
-
+from ...java.java_class_def import JavaClassDef
+from ...java.jni_ref import jobject
 
 def native_write_args(emu, *argv):
     if emu.arch == emu_const.ARCH_ARM32:

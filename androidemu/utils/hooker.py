@@ -1,20 +1,20 @@
-from unicorn import *
-from unicorn.arm_const import *
-from unicorn.arm64_const import *
-from .const import emu_const
 import os
 import traceback
 import logging
 
+from unicorn import *
+from unicorn.arm_const import *
+from unicorn.arm64_const import *
+
+from ..const import emu_const
+
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from .emulator import Emulator
+    from ..emulator import Emulator
 
-# Utility class to create a bridge between ARM and Python.
 class Hooker:
-
     """
-    :type emu androidemu.emulator.Emulator
+    Utility class to create a bridge between ARM and Python.
     """
     def __init__(self, emu: 'Emulator', base_addr: int, size: int):
         self._emu: 'Emulator' = emu
@@ -33,7 +33,13 @@ class Hooker:
         return idx
 
     #Returns the address of the function's starting point; if it's a thumb instruction, it's automatically incremented by 1.
-    def write_function(self, func):
+    def write_function(self, func: callable):
+        """
+        Write a function to the emulator.
+
+        In armv7a it will be bx lr
+        In armv8a it will be ret
+        """
         # Get the hook id.
         hook_id = self._get_next_id()
         self._hooks[hook_id] = func
@@ -51,10 +57,15 @@ class Hooker:
             self._hook_current += 4
         else:
             self._emu.mu.mem_write(self._hook_current, b"\xC0\x03\x5F\xD6")  #ret
-            self._hook_current += 4 
+            self._hook_current += 4
         return hook_addr
 
-    def write_function_table(self, table):
+    def write_function_table(self, table: dict):
+        """
+        Write a function table to the emulator.
+
+        Use when you have a lot of functions.        
+        """
         if not isinstance(table, dict):
             raise ValueError("Expected a dictionary for the function table.")
 
