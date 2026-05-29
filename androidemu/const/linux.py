@@ -26,7 +26,7 @@ FUTEX_WAIT_BITSET           =    9
 FUTEX_WAKE_BITSET           =    10
 FUTEX_WAIT_REQUEUE_PI       =    11
 FUTEX_CMP_REQUEUE_PI        =    12
-     
+
 FUTEX_PRIVATE_FLAG          =    128
 FUTEX_CLOCK_REALTIME        =    256
 
@@ -59,6 +59,9 @@ F_POSIX                     =    0x040	#/* Use POSIX semantics for lock */
 
 #dirfd
 AT_FDCWD                    =    -100
+AT_EMPTY_PATH               =    0x1000
+AT_SYMLINK_NOFOLLOW         =    0x100
+
 AT_NULL                     =    0
 AT_IGNORE                   =    1
 AT_EXECFD                   =    2
@@ -126,3 +129,6 @@ EMLINK	                    =    31  # /* Too many links */
 EPIPE	                    =    32  # /* Broken pipe */
 EDOM	                    =    33  # /* Math argument out of domain of func */
 ERANGE	                    =    34  # /* Math result not representable */
+
+PTRACE_TRACEME                  =   0x0
+PTRACE_DETACH                   =   0x11

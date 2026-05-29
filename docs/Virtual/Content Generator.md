@@ -9,7 +9,7 @@ Maybe, it's not the best implement variant, but...
 **using only for device files**
 <small>probably for any file can be</small>
 
-::: androidemu.utils.generators.vfs_content.ContentGenerator
+::: androidemu.kernel.dev.content.ContentGenerator
     options:
       filters: ["!^_"]
       show_root_heading: true

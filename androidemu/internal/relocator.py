@@ -7,9 +7,10 @@ from unicorn.arm64_const import *
 
 from lief.ELF import Relocation
 
+from ..types import ptr_t
 
 if TYPE_CHECKING:
-    from ..emulator import Emulator
+    from ..core.emulator import Emulator
 
 R_ARM_ABS32 = Relocation.TYPE.ARM_ABS32
 R_ARM_GLOB_DAT = Relocation.TYPE.ARM_GLOB_DAT
@@ -33,7 +34,7 @@ class Relocator:
     def __init__(self, emu: 'Emulator', load_bias):
         self.emu = emu
         self.load_bias = load_bias
-        self.word_size = emu.ptr_size
+        self.word_size = ptr_t.size
 
     def write_val(self, addr, value):        
         try:
@@ -57,7 +58,7 @@ class ARM32Relocator(Relocator):
             hook_addr = self.emu.linker.symbol_hooks[sym_name]
             self.write_val(r_addr, hook_addr)
             return
-
+        
         # R_ARM_RELATIVE (B + A)
         if r_type == R_ARM_RELATIVE:
             new_val = self.load_bias + implicit
@@ -71,9 +72,11 @@ class ARM32Relocator(Relocator):
                     new_val = self.emu.call_native(sym_addr)
                     self.write_val(r_addr, new_val)
                 else:
-                    self.write_val(r_addr, sym_addr)
+                    new_val = sym_addr
+                    self.write_val(r_addr, new_val)
             else:
-                self.write_val(r_addr, 0)
+                new_val = 0
+                self.write_val(r_addr, new_val)
 
         # ABS32 (implicit) (S + A)
         elif r_type == R_ARM_ABS32:
@@ -83,9 +86,11 @@ class ARM32Relocator(Relocator):
                     new_val = self.emu.call_native(sym_addr)
                     self.write_val(r_addr, new_val + implicit)
                 else:
-                    self.write_val(r_addr, sym_addr + implicit)
+                    new_val = sym_addr + implicit
+                    self.write_val(r_addr, new_val)
             else:
-                self.write_val(r_addr, implicit)
+                new_val = implicit
+                self.write_val(r_addr, new_val)
 
         # IRELATIVE
         elif r_type == R_ARM_IRELATIVE:
@@ -95,13 +100,14 @@ class ARM32Relocator(Relocator):
             self.write_val(r_addr, new_val)
 
         elif r_type == R_ARM_TLS_TPOFF32:
+            new_val = r_addr
             if tls_info:
                 self.write_val(r_addr, tls_info['offset'])
             else:
                 self.write_val(r_addr, 0)
         
         else:
-            logger.warning("[ARM32Relocator] Unsupported relocation type: %s" % r_type)
+            logger.warning("[ARM32Relocator] Unsupported relocation type: %s", r_type)
 
 class ARM64Relocator(Relocator):
     def apply(self, r_type, r_addr, sym_addr, sym_name, addend, tls_info=None, is_ifunc=False):

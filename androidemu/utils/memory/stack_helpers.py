@@ -1,11 +1,13 @@
 from unicorn.arm_const import *
 from unicorn.arm64_const import *
 from ...const import emu_const
-from . import memory_helpers
+from . import helpers
+
+from ...types import ptr_t
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from ...emulator import Emulator
+    from ...core.emulator import Emulator
 
 class StackHelper():
     def __init__(self, emu: 'Emulator'):
@@ -20,13 +22,13 @@ class StackHelper():
         self.__sp_reg = sp_reg
 
     def reserve(self, nptr):
-        self.__sp -= nptr * self.__emu.ptr_size
+        self.__sp -= nptr * ptr_t.size
         return self.__sp
 
     def write_val(self, value):
-        ptr_sz = self.__emu.ptr_size
+        ptr_sz = ptr_t.size
         self.__sp -= ptr_sz
-        memory_helpers.write_ptrs_sz(self.__emu.mu, self.__sp, value, ptr_sz)
+        helpers.write_uints(self.__emu.mu, self.__sp, value)
         return self.__sp
 
     def write_utf8(self, str_val):

@@ -1,7 +1,7 @@
 ## Example of working with Virtual File System in RunTime
 
 ```python
-from androidemu.emulator import Emulator
+from androidemu import Emulator
 from androidemu.const import emu_const
 
 emulator = Emulator(vfs_root="vfs", arch=emu_const.ARCH_ARM32)

@@ -3,7 +3,7 @@
 Just run this script in any file after installing AndroCorn!
 
 ```python
-from androidemu.emulator import Emulator
+from androidemu import Emulator
 from androidemu.const import emu_const
 
 # Initialize AndroCorn

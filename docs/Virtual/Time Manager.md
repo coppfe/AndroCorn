@@ -1,4 +1,4 @@
-::: androidemu.utils.state.time_manager.TimeManager
+::: androidemu.core.state.time_manager.TimeManager
     options:
       filters: ["!^_", "!uptime_us", "!virtual_us"]
       show_root_heading: true

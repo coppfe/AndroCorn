@@ -1,8 +1,8 @@
-from ..java_class_def import JavaClassDef
-from ..java_field_def import JavaFieldDef
-from ..java_method_def import java_method_def, JavaMethodDef
+from ..class_def import JavaClassDef
+from ..field_def import JavaFieldDef
+from ..method_def import java_method_def, JavaMethodDef
 from ..classes.context import ContextImpl
-from ..constants.default_const import *
+from ..jvm.constants import *
 from .application import Application
 
 class AccessibilityManager(metaclass=JavaClassDef, jvm_name='android/view/accessibility/AccessibilityManager'):

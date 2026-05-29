@@ -4,8 +4,10 @@ import os
 
 from typing import TYPE_CHECKING
 
+from ..types import ptr_t
+
 if TYPE_CHECKING:
-    from ..emulator import Emulator
+    from ..core.emulator import Emulator
     from .module import Module
     from ..utils.parsers.elf import ELFReader
 
@@ -19,8 +21,8 @@ class SoinfoWriter:
 
     def __init__(self, emu: 'Emulator'):
         self.emu = emu
-        self.is_64 = (emu.ptr_size == 8)
-        self.ptr_sz = emu.ptr_size
+        self.ptr_sz = ptr_t.size
+        self.is_64 = (self.ptr_sz == 8)
         self.fmt = "<Q" if self.is_64 else "<I"
 
     def write_soinfo(self, module: 'Module', reader: 'ELFReader', addr: int) -> int:

@@ -169,6 +169,8 @@ persist.qfp=false
 ro.core_ctl_min_cpu=2
 ro.core_ctl_max_cpu=4
 
+ro.crypto.state=encrypted
+
 #HWUI properties
 ro.hwui.texture_cache_size=72
 ro.hwui.layer_cache_size=48

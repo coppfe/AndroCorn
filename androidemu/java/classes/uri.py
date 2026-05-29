@@ -1,6 +1,6 @@
-from ..java_class_def import JavaClassDef
-from ..java_field_def import JavaFieldDef
-from ..java_method_def import java_method_def, JavaMethodDef
+from ..class_def import JavaClassDef
+from ..field_def import JavaFieldDef
+from ..method_def import java_method_def, JavaMethodDef
 
 class Uri(metaclass=JavaClassDef, jvm_name="android/net/Uri"):
     

@@ -1,5 +1,5 @@
 ### Java Class Definer
-::: androidemu.java.java_class_def.JavaClassDef
+::: androidemu.java.class_def.JavaClassDef
     options:
       filters: ["!^_"]
       show_root_heading: false

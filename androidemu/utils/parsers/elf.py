@@ -19,8 +19,6 @@ class ELFReader:
         if not self.binary:
             raise ValueError("LIEF returned None. Is this a valid ELF?")
 
-        lief.disable_leak_warning()
-
         # -------- header meta --------
         self.is_32 = self.binary.header.identity_class == lief.ELF.Header.CLASS.ELF32
         self.is_lib = self.binary.header.file_type == lief.ELF.Header.FILE_TYPE.DYN
@@ -52,6 +50,7 @@ class ELFReader:
         append = segments.append
 
         for seg in sorted(self._segments_raw, key=lambda s: s.virtual_address):
+            # seg: lief.ELF.Segment
             seg_type = str(seg.type).split(".")[-1]
 
             append({
@@ -211,4 +210,8 @@ class ELFReader:
         return sym.value if sym else None
 
     def close(self):
-        del self.binary
+        self.binary = None
+        self._segments_raw = None
+        self._tls_segment = None
+        
+        self._segments = []

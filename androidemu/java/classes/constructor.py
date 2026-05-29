@@ -1,7 +1,7 @@
 from .executable import Executable
-from ..java_class_def import JavaClassDef
-from ..java_field_def import JavaFieldDef
-from ..java_method_def import JavaMethodDef
+from ..class_def import JavaClassDef
+from ..field_def import JavaFieldDef
+from ..method_def import JavaMethodDef
 
 
 class Constructor(metaclass=JavaClassDef,

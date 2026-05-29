@@ -7,22 +7,21 @@ import os
 
 from unicorn import *
 
-from ..helpers.native_method import native_method
-from ...utils.memory import memory_helpers
+from ..helpers.method import native_method
+from ...utils.memory import helpers
 
+from ...types import ptr_t
 
 if TYPE_CHECKING:
-    from unicorn import Uc
-    from ...emulator import Emulator
+    from ...core.emulator import Emulator
 
 logger = logging.getLogger(__name__)
 
 class LibDLSymbolHooks(StubAddress):
 
-    def __init__(self, emu: 'Emulator'):
+    def __init__(self):
         super().__init__()
         
-        self._emu: 'Emulator' = emu
         
         self._func_table = {
             "dlopen": self.dlopen,
@@ -35,28 +34,28 @@ class LibDLSymbolHooks(StubAddress):
         self.global_func_table.update(self._func_table)
     
     @native_method
-    def dlopen(self, uc: 'Uc', path_str: int, flags: int):
+    def dlopen(self, emu: 'Emulator', path_str: int, flags: int):
         if path_str == 0:
-            if self._emu.linker.modules:
-                main_mod = self._emu.linker.modules[0]
+            if emu.linker.modules:
+                main_mod = emu.linker.modules[0]
                 logger.debug("[+] dlopen(NULL) -> returning main module: %s", main_mod.filename)
                 return main_mod.soinfo_ptr
             return 0
 
-        path = memory_helpers.read_utf8(uc, path_str)
+        path = helpers.read_utf8(emu.mu, path_str)
         logger.debug("[+] dlopen('%s', flags=0x%x)", path, flags)
 
         requested_basename = os.path.basename(path)
-        for mod in self._emu.linker.modules:
+        for mod in emu.linker.modules:
             if os.path.basename(mod.filename) == requested_basename:
                 logger.debug("[*] dlopen: '%s' already loaded as %s", path, mod.filename)
                 return mod.soinfo_ptr
 
-        fullpath = self._emu.linker.find_so_on_disk(path)
+        fullpath = emu.linker.find_so_on_disk(path)
         
         if fullpath:
 
-            mod = self._emu.load_library(fullpath, do_init=True)
+            mod = emu.load_library(fullpath, do_init=True)
             if mod:
                 return mod.soinfo_ptr
         
@@ -65,7 +64,7 @@ class LibDLSymbolHooks(StubAddress):
 
 
     @native_method
-    def dlclose(self, uc, handle):
+    def dlclose(self, emu, handle):
         """
         The function dlclose() decrements the reference count on the dynamic library handle handle.
         If the reference count drops to zero and no other loaded libraries use symbols in it, then the dynamic library is unloaded.
@@ -73,44 +72,52 @@ class LibDLSymbolHooks(StubAddress):
         return 0
 
     @native_method
-    def dladdr(self, uc: 'Uc', addr: int, info_ptr: int):
-        ptr_sz = self._emu.ptr_size
+    def dladdr(self, emu: 'Emulator', addr: int, info_ptr: int):
         
-        for mod in self._emu.linker.linked_modules:
+        for mod in emu.linker.modules:
             if mod.base <= addr < mod.base + mod.size:
                 fname_ptr = mod.filename_ptr 
                 
-                memory_helpers.write_ptrs_sz(uc, info_ptr, 
+                helpers.write_uints(emu.mu, info_ptr, 
                                             [fname_ptr, mod.base, 0, 0], 
-                                            ptr_sz)
+                                   )
                 return 1
         return 0
     
     @native_method
-    def dlsym(self, uc, handle, symbol_ptr):
-        symbol_name = memory_helpers.read_utf8(uc, symbol_ptr)
+    def dlsym(self, emu: 'Emulator', handle, symbol_ptr):
+        symbol_name = helpers.read_utf8(emu.mu, symbol_ptr)
         
-        # ARM64: 0, ARM32: 0xffffffff
-        is_64 = (self._emu.ptr_size == 8)
+        is_64 = (ptr_t.size == 8)
         rtld_default = 0 if is_64 else 0xffffffff
-        rtld_next = -1 if is_64 else -2 #future
 
         logger.debug("[+] dlsym(handle=%#x, symbol='%s')", handle, symbol_name)
 
+        if symbol_name in emu.linker.symbol_hooks:
+            return emu.linker.symbol_hooks[symbol_name]
+
         if handle == rtld_default:
-            res = self._emu.linker.find_symbol_globally(symbol_name)
-            return res
+            res = emu.linker.find_symbol_globally(symbol_name)
+            if res is not None:
+                return res
+            return 0
 
         target_module = None
-        for mod in self._emu.linker.linked_modules:
+        for mod in emu.linker.modules:
             if mod.soinfo_ptr == handle:
                 target_module = mod
                 break
         
         if target_module:
-            if symbol_name in target_module.symbols:
-                return target_module.symbols[symbol_name]
+            addr = target_module.find_symbol(symbol_name)
+            if addr is not None:
+                return addr
             
+            for m in emu.linker.modules:
+                addr = m.find_symbol(symbol_name)
+                if addr is not None:
+                    logger.debug("[+] dlsym: '%s' fallback found in %s", symbol_name, m.filename)
+                    return addr
 
             logger.warning("[!] dlsym: symbol '%s' not found in module %s", symbol_name, target_module.filename)
             return 0
@@ -119,7 +126,7 @@ class LibDLSymbolHooks(StubAddress):
         return 0
     
     @native_method
-    def dlerror(self, uc):
+    def dlerror(self, emu):
         #Not implemented
         logger.error("[x] dlerror occurred")
         return 0

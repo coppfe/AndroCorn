@@ -1,4 +1,4 @@
-from .jni_ref import *
+from .jni.reference import *
 
 from typing import Dict, Union
 

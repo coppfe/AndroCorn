@@ -35,3 +35,4 @@ APP_PROCESS_BASE                = 0xAB006000
 
 
 PAGE_SIZE                       = 0x1000
+HIDE                            = [ASM_CODE, BRIDGE_MEMORY_BASE, TLS_BASE, SOINFO_START_BASE, STOP_MEMORY_BASE, JMETHOD_ID_BASE] # Ignore this memory in self/maps

@@ -1,10 +1,10 @@
-from ..java_class_def import JavaClassDef
-from ..java_method_def import java_method_def
+from ..class_def import JavaClassDef
+from ..method_def import java_method_def
 from .string import String
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from ...emulator import Emulator
+    from ...core.emulator import Emulator
 
 class Secure(metaclass=JavaClassDef, jvm_name='android/provider/Settings$Secure'):
     def __init__(self):

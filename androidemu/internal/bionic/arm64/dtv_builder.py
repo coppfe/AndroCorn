@@ -1,9 +1,11 @@
 import logging
+
 from ..dtv_builder import DTVBuilder
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ....emulator import Emulator
+    from unicorn import Uc
+    from androidemu.utils.memory.map import MemoryMap
     from .tls_bootstrap import BionicTLS_ARM64
 
 logger = logging.getLogger(__name__)
@@ -18,15 +20,16 @@ class DTVBuilderARM64(DTVBuilder):
       dtv[2..N] : Module Pointers
     """
 
-    def __init__(self, emu: 'Emulator', tls: 'BionicTLS_ARM64') -> None:
-        super().__init__(emu, tls)
+    def __init__(self, memory: 'MemoryMap', mu: 'Uc', tls: 'BionicTLS_ARM64') -> None:
+        super().__init__(mu, tls)
+        self.memory = memory
 
     def build(self) -> int:
         """Allocate the entire DTV table once."""
         # (2 header slots + MAX_MODULES) * 8 bytes
         size = (2 + self.MAX_MODULES) * self.ptr_sz
         
-        self.base = self.emu.memory.static_alloc(size, align=0x10)
+        self.base = self.memory.static_alloc(size, align=0x10)
 
         self._write_ptr(self.base, self.dtv_generation)
         self._write_ptr(self.base + self.ptr_sz, self.module_count)

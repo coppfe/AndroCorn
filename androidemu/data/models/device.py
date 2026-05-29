@@ -12,13 +12,9 @@ from .net import Net
 class Device:
     android_id: str = field(default_factory=lambda: ''.join(random.choice('0123456789abcdef') for _ in range(16)))
     
-    memory: Memory          = field(init=False)
-    kernel: Kernel          = field(init=False)
-    net:    Net             = field(init=False)
-
-    memory: Any             = field(default_factory=dict) 
-    kernel: Any             = field(default_factory=dict)
-    net:    Any             = field(default_factory=dict)
+    memory: Memory          = field(default_factory=Memory)
+    kernel: Kernel          = field(default_factory=Kernel)
+    net:    Net             = field(default_factory=Net)
 
     config: Any             = field(default_factory=dict)
 

@@ -31,14 +31,14 @@ From androidemu/data/mem_map.py
 
 
 ### Memory Helpers
-::: androidemu.utils.memory.memory_helpers
+::: androidemu.utils.memory.helpers
     options:
       filters: ["!^_"]
       show_root_heading: false
       show_root_toc_entry: false
       heading_level: 4
 ### Memory Mapper
-::: androidemu.utils.memory.memory_map.MemoryMap
+::: androidemu.utils.memory.map.MemoryMap
     options:
       filters: ["!^_"]
       show_root_heading: false

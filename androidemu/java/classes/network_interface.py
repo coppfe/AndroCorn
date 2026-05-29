@@ -1,10 +1,10 @@
-from ..java_class_def import JavaClassDef
-from ..java_method_def import java_method_def
+from ..class_def import JavaClassDef
+from ..method_def import java_method_def
 from .array import Array
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from ...emulator import Emulator
+    from ...core.emulator import Emulator
 
 class NetworkInterface(metaclass=JavaClassDef, jvm_name='java/net/NetworkInterface'):
     def __init__(self, pyname):

@@ -1,33 +1,38 @@
-import logging
-
 from ..const.offsets.arm32 import *
 from ..const.offsets.arm64 import *
 from ..const.emu_const import *
 
-from .memory import memory_helpers
+from .memory import helpers
+
+from ..types import ptr_t
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from ..emulator import Emulator
+    from unicorn.unicorn import Uc
+    from androidemu.objects.registers import RegistersMapping
 
 class BionicTLSUtils:
 
-    __slots__ = ("__emu", "__errno_offset")
+    __slots__ = ("_mu", "_registers", "_errno_offset", "_ptr_size")
 
-    def __init__(self, emulator: "Emulator"):
-        self.__emu = emulator
+    def __init__(self, mu: 'Uc', registers: 'RegistersMapping'):
+        
+        self._mu = mu
+        self._registers = registers
+        self._ptr_size = ptr_t.size
 
-        if self.__emu.arch == ARCH_ARM32:
-            self.__errno_offset = ARM32_TLS_ERRNO
+        if mu._arch == ARCH_ARM32:
+            self._errno_offset = ARM32_TLS_ERRNO
         else:
-            self.__errno_offset = ARM64_TLS_ERRNO
+            self._errno_offset = ARM64_TLS_ERRNO
     
     def set_errno(self, errno):
-        __tls = self.__emu.mu.reg_read(self.__emu.scheduler._reg_tls)
-        __slot = __tls + self.__errno_offset
-        memory_helpers.write_uints(self.__emu.mu, __slot, errno)
+        tls = self._mu.reg_read(self._registers.tls)
+        slot = tls + self._errno_offset
+
+        helpers.write_uints(self._mu, slot, errno)
         return 0
     
     def set_tls(self, tls_ptr):
-        self.__emu.mu.reg_write(self.__emu.scheduler._reg_tls, tls_ptr)
+        self._mu.reg_write(self._registers.tls, tls_ptr)
         return 0

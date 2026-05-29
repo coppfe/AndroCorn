@@ -4,7 +4,7 @@ State:\tR (running)
 Tgid:\t{pid}
 Pid:\t{pid}
 PPid:\t{ppid}
-TracerPid:\t0
+TracerPid:\t{tracerpid}
 Uid:\t{uid}\t{uid}\t{uid}\t{uid}
 Gid:\t{uid}\t{uid}\t{uid}\t{uid}
 FDSize:\t256
@@ -44,3 +44,17 @@ Mems_allowed_list:\t0
 voluntary_ctxt_switches:\t{vol_switches}
 nonvoluntary_ctxt_switches:\t{nonvol_switches}
 """
+
+MOUNTINFO = ("14 20 0:11 / /sys rw,nosuid,nodev,noexec,relatime - sysfs sysfs rw\n"
+            "15 20 0:12 / /proc rw,nosuid,nodev,noexec,relatime - proc proc rw\n"
+            "16 20 0:5 / /dev rw,nosuid,relatime - devtmpfs ueventd rw\n"
+            "17 14 0:13 / /sys/kernel/debug rw,nosuid,nodev,noexec,relatime - debugfs debugfs rw\n"
+            "20 1 259:0 / / rw,relatime - ext4 /dev/block/mmcblk0p42 ro,seclabel\n"
+            "21 20 0:15 / /dev/pts rw,nosuid,noexec,relatime - devpts devpts rw,seclabel\n"
+            "22 20 0:16 / /dev/cpuctl rw,nosuid,nodev,noexec,relatime - cgroup cgroup rw,cpu\n"
+            "23 20 0:17 / /dev/cpuset rw,nosuid,nodev,noexec,relatime - cgroup cgroup rw,cpuset\n"
+            "25 20 0:18 / /dev/stune rw,nosuid,nodev,noexec,relatime - cgroup cgroup rw,stune\n"
+            "26 20 0:19 / /mnt rw,nosuid,nodev,noexec,relatime - tmpfs tmpfs rw,seclabel\n"
+            "27 20 259:1 / /vendor ro,nosuid,nodev,relatime - ext4 /dev/block/mmcblk0p43 ro,seclabel\n"
+            "28 20 259:2 / /system ro,relatime - ext4 /dev/block/mmcblk0p44 ro,seclabel\n"
+            "29 20 259:3 / /data rw,nosuid,nodev,noatime - ext4 /dev/block/mmcblk0p45 rw,seclabel\n")

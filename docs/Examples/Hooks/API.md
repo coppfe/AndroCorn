@@ -33,7 +33,7 @@ class LibCFunHooks(HookAddress):
 
 ### Example for Emulator with HookAddress
 ```python
-from androidemu.emulator import Emulator
+from androidemu import Emulator
 from androidemu.native.hook.base import HookAddress
 
 class LibCFunHooks(HookAddress):
@@ -72,8 +72,8 @@ class LibCSymbolHooks(StubAddress):
         }
         self.global_func_table.update(self._func_table)
         
-    @native_method # <- Symbol Hooks working as natives so here is the first arg is Unicorn Object.
-    def stack_check_fail(self, uc):
+    @native_method # <- Symbol Hooks working as natives so here is the first arg is Emulator Object
+    def stack_check_fail(self, emu):
         raise RuntimeError("__stack_chk_fail called!!!")
 ```
 
@@ -81,54 +81,52 @@ As you can see, all methods there was inheritance base abstract class.
 
 ## Example with Emulator object for stubbing addresses
 ```python
-from androidemu.java.helpers.native_method import native_method
+from androidemu.native.helpers.method import native_method
 
 class LibCStubs:
 
-    def __init__(self, emu: 'Emulator'):
+    def __init__(self, emu):
         super().__init__()
         
-        self._emu = emu
-
         self._func_table = {"malloc": self.hook_malloc}
 
         for key, hook in self._func_table.items():
-            self._emu.linker.add_symbol_hook(key, self._emu._hooker.write_function(hook))
+            emu.linker.add_symbol_hook(key, emu._hooker.write_function(hook))
     
     @native_method
-    def hook_malloc(self, uc, size):
+    def hook_malloc(self, emu, size):
         print(f"[*] Malloc: {size}")
 
 def init():
     emulator = Emulator(vfs_root="vfs", muti_task=True, arch=1, init_sys_libs=False) # <- Toggle init_sys_libs to false to have time for hook
     LibCStubs(emulator)
+    # load libs ...
+    emulator.linker.call_constructors() # auto init all modules
 ```
 
 Or like this one:
 
 ```python
-from androidemu.java.helpers.native_method import native_method
+from androidemu.native.helpers.method import native_method
 from androidemu.native.stub.base import StubAddress
 
 class LibCStubs(StubAddress):
 
-    def __init__(self, emu: 'Emulator'):
+    def __init__(self):
         super().__init__()
         
-        self._emu = emu
-
         self._func_table = {"malloc": self.hook_malloc}
 
         for key, hook in self._func_table.items():
             self.global_func_table[key] = hook
     
     @native_method
-    def hook_malloc(self, uc, size):
+    def hook_malloc(self, emu, size):
         print(f"[*] Malloc: {size}")
 
 def init():
+    LibCStubs()
     emulator = Emulator(vfs_root="vfs", muti_task=True, arch=1, init_sys_libs=False) # <- Toggle init_sys_libs to false to have time for hook
-    LibCStubs(emulator)
     emulator.hooks.init_stubs()
 ```
 

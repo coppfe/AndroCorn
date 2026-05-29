@@ -1,5 +1,6 @@
 import logging
 from unicorn.arm64_const import UC_ARM64_REG_TPIDR_EL0
+
 from ....utils.memory.struct_writer import StructWriter
 from ....const import linux
 from .dtv_builder import DTVBuilderARM64
@@ -12,29 +13,31 @@ from ....const.offsets.arm64 import *
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ....emulator import Emulator
-
+    from unicorn import Uc
+    from androidemu.utils.memory.map import MemoryMap
+    
 logger = logging.getLogger(__name__)
 
 class BionicTLS_ARM64(BionicTLS):
 
-    def __init__(self, emu):
-        super().__init__(emu)
-        
-        self.dtv_builder = DTVBuilderARM64(emu, self)
-        self.pthread_builder = PThreadBuilderARM64(emu)
+    def __init__(self, memory: 'MemoryMap', mu: 'Uc'):
+        super().__init__(mu)
+
+        self.memory = memory
+        self.dtv_builder = DTVBuilderARM64(memory, mu, self)
+        self.pthread_builder = PThreadBuilderARM64(memory)
 
     def bootstrap(self, phdr_addr, phnum, entry_point):
         logger.info("[TLS-ARM64] Bootstrapping Modern Layout")
 
         size = PAGE_SIZE
-        self.tp = self.emu.memory.static_alloc(size, addr=self.counter_memory, align=PAGE_SIZE)
+        self.tp = self.memory.static_alloc(size, addr=self.counter_memory, align=PAGE_SIZE)
 
         self.counter_memory = self.tp + size
 
         self.dtv = self.dtv_builder.build()
         self.pthread_internal = self.pthread_builder.build()
-        
+
         self.errno_ptr = self.pthread_internal + ARM64_TLS_ERRNO_PTR
 
         kab_base = self._init_kernel_args(phdr_addr, phnum, entry_point)        # Kernel Argument Block
@@ -50,16 +53,16 @@ class BionicTLS_ARM64(BionicTLS):
         # self._write_ptr(self.tp + ARM64_TLS_DTV, self.dtv)                    # Slot 7: DTV
 
         self.mu.reg_write(UC_ARM64_REG_TPIDR_EL0, self.tp)
-        
+
         logger.info("[TLS-ARM64] Bootstrap Done. TP=%#x, KAB=%#x, DTV=%#x, Pthread=%#x", self.tp, kab_base, self.dtv, self.pthread_internal)
 
     def _init_kernel_args(self, phdr_addr, phnum, entry_point):
-        reserver = self.emu.memory
+        reserver = self.memory
 
         addr = reserver.static_alloc(0x4000, addr=self.counter_memory)
         self.counter_memory = addr + 0x4000
 
-        writer = StructWriter(self.emu)
+        writer = StructWriter(self.mu, self.memory)
 
         # 1. bin_name
         bin_name_ptr = writer.write_utf8("/system/bin/app_process")
@@ -75,6 +78,7 @@ class BionicTLS_ARM64(BionicTLS):
 
         # 4. envp
         env = {
+            "PATH": "/sbin:/vendor/bin:/system/sbin:/system/bin:/system/xbin",
             "ANDROID_DATA":"/data",
             "MKSH":"/system/bin/sh",
             "HOME":"/data",
@@ -116,7 +120,7 @@ class BionicTLS_ARM64(BionicTLS):
         for k, v in auxv:
             self._write_ptr(curr_auxv, k)
             self._write_ptr(curr_auxv + 8, v)
-            curr_auxv += 16 
+            curr_auxv += 16
 
         # 6. Kernel Argument Block
         kab_base = reserver.dynamic_alloc(32)
@@ -128,7 +132,7 @@ class BionicTLS_ARM64(BionicTLS):
         return kab_base
 
     def setup_static_tls(self, reader, bias):
-        loader = TLSModuleLoader(self.emu, self)
+        loader = TLSModuleLoader(self.memory, self.mu, self)
         module_id = loader.register_module(reader)
         tls_block = self.dtv_builder.get_tls_block(module_id)
         return tls_block - self.tp

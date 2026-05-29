@@ -1,5 +1,5 @@
-from ..java_class_def import JavaClassDef
-from ..java_method_def import java_method_def
+from ..class_def import JavaClassDef
+from ..method_def import java_method_def
 
 class Boolean(metaclass=JavaClassDef, jvm_name='java/lang/Boolean'):
     

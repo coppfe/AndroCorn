@@ -12,7 +12,8 @@ from ..tls_bionic import BionicTLS
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from ....emulator import Emulator
+    from androidemu.utils.memory.map import MemoryMap
+    from unicorn import Uc
 
 logger = logging.getLogger(__name__)
 
@@ -21,17 +22,18 @@ class BionicTLS_ARM32(BionicTLS):
     Bionic TLS ARM32 Android 7.1
     """
 
-    def __init__(self, emu: 'Emulator'):
-        super().__init__(emu)
+    def __init__(self, memory: 'MemoryMap', mu: 'Uc'):
+        super().__init__(mu)
 
-        self.dtv_builder = DTVBuilderARM32(emu, self)
-        self.pthread_builder = PThreadBuilderARM32(emu)
+        self.memory = memory
+        self.dtv_builder = DTVBuilderARM32(memory, mu, self)
+        self.pthread_builder = PThreadBuilderARM32(memory)
 
     def bootstrap(self, phdr_addr, phnum, entry_point):
         logger.info("[TLS-7.1-ARM32] Bootstrapping Legacy Layout")
 
         size = PAGE_SIZE
-        self.tp = self.emu.memory.static_alloc(size, addr=self.counter_memory, align=PAGE_SIZE)
+        self.tp = self.memory.static_alloc(size, addr=self.counter_memory, align=PAGE_SIZE)
 
         self.counter_memory = self.tp + size
 
@@ -39,7 +41,7 @@ class BionicTLS_ARM32(BionicTLS):
 
         self.dtv = self.dtv_builder.build()
         self.pthread_internal = self.pthread_builder.build()
-        
+
         self._write_ptr(self.tp + ARM32_TLS_BASE, self.tp)                         # Slot 0: TLS Base pointer (Self)
         self._write_ptr(self.tp + ARM32_TLS_PTHREAD_T, self.pthread_internal)      # Slot 1: pthread_t
         self._write_ptr(self.tp + ARM32_TLS_ERRNO, 0)                              # Slot 2: __errno
@@ -54,25 +56,25 @@ class BionicTLS_ARM32(BionicTLS):
         self.mu.reg_write(UC_ARM_REG_R9, self.tp) # backward compatibility
         # self.mu.reg_write(UC_ARM_REG_R10, self.pthread_internal) # i dont remember why
         self.mu.reg_write(UC_ARM_REG_C13_C0_3, self.tp)
-        
+
         logger.info("TLS 7.1 Ready. TP: %#x DTV: %#x, Pthread: %#x", self.tp, self.dtv, self.pthread_internal)
 
     def setup_static_tls(self, reader, bias):
-        loader = TLSModuleLoader(self.emu, self)
+        loader = TLSModuleLoader(self.memory, self.mu, self)
         module_id = loader.register_module(reader)
         if module_id == 0:
             return 0
         tls_block = self.dtv_builder.get_tls_block(module_id)
         return tls_block - self.tp
 
-    
+
     def _init_kernel_args(self, phdr_addr, phnum, entry_point):
-        reserver = self.emu.memory
+        reserver = self.memory
         addr = reserver.static_alloc(0x4000, addr=self.counter_memory)
         self.counter_memory = addr + 0x4000
 
-        writer = StructWriter(self.emu)
-        
+        writer = StructWriter(self.mu, self.memory)
+
         # Kernel args
         bin_name_ptr = writer.write_utf8("/system/bin/app_process")
 
@@ -87,6 +89,7 @@ class BionicTLS_ARM32(BionicTLS):
 
         # envp
         env = {
+            "PATH": "/sbin:/vendor/bin:/system/sbin:/system/bin:/system/xbin",
             "ANDROID_DATA":"/data",
             "MKSH":"/system/bin/sh",
             "HOME":"/data",

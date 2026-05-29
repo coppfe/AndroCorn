@@ -1,5 +1,3 @@
-
-
 PR_UNALIGN_NOPRINT              =   1	    #/* silently fix up unaligned user accesses */
 PR_UNALIGN_SIGBUS               =   2	    #/* generate SIGBUS on unaligned user access */
 PR_GET_DUMPABLE                 =   3
@@ -22,7 +20,11 @@ PR_GET_NAME                     =   16		#/* Get process name */
 
 PR_SET_VMA                      =   0x53564d41
 PR_SET_PTRACER                  =   0x59616d61
+PR_SET_PTRACER_ANY              =   0xFFFFFFFF
 
-IOCTL_TCGETS                    =   0x5401
+IOCTL_TCGETS                    =   0x5401  # https://github.com/torvalds/linux/blob/master/include/uapi/asm-generic/ioctls.h
 IOCTL_SIOCGIFCONF               =   0x8912
 IOCTL_BINDER_VERSION            =   0xc0046209
+IOCTL_TIOCGPTN                  =   0x80045430
+IOCTL_TIOCGPTPEER               =   0x40045431
+IOCTL_TIOCGSERIAL               =   0x5412

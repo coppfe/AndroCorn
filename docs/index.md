@@ -9,17 +9,17 @@ Project was tested on libc, C++ shared, libstdc++, and TikTok libraries (metasec
 
 AndroCorn is still a beta-test project, what's mean it's not stable. Here is still rolling release that can broke some functionallity. But im trying to not break compability with ExAndroidNativeEmu (my thanks to maiyao1988, this project was really helpful when i started writing a emulator! ❤️)
 
-::: androidemu.emulator.Emulator
+::: androidemu.core.emulator.Emulator
     options:
       filters: ["!^_"]
       show_root_heading: true
 
-::: androidemu.scheduler.Scheduler
+::: androidemu.cpu.scheduler.Scheduler
     options:
       filters: ["!^_"]
       show_root_heading: true
 
-::: androidemu.pcb.Pcb
+::: androidemu.core.process.pcb.ProcessControlBlock
     options:
       filters: ["!^_"]
       show_root_heading: true

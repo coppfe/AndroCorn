@@ -4,15 +4,13 @@ from ...data.mem_map import TLS_BASE
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from ...emulator import Emulator
+    from unicorn import Uc
     from .dtv_builder import DTVBuilder
     from .pthread_builder import PThreadBuilder
 
 class BionicTLS(ABC):
-    def __init__(self, emu: 'Emulator'):
-        self.emu = emu
-        self.mu = emu.mu
-        self.ptr_sz = self.emu.ptr_size
+    def __init__(self, mu: 'Uc'):
+        self.mu = mu
         
         self.counter_memory = TLS_BASE
 

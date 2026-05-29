@@ -1,5 +1,5 @@
 ### Java Field Definer
-::: androidemu.java.java_field_def.JavaFieldDef
+::: androidemu.java.field_def.JavaFieldDef
     options:
       filters: ["!^_"]
       show_root_heading: false

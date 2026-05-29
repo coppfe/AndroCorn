@@ -1,8 +1,8 @@
 import logging
-from typing import List, Dict, Optional, TYPE_CHECKING
+from typing import Any, List, Dict, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ..emulator import Emulator
+    from ..core.emulator import Emulator
     from ..utils.parsers.elf import ELFReader
 
 logger = logging.getLogger(__name__)
@@ -16,6 +16,7 @@ class Module:
                  load_base: int,
                  load_bias: int,
                  size: int, 
+                 dynamic: int,
                  symbols: Dict[str, int], 
                  reader: 'ELFReader'):
         
@@ -24,12 +25,13 @@ class Module:
         self.soinfo_ptr: int = 0
         self.base: int = load_base
         self.bias: int = load_bias
+        self.dynamic: int = dynamic
         self.tls_offset: int = 0
         self.size: int = size
         self.symbols: Dict[str, int] = symbols
         self.reader: 'ELFReader' = reader
         self.init_array: List[int] = []
-        
+
         self.needed: List['Module'] = []
         self.initialized: bool = False
 
@@ -69,27 +71,3 @@ class Module:
             if target in self.symbol_lookup:
                 return self.symbol_lookup[target]
         return None
-
-    def call_init(self, emu: 'Emulator') -> None:
-        """
-        Init the module
-
-        :param emu: The emulator
-        """
-        init_funcs = self.init_array
-        if not init_funcs:
-            return
-
-        logger.info("[*] Calling %d init functions for %s", 
-                    len(init_funcs), self.filename)
-
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.debug("init_array adjusted: %s", [hex(a) for a in init_funcs])
-
-            for func in init_funcs:
-                symbol_name = self.find_symbol_name(func) or 'unknown'
-                logger.debug("  [>] Calling init: %#x (%s)", func, symbol_name)
-                emu.call_native(func)
-        else:
-            for func in init_funcs:
-                emu.call_native(func)

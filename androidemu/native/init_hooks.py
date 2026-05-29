@@ -11,8 +11,8 @@ from .stub.libdl_sym import LibDLSymbolHooks
 from .asset_mgr_hooks import AssetManagerHooks
 
 if TYPE_CHECKING:
-    from ..emulator import Emulator
-    from ..utils.hookers.hook_addr import AddressHooker
+    from ..core.emulator import Emulator
+    from ..utils.hookers.address import AddressHooker
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ class HooksInitializer:
         # self.resolver = TLSSymbolResolver(emu, self._emu.tls_state)
 
         for clz in SYM_HOOK_CLASSES:
-            clz(emu) # system classes
+            clz() # system classes
 
         self._initialize()
 

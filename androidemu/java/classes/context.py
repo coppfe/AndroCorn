@@ -1,6 +1,6 @@
-from..java_class_def import JavaClassDef
-from..java_field_def import JavaFieldDef
-from..java_method_def import java_method_def,JavaMethodDef
+from..class_def import JavaClassDef
+from..field_def import JavaFieldDef
+from..method_def import java_method_def,JavaMethodDef
 from .package_manager import *
 from .asset_manager import *
 from .share_preference import *

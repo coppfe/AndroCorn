@@ -1,5 +1,5 @@
-from ..java_class_def import JavaClassDef
-from ..java_field_def import JavaFieldDef
+from ..class_def import JavaClassDef
+from ..field_def import JavaFieldDef
 
 
 class Executable(metaclass=JavaClassDef,

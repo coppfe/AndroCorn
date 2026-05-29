@@ -1,5 +1,5 @@
 ### Java Class Loader
-::: androidemu.java.java_classloader.JavaClassLoader
+::: androidemu.java.classloader.JavaClassLoader
     options:
       filters: ["!^_"]
       show_root_heading: false

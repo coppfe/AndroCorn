@@ -3,8 +3,8 @@ import os.path
 import unittest
 import time
 
-from androidemu.emulator import Emulator
-from androidemu.utils.memory import memory_helpers
+from androidemu.core.emulator import Emulator
+from androidemu.utils.memory import helpers
 from androidemu.const import emu_const
 from unicorn import *
 from unicorn.arm_const import *

@@ -14,7 +14,7 @@ from androidemu.emulator import Emulator
 from androidemu.java.java_class_def import JavaClassDef
 from androidemu.java.java_method_def import java_method_def
 from androidemu.java.classes.array import ByteArray
-from androidemu.java.jni_ref import jobject
+from androidemu.java.jni.reference import jobject
 from androidemu.java.classes.list import List
 
 class com_ss_sys_ces_a(metaclass=JavaClassDef, jvm_name='com/ss/sys/ces/a'):

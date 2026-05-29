@@ -8,24 +8,33 @@ from unicorn.arm64_const import *
 
 from ..const import emu_const
 
+from ..types import ptr_t
+
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from ..emulator import Emulator
+    from unicorn import Uc
+    from ..core.emulator import Emulator
 
 class Hooker:
     """
     Utility class to create a bridge between ARM and Python.
     """
-    def __init__(self, emu: 'Emulator', base_addr: int, size: int):
-        self._emu: 'Emulator' = emu
-        arch = emu.arch
+    def __init__(self, emu: 'Emulator', mu: 'Uc', base_addr: int, size: int):
+        
+        self._emu = emu
+        self._mu = mu
+        self._ptr_size = ptr_t.size
+
         self._size = size
         self._current_id = 0xFF00
+
         self._hooks = dict()
         self._addr_to_hook = dict()
-        _hook_start = base_addr + emu.ptr_size
+
+        _hook_start = base_addr + self._ptr_size
         self._hook_current = _hook_start
-        self._emu.mu.hook_add(UC_HOOK_CODE, self._hook, None, _hook_start, _hook_start + size)
+
+        self._mu.hook_add(UC_HOOK_CODE, self._hook, None, _hook_start, _hook_start + size)
 
     def _get_next_id(self):
         idx = self._current_id
@@ -44,19 +53,20 @@ class Hooker:
         hook_id = self._get_next_id()
         self._hooks[hook_id] = func
         #the the hook_id to header
-        self._emu.mu.mem_write(self._hook_current, int(hook_id).to_bytes(4, byteorder='little', signed=False))
+        self._mu.mem_write(self._hook_current, int(hook_id).to_bytes(4, byteorder='little', signed=False))
         self._hook_current+=4
         
         hook_addr = self._hook_current
         self._addr_to_hook[hook_addr] = func
-        if (self._emu.arch == emu_const.ARCH_ARM32):
+        if (self._mu._arch == emu_const.ARCH_ARM32):
             # Create the ARM assembly code.
             # 注意，这里不要改sp，因为后面hook code会靠sp来定位参数
             # Write assembly code to the emulator.
-            self._emu.mu.mem_write(self._hook_current, b"\x1E\xFF\x2F\xE1")  #bx lr
+
+            self._mu.mem_write(self._hook_current, b"\x1E\xFF\x2F\xE1")  #bx lr
             self._hook_current += 4
         else:
-            self._emu.mu.mem_write(self._hook_current, b"\xC0\x03\x5F\xD6")  #ret
+            self._mu.mem_write(self._hook_current, b"\xC0\x03\x5F\xD6")  #ret
             self._hook_current += 4
         return hook_addr
 
@@ -66,8 +76,6 @@ class Hooker:
 
         Use when you have a lot of functions.        
         """
-        if not isinstance(table, dict):
-            raise ValueError("Expected a dictionary for the function table.")
 
         index_max = int(max(table, key=int)) + 1
         # First, we write every function and store its result address.
@@ -79,17 +87,17 @@ class Hooker:
         # Then we write the function table.
         table_bytes = b""
         table_address = self._hook_current
-        ptr_size = self._emu.ptr_size
+        ptr_size = self._ptr_size
         for index in range(0, index_max):
             address = hook_map[index] if index in hook_map else 0
             table_bytes += int(address).to_bytes(ptr_size, byteorder='little')  # Write each function pointer into the pointer table.
 
-        self._emu.mu.mem_write(table_address, table_bytes)
+        self._mu.mem_write(table_address, table_bytes)
         self._hook_current += len(table_bytes)
 
         # Then we write the a pointer to the table.
         ptr_address = self._hook_current
-        self._emu.mu.mem_write(ptr_address, table_address.to_bytes(ptr_size, byteorder='little'))
+        self._mu.mem_write(ptr_address, table_address.to_bytes(ptr_size, byteorder='little'))
         self._hook_current += ptr_size
         return ptr_address, table_address
 
@@ -103,4 +111,3 @@ class Hooker:
             traceback.print_exc()
             logging.exception("catch error on _hook")
             os._exit(-1)
-            raise

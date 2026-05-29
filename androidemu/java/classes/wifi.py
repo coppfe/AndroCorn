@@ -1,12 +1,12 @@
-from ..java_class_def import JavaClassDef
-from ..java_field_def import JavaFieldDef
-from ..java_method_def import java_method_def,JavaMethodDef
+from ..class_def import JavaClassDef
+from ..field_def import JavaFieldDef
+from ..method_def import java_method_def,JavaMethodDef
 from ..classes.list import List
 from ..classes.string import String
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from ...emulator import Emulator
+    from ...core.emulator import Emulator
 
 class WifiInfo(metaclass=JavaClassDef, jvm_name='android/net/wifi/WifiInfo'):
 

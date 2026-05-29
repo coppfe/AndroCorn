@@ -1,15 +1,17 @@
 import os
 import logging
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from ..const.linux import *
 
 from ..utils import misc_utils
 
 if TYPE_CHECKING:
-    from ..emulator import Emulator
-    from ..utils.generators.vfs_content import ContentGenerator
+    from unicorn import Uc
+
+    from ..core.process.pcb import ProcessControlBlock
+    from ..kernel.dev.content import ContentGenerator
 
 logging.getLogger(__name__)
 
@@ -17,8 +19,8 @@ class VirtualFile:
     """
     Provider with real (or virtual) file (descriptor)
     """
-    def __init__(self, emulator: 'Emulator', name, host_fd, name_in_system, is_virtual=False):
-        self.__emulator: 'Emulator' = emulator
+    def __init__(self, mu: 'Uc', name, host_fd, name_in_system, is_virtual=False, content_generator: Optional['ContentGenerator'] = None):
+        self._mu = mu
 
         self.offset: int = 0
         self.ref_count = 1 
@@ -33,14 +35,16 @@ class VirtualFile:
         self.__buffer = bytearray()
 
         if is_virtual:
-            self.__content_generator: 'ContentGenerator' = self.__emulator.content_generator
+            if content_generator is None:
+                raise RuntimeError("ContentGenerator cannot be None if file is virtual.")
+            self._content_generator: 'ContentGenerator' = content_generator
     
     @staticmethod
-    def open(emulator: 'Emulator', filename: str, file_path: str, flags: int,  is_virtual: bool = False) -> int:
+    def open(pcb: 'ProcessControlBlock', filename: str, file_path: str, flags: int,  is_virtual: bool = False) -> int:
         """
         Open real or virtual file
 
-        :param emulator: The emulator
+        :param pcb: The ProcessControlBlock
         :param filename: The name of the file
         :param file_path: The path to the file
         :param flags: The flags
@@ -49,7 +53,7 @@ class VirtualFile:
         :return: The file descriptor
         """
         if is_virtual:
-            guest_fd = emulator.pcb.virtual_files.add_virtual_fd(filename, file_path)
+            guest_fd = pcb.virtual_files.add_virtual_fd(filename, file_path)
             logging.debug("open virtual [%s] GuestFD:%d", filename, guest_fd)
             return guest_fd
         
@@ -69,7 +73,7 @@ class VirtualFile:
         except FileNotFoundError:
             return -ENOENT
         
-        guest_fd = emulator.pcb.virtual_files.add_fd(filename, file_path, host_fd)
+        guest_fd = pcb.virtual_files.add_fd(filename, file_path, host_fd)
         logging.debug("open [%s] HostFD:%d -> GuestFD:%d", filename, host_fd, guest_fd)
 
         return guest_fd
@@ -89,7 +93,7 @@ class VirtualFile:
                     data = self.__buffer[self.offset : self.offset + count]
                     self.offset += len(data)
                 else:
-                    content = self.__content_generator.generate(
+                    content = self._content_generator.generate(
                         self.name, fd=self.descriptor, count=count
                     )
                     data = content.encode('utf-8') if isinstance(content, str) else (content if isinstance(content, bytes) else b'')
@@ -110,7 +114,7 @@ class VirtualFile:
 
             actual_size = len(data)
             if actual_size > 0:
-                self.__emulator.mu.mem_write(buf_addr, data)
+                self._mu.mem_write(buf_addr, data)
 
             return actual_size
 
@@ -135,7 +139,6 @@ class VirtualFile:
             
             self.__buffer[self.offset:end_pos] = data
             self.offset += len(data)
-            
             logging.debug("VFS: Virtual write to %s, size %d, new total size %d", 
                           self.name, len(data), len(self.__buffer))
             return len(data)
@@ -173,21 +176,18 @@ class VirtualFile:
         return False
 
     def seek(self, offset: int, whence: int) -> int:
-        """
-        Seek the file
 
-        :param offset: The offset
-        :param whence: The whence
-
-        :return: The new offset
-        """
         if whence == 0: # SEEK_SET
             self.offset = offset
         elif whence == 1: # SEEK_CUR
             self.offset += offset
         elif whence == 2: # SEEK_END
-            size = len(self.__buffer)
+            size = self.get_size()
             self.offset = size + offset
+            
+        if self.offset < 0:
+            self.offset = 0 
+            
         return self.offset
     
     def get_size(self) -> int:

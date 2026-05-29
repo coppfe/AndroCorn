@@ -3,15 +3,15 @@ import logging
 from typing import TYPE_CHECKING
 
 
-from .helpers.native_method import native_method
-from ..utils.memory import memory_helpers
-from ..java.jni_env import JNIEnv
+from .helpers.method import native_method
+from ..utils.memory import helpers
+from ..java.jni.main import JNIEnv
 from unicorn import *
 
 if TYPE_CHECKING:
     from ..utils.hooker import Hooker
     from ..internal.linker import AndroidLinker
-    from ..emulator import Emulator
+    from ..core.emulator import Emulator
     
 
 logger = logging.getLogger(__name__)
@@ -38,7 +38,7 @@ class AssetManagerHooks:
 
 
     @native_method
-    def __AAssetManager_fromJava(self, uc, env_ptr, jobj_mgr_idx):
+    def __AAssetManager_fromJava(self, emu, env_ptr, jobj_mgr_idx):
         env_obj = self._emu.java_vm.jni_env
         assert env_obj.address_ptr == env_ptr, "ERROR input env_ptr != main_thread ptr, impossible for single thread program!!!"
 
@@ -53,9 +53,9 @@ class AssetManagerHooks:
     #
 
     @native_method
-    def __AAssetManager_open(self, uc, amgr_ptr, filename_ptr, mode):
+    def __AAssetManager_open(self, emu, amgr_ptr, filename_ptr, mode):
 
-        filename = memory_helpers.read_utf8(uc, filename_ptr)
+        filename = helpers.read_utf8(emu.mu, filename_ptr)
         zipf = self.__local_ptr_map[amgr_ptr]
         real_filename = "assets/%s"%filename
         zf = zipf.open(real_filename, mode = 'r')
@@ -67,7 +67,7 @@ class AssetManagerHooks:
     #
 
     @native_method
-    def __AAsset_close(self, uc, asset_ptr):
+    def __AAsset_close(self, emu, asset_ptr):
         asset_sa = self.__local_asset_ptr_map.pop(asset_ptr)
         asset_obj = asset_sa[0]
         asset_obj.close()
@@ -75,7 +75,7 @@ class AssetManagerHooks:
 
 
     @native_method
-    def __AAsset_read(self, uc, asset_ptr, buf_ptr, count):
+    def __AAsset_read(self, emu, asset_ptr, buf_ptr, count):
         asset_sa = self.__local_asset_ptr_map[asset_ptr]
         asset_obj = asset_sa[0]
         b = asset_obj.read(count)
@@ -84,13 +84,13 @@ class AssetManagerHooks:
             return -1
         #
         n = len(b)
-        uc.mem_write(buf_ptr, b)
+        emu.mu.mem_write(buf_ptr, b)
 
         return n
     #
 
     @native_method
-    def __AAsset_getLength(self, uc, asset_ptr):
+    def __AAsset_getLength(self, emu, asset_ptr):
         asset_sa = self.__local_asset_ptr_map[asset_ptr]
         asset_filename = asset_sa[1]
         zipf = asset_sa[2]

@@ -1,5 +1,5 @@
 import unittest
-from androidemu.emulator import Emulator
+from androidemu.core.emulator import Emulator
 from androidemu.const import emu_const
 
 class TestLibcPrintfCall(unittest.TestCase):

@@ -2,8 +2,11 @@ import logging
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
+from unicorn.unicorn import Uc
+from ...types import ptr_t
+
 if TYPE_CHECKING:
-    from ...emulator import Emulator
+    from ...types import ptr_t
     from .tls_bionic import BionicTLS
 
 logger = logging.getLogger(__name__)
@@ -12,11 +15,10 @@ class DTVBuilder(ABC):
 
     MAX_MODULES = 256 
     
-    def __init__(self, emu: 'Emulator', state):
-        self.emu = emu
-        self.mu = emu.mu
+    def __init__(self, mu: 'Uc', state: 'BionicTLS'):
+        self.mu = mu
         self.state: 'BionicTLS' = state
-        self.ptr_sz = emu.ptr_size
+        self.ptr_sz = ptr_t.size
         
         self.base = 0
         self.dtv_generation = 0

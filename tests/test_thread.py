@@ -1,8 +1,10 @@
 import logging
 import unittest
 from androidemu.const import emu_const
-from androidemu.emulator import Emulator
-from androidemu.utils.hookers.hook_addr import AddressHooker
+from androidemu.core.emulator import Emulator
+from androidemu.utils.hookers.address import AddressHooker
+
+# logging.basicConfig(level=logging.DEBUG)
 
 class TestThread(unittest.TestCase):
     def __init__(self, methodName):
@@ -22,7 +24,7 @@ class TestThread(unittest.TestCase):
         return False
     #
 
-    def __pthread_create32_after_hook(self, emu, r0, r1):
+    def __pthread_create32_after_hook(self, emu: 'Emulator', r0, *shit):
         logging.warning("pthread_create return 0x%08X"%(r0,))
         self.__is32_after_call = True
         self.assertEqual(r0, 0)
@@ -56,7 +58,7 @@ class TestThread(unittest.TestCase):
         return False
     #
 
-    def __pthread_create64_after_hook(self, emu, r0, r1):
+    def __pthread_create64_after_hook(self, emu, r0, *shit):
         logging.warning("pthread_create 64 return 0x%08X"%(r0,))
         self.__is64_after_call = True
         self.assertEqual(r0, 0)
@@ -64,6 +66,7 @@ class TestThread(unittest.TestCase):
     #
 
     def test_thread64(self):
+        logging.warning("testing ARCH ARM64")
         emulator = Emulator(
             vfs_root="vfs",
             arch=emu_const.ARCH_ARM64,

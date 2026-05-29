@@ -2,8 +2,8 @@ import posixpath
 import os.path
 import unittest
 
-from androidemu.emulator import Emulator
-from androidemu.utils.memory import memory_helpers
+from androidemu.core.emulator import Emulator
+from androidemu.utils.memory import helpers
 from androidemu.const import emu_const
 
 from unicorn import *
@@ -33,7 +33,7 @@ class TestGetSign(unittest.TestCase):
             
             emulator.call_symbol(libcm, '__system_property_get', name_ptr, val_ptr)
 
-            result_bytes = memory_helpers.read_utf8(emulator.mu, val_ptr)
+            result_bytes = helpers.read_utf8(emulator.mu, val_ptr)
             return result_bytes
         
         finally:
@@ -56,7 +56,7 @@ class TestGetSign(unittest.TestCase):
             
             emulator.call_symbol(libcm, '__system_property_get', name_ptr, val_ptr)
 
-            result_bytes = memory_helpers.read_utf8(emulator.mu, val_ptr)
+            result_bytes = helpers.read_utf8(emulator.mu, val_ptr)
 
             sysconf = emulator.call_symbol(libcm, 'sysconf', 100)
             print(f"[*] sysconf: {sysconf}")

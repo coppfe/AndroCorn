@@ -1,8 +1,8 @@
 import unittest
 import logging
-from androidemu.emulator import Emulator
+from androidemu.core.emulator import Emulator
 from androidemu.const import emu_const
-
+logging.basicConfig(level=logging.DEBUG)
 class TestBionicPerror(unittest.TestCase):
 
     def setUp(self):

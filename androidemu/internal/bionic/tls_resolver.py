@@ -1,8 +1,10 @@
 from typing import TYPE_CHECKING
-from ...native.helpers.native_method import native_method
+from ...native.helpers.method import native_method
+
+from ...types import ptr_t
 
 if TYPE_CHECKING:
-    from ...emulator import Emulator
+    from ...core.emulator import Emulator
     from .tls_bionic import BionicTLS
 
 # not used
@@ -11,11 +13,12 @@ class TLSSymbolResolver:
     def __init__(self, emu: 'Emulator', state: 'BionicTLS'):
         self.emu = emu
         self.mu = emu.mu
-        self.ptr_sz = emu.ptr_size
+        self.ptr_sz = ptr_t.size
         self.state = state
 
+    # not tested
     @native_method
-    def tls_get_addr(self, tls_index_ptr: int) -> int:
+    def tls_get_addr(self, uc, tls_index_ptr: int) -> int:
         """
         tls_index_ptr -> struct { module_id, offset }
         """

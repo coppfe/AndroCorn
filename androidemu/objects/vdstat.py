@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
-    from ..utils.state.time_manager import TimeManager
+    from ..core.state.time_manager import TimeManager
 
 class VirtualDeviceStat:
     def __init__(self, 

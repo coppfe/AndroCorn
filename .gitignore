@@ -3,13 +3,17 @@ __pycache__/
 *$py.class
 *.egg-info
 
-venv/
+.python-version
+
+.venv/
 env/
 .env
 
 build
+site
 
 .vscode/
+.zed/
 
 *.log
 
@@ -17,6 +21,8 @@ notes.txt
 test.py
 keystone_in/
 androidemu/highlevel/host
+vfs/data/*
+
 
 tests/bin/*
 tests/bin64/

@@ -15,6 +15,8 @@
   </a>
   <a href="https://github.com/coppfe/AndroCorn/network/members">
     <img src="https://img.shields.io/github/forks/coppfe/AndroCorn?style=for-the-badge&color=lightgrey" alt="Forks">
+  <a href="https://coppfe.github.io/AndroCorn/">
+    <img src="https://img.shields.io/badge/docs-GitHub%20Pages-green?style=for-the-badge&logo=github" alt="Docs">
   </a>
 </p>
 
@@ -28,6 +30,8 @@
 Key Features:
 
 * Architecture Support: Full ARM32 (v7-a) and ARM64 (v8-a) execution.
+
+* Auto-Init from build.prop if you don't have `__properties__` file
 
 * Advanced Memory Introspection: Enabling bypasses for self-integrity checks and inline-hook detection.
 
@@ -45,7 +49,7 @@ Key Features:
 
 * JNI & Java Bridge: Seamlessly interact with native code using a JNI layer and Java-like classes implemented entirely in Python.
 
-* Security & Life-cycle: Experimental fork() and execve() support, primitive Copy-On-Write (CoW) memory optimization, and Yama ptrace scope integration.
+* Security & Life-cycle: Experimental fork() and execve() support, memory optimizations.
 
 * Reverse Engineering Ready:
 

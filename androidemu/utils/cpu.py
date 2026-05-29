@@ -13,7 +13,6 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from unicorn import Uc
-    from ..emulator import Emulator
 
 class CPU_Utils:
 
@@ -43,8 +42,8 @@ class CPU_Utils:
         ARM32_CNTKCTL: (False, 15, 0, 0, 14, 1), # CNTKCTL (MRC)
     }
 
-    def __init__(self, emu: 'Emulator'):
-        self.mu: 'Uc' = emu.mu
+    def __init__(self, mu: 'Uc'):
+        self._mu = mu
         pass
 
     def _enable_vfp32(self):
@@ -69,13 +68,16 @@ class CPU_Utils:
         mem_size = PAGE_SIZE
         code_bytes = bytes.fromhex(code)
 
+        old_sp = self._mu.reg_read(UC_ARM_REG_SP)
+
         try:
-            self.mu.mem_write(address, code_bytes)
-            self.mu.reg_write(UC_ARM_REG_SP, address + mem_size)
+            self._mu.mem_write(address, code_bytes)
+            self._mu.reg_write(UC_ARM_REG_SP, address + mem_size)
             
-            self.mu.emu_start(address | 1, address + len(code_bytes))
+            self._mu.emu_start(address | 1, address + len(code_bytes))
         finally:
-            self.mu.mem_write(address, b'\x00' * len(code_bytes))
+            self._mu.mem_write(address, b'\x00' * len(code_bytes))
+            self._mu.reg_write(UC_ARM_REG_SP, old_sp)
         
     #arm64
     '''
@@ -87,9 +89,9 @@ class CPU_Utils:
     def _enable_vfp64(self):
         #arm64 enable vfp
         x = 0
-        x = self.mu.reg_read(UC_ARM64_REG_CPACR_EL1)
+        x = self._mu.reg_read(UC_ARM64_REG_CPACR_EL1)
         x |= 0x300000; # set FPEN bit
-        self.mu.reg_write(UC_ARM64_REG_CPACR_EL1, x)
+        self._mu.reg_write(UC_ARM64_REG_CPACR_EL1, x)
 
     def __encode_64(self, reg_id, is_write: bool):
         params = self.REGS_64.get(reg_id)
@@ -134,41 +136,41 @@ class CPU_Utils:
     def __emulate(self, code_bytes: bytes, is_64: bool):
         address = ASM_CODE
         try:
-            self.mu.mem_write(address, code_bytes)
+            self._mu.mem_write(address, code_bytes)
             
             stop_addr = address + 0x10 
-            self.mu.reg_write(UC_ARM64_REG_X30 if is_64 else UC_ARM_REG_LR, stop_addr)
+            self._mu.reg_write(UC_ARM64_REG_X30 if is_64 else UC_ARM_REG_LR, stop_addr)
 
-            self.mu.emu_start(address, address + 4, count=1)
+            self._mu.emu_start(address, address + 4, count=1)
         finally:
-            self.mu.mem_write(address, b'\x00' * len(code_bytes))
+            self._mu.mem_write(address, b'\x00' * len(code_bytes))
 
     def _read_sys_reg(self, register_id: int):
-        is_64 = self.mu._arch == UC_ARCH_ARM64
+        is_64 = self._mu._arch == UC_ARCH_ARM64
         code_bytes, is_res_64 = self.__encode_64(register_id, False) if is_64 else \
                                 self.__encode_32(register_id, False)
 
         self.__emulate(code_bytes, is_64)
 
         if is_64:
-            return self.mu.reg_read(UC_ARM64_REG_X0)
+            return self._mu.reg_read(UC_ARM64_REG_X0)
         
-        res_low = self.mu.reg_read(UC_ARM_REG_R0)
+        res_low = self._mu.reg_read(UC_ARM_REG_R0)
         if is_res_64:
-            res_high = self.mu.reg_read(UC_ARM_REG_R1)
+            res_high = self._mu.reg_read(UC_ARM_REG_R1)
             return (res_high << 32) | res_low
         return res_low
 
     def _write_sys_reg(self, register_id: int, value: int):
-        is_64 = self.mu._arch == UC_ARCH_ARM64
+        is_64 = self._mu._arch == UC_ARCH_ARM64
         code_bytes, is_val_64 = self.__encode_64(register_id, True) if is_64 else \
                                 self.__encode_32(register_id, True)
 
         if is_64:
-            self.mu.reg_write(UC_ARM64_REG_X0, value)
+            self._mu.reg_write(UC_ARM64_REG_X0, value)
         else:
-            self.mu.reg_write(UC_ARM_REG_R0, value & 0xFFFFFFFF)
+            self._mu.reg_write(UC_ARM_REG_R0, value & 0xFFFFFFFF)
             if is_val_64:
-                self.mu.reg_write(UC_ARM_REG_R1, value >> 32)
+                self._mu.reg_write(UC_ARM_REG_R1, value >> 32)
 
         self.__emulate(code_bytes, is_64)

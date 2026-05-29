@@ -2,61 +2,53 @@ import unittest
 import time
 import logging
 
-from androidemu.emulator import Emulator
-from androidemu.java.java_class_def import JavaClassDef
-from androidemu.java.java_method_def import java_method_def
+from androidemu.core.emulator import Emulator
+from androidemu.java.class_def import JavaClassDef
+from androidemu.java.method_def import java_method_def
 from androidemu.java.classes.array import ByteArray
-from androidemu.java.jni_ref import jobject
+from androidemu.java.jni.reference import jobject
 from androidemu.java.classes.list import List
 
 from unicorn import *
 from unicorn.arm_const import *
 
 class com_ss_sys_ces_a(metaclass=JavaClassDef, jvm_name='com/ss/sys/ces/a'):
-    @staticmethod
-    @java_method_def(name='meta', args_list=["jint", "jobject", "jobject"], signature='(ILandroid/content/Context;Ljava/lang/Object;)Ljava/lang/Object;', native=True)
+    @java_method_def(name='meta', args_list=["jint", "jobject", "jobject"], signature='(ILandroid/content/Context;Ljava/lang/Object;)Ljava/lang/Object;', native=False)
     def meta(self, *args): pass
     
-    @staticmethod
-    @java_method_def(name='leviathan', args_list=["jint", "jint", "jobject"], signature='(II[B)[B', native=True)
+    @java_method_def(name='leviathan', args_list=["jint", "jint", "jobject"], signature='(II[B)[B', native=False)
     def leviathan(self, *args): pass
 
-    @staticmethod
-    @java_method_def(name='decode', args_list=["jint", "jobject"], signature='(I[B)[B', native=True)
+    @java_method_def(name='decode', args_list=["jint", "jobject"], signature='(I[B)[B', native=False)
     def decode(self, *args): pass
     
-    @staticmethod
-    @java_method_def(name='encode', args_list=["jobject"], signature='([B)[B', native=True)
+    @java_method_def(name='encode', args_list=["jobject"], signature='([B)[B', native=False)
     def encode(self, *args): pass
 
-    @staticmethod
     @java_method_def(name='njss', args_list=["jint", "jobject"], signature='(ILjava/lang/Object;)Ljava/lang/Object;', native=False)
     def njss(emu, i1, s):
-        # just stub it idk what this shit want. if you want to check reverse older versions of tiktok (overland) like <20.x.x
+        # just stub it idk what this shit want. if you want to check reverse older versions of tiktok (overland aka EU) like <20.x.x
         if i1 == 136:
             return ByteArray([])
         elif i1 == 235:
             pass
 
-    @staticmethod
     @java_method_def(name='Bill', args_list=[], signature='()V', native=False)
     def Bill(*args): pass
 
-    @staticmethod
     @java_method_def(name='Francies', args_list=[], signature='()V', native=False)
     def Francies(*args): pass
 
-    @staticmethod
     @java_method_def(name='Louis', args_list=[], signature='()V', native=False)
     def Louis(*args): pass
     
-    @staticmethod
     @java_method_def(name='Zeoy', args_list=[], signature='()V', native=False)
     def Zeoy(*args): pass
 
     # hello from left 4 dead?
 
 class java_lang_Thread(metaclass=JavaClassDef, jvm_name='java/lang/Thread'):
+    
     @java_method_def(name="currentThread", signature='()Ljava/lang/Thread;', native=False)
     def currentThread(self):
         return java_lang_Thread()
@@ -64,11 +56,13 @@ class java_lang_Thread(metaclass=JavaClassDef, jvm_name='java/lang/Thread'):
     @java_method_def(name="getStackTrace", signature='()[Ljava/lang/StackTraceElement;', native=False)
     def getStackTrace(self, s):
         return List([])
-    
-def malloc_handler(emu, size):
-    print(f"[*] Malloc: {size}")
 
 def call_leviathan(emulator: Emulator, i1, timestamp, payload_bytes):
+    # actually u can use code style like this one:
+    # clazz: 'com_ss_sys_ces_a' = emulator.java_classloader.find_class_by_name("com/ss/sys/ces/a")
+    # print(clazz.leviathan(emulator, ...))
+    # but... just left it here k i don't remember why i hardcoded this
+
     jni_env = emulator.java_vm.jni_env
     
     clazz = emulator.java_classloader.find_class_by_name("com/ss/sys/ces/a")
@@ -100,7 +94,6 @@ def call_leviathan(emulator: Emulator, i1, timestamp, payload_bytes):
         timestamp,
         payload_ref
     )
-    
     if result_ptr:
         res_obj = jni_env.get_reference(result_ptr)
         return res_obj.value
@@ -170,12 +163,24 @@ if __name__ == '__main__':
 
     pr = cProfile.Profile()
     pr.enable()
+    
     unittest.main(exit=False)
+    
     pr.disable()
     s = io.StringIO()
-    ps = pstats.Stats(pr, stream=s).sort_stats('cumulative')
+    
+    ps = pstats.Stats(pr, stream=s)
+    
+    threshold = 0.01
+    ps.stats = {
+        key: value 
+        for key, value in ps.stats.items() 
+        if value[2] >= threshold or value[3] >= threshold
+    }
+    
+    ps.sort_stats('cumulative').print_stats()
+    
     print(s.getvalue())
-
 # Execve hit log level changed to debug
 
 # Fork Task is TOOOOOOOOOOOOOOOOOOO SLOW
