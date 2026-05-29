@@ -427,7 +427,7 @@
   <span class="md-ellipsis">
     
   
-    Hooks
+    Bypass Checks
   
 
     
@@ -440,6 +440,89 @@
         
         <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_3_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_5_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Bypass Checks
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../Examples/Bypass%20Checks/Self-Scan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Self Scan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_4" id="__nav_5_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hooks
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_4">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -528,10 +611,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_5" >
         
           
-          <label class="md-nav__link" for="__nav_5_4" id="__nav_5_4_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_5_5" id="__nav_5_5_label" tabindex="0">
             
   
   
@@ -549,8 +632,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_4">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_5">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -865,7 +948,7 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#androidemu.java.java_classloader.JavaClassLoader.add_class" class="md-nav__link">
+  <a href="#androidemu.java.classloader.JavaClassLoader.add_class" class="md-nav__link">
     <span class="md-ellipsis">
       
         add_class
@@ -876,7 +959,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#androidemu.java.java_classloader.JavaClassLoader.find_class_by_id" class="md-nav__link">
+  <a href="#androidemu.java.classloader.JavaClassLoader.find_class_by_id" class="md-nav__link">
     <span class="md-ellipsis">
       
         find_class_by_id
@@ -887,7 +970,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#androidemu.java.java_classloader.JavaClassLoader.find_class_by_name" class="md-nav__link">
+  <a href="#androidemu.java.classloader.JavaClassLoader.find_class_by_name" class="md-nav__link">
     <span class="md-ellipsis">
       
         find_class_by_name
@@ -1205,7 +1288,7 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#androidemu.java.java_classloader.JavaClassLoader.add_class" class="md-nav__link">
+  <a href="#androidemu.java.classloader.JavaClassLoader.add_class" class="md-nav__link">
     <span class="md-ellipsis">
       
         add_class
@@ -1216,7 +1299,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#androidemu.java.java_classloader.JavaClassLoader.find_class_by_id" class="md-nav__link">
+  <a href="#androidemu.java.classloader.JavaClassLoader.find_class_by_id" class="md-nav__link">
     <span class="md-ellipsis">
       
         find_class_by_id
@@ -1227,7 +1310,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#androidemu.java.java_classloader.JavaClassLoader.find_class_by_name" class="md-nav__link">
+  <a href="#androidemu.java.classloader.JavaClassLoader.find_class_by_name" class="md-nav__link">
     <span class="md-ellipsis">
       
         find_class_by_name
@@ -1281,14 +1364,8 @@
 
 
               <details class="mkdocstrings-source">
-                <summary>Source code in <code>androidemu/java/java_classloader.py</code></summary>
-                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-4"> 4</a></span>
-<span class="normal"><a href="#__codelineno-0-5"> 5</a></span>
-<span class="normal"><a href="#__codelineno-0-6"> 6</a></span>
-<span class="normal"><a href="#__codelineno-0-7"> 7</a></span>
-<span class="normal"><a href="#__codelineno-0-8"> 8</a></span>
-<span class="normal"><a href="#__codelineno-0-9"> 9</a></span>
-<span class="normal"><a href="#__codelineno-0-10">10</a></span>
+                <summary>Source code in <code>androidemu/java/classloader.py</code></summary>
+                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-10">10</a></span>
 <span class="normal"><a href="#__codelineno-0-11">11</a></span>
 <span class="normal"><a href="#__codelineno-0-12">12</a></span>
 <span class="normal"><a href="#__codelineno-0-13">13</a></span>
@@ -1330,55 +1407,61 @@
 <span class="normal"><a href="#__codelineno-0-49">49</a></span>
 <span class="normal"><a href="#__codelineno-0-50">50</a></span>
 <span class="normal"><a href="#__codelineno-0-51">51</a></span>
-<span class="normal"><a href="#__codelineno-0-52">52</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-4" name="__codelineno-0-4"></a><span class="k">class</span><span class="w"> </span><span class="nc">JavaClassLoader</span><span class="p">(</span><span class="n">metaclass</span><span class="o">=</span><span class="n">JavaClassDef</span><span class="p">,</span> <span class="n">jvm_name</span><span class="o">=</span><span class="s1">&#39;java/lang/ClassLoader&#39;</span><span class="p">):</span>
-<a id="__codelineno-0-5" name="__codelineno-0-5"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<a id="__codelineno-0-6" name="__codelineno-0-6"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">class_by_id</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
-<a id="__codelineno-0-7" name="__codelineno-0-7"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">class_by_name</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
-<a id="__codelineno-0-8" name="__codelineno-0-8"></a>
-<a id="__codelineno-0-9" name="__codelineno-0-9"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">add_class</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">clazz</span><span class="p">:</span> <span class="n">JavaClassDef</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-10" name="__codelineno-0-10"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
-<a id="__codelineno-0-11" name="__codelineno-0-11"></a><span class="sd">        Add a PyClass to the classloader</span>
-<a id="__codelineno-0-12" name="__codelineno-0-12"></a>
-<a id="__codelineno-0-13" name="__codelineno-0-13"></a><span class="sd">        :param clazz: PyClass</span>
-<a id="__codelineno-0-14" name="__codelineno-0-14"></a><span class="sd">        &quot;&quot;&quot;</span>
-<a id="__codelineno-0-15" name="__codelineno-0-15"></a>
-<a id="__codelineno-0-16" name="__codelineno-0-16"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">clazz</span><span class="p">,</span> <span class="n">JavaClassDef</span><span class="p">):</span>
-<a id="__codelineno-0-17" name="__codelineno-0-17"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Expected a JavaClassDef.&#39;</span><span class="p">)</span>
+<span class="normal"><a href="#__codelineno-0-52">52</a></span>
+<span class="normal"><a href="#__codelineno-0-53">53</a></span>
+<span class="normal"><a href="#__codelineno-0-54">54</a></span>
+<span class="normal"><a href="#__codelineno-0-55">55</a></span>
+<span class="normal"><a href="#__codelineno-0-56">56</a></span>
+<span class="normal"><a href="#__codelineno-0-57">57</a></span>
+<span class="normal"><a href="#__codelineno-0-58">58</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-10" name="__codelineno-0-10"></a><span class="k">class</span><span class="w"> </span><span class="nc">JavaClassLoader</span><span class="p">(</span><span class="n">metaclass</span><span class="o">=</span><span class="n">JavaClassDef</span><span class="p">,</span> <span class="n">jvm_name</span><span class="o">=</span><span class="s1">&#39;java/lang/ClassLoader&#39;</span><span class="p">):</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">class_by_id</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">class_by_name</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14"></a>
+<a id="__codelineno-0-15" name="__codelineno-0-15"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">add_class</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">clazz</span><span class="p">:</span> <span class="n">JavaClassDef</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-16" name="__codelineno-0-16"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<a id="__codelineno-0-17" name="__codelineno-0-17"></a><span class="sd">        Add a PyClass to the classloader</span>
 <a id="__codelineno-0-18" name="__codelineno-0-18"></a>
-<a id="__codelineno-0-19" name="__codelineno-0-19"></a>        <span class="k">if</span> <span class="n">clazz</span><span class="o">.</span><span class="n">jvm_name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">class_by_name</span><span class="p">:</span>
-<a id="__codelineno-0-20" name="__codelineno-0-20"></a>            <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="s1">&#39;The class </span><span class="se">\&#39;</span><span class="si">%s</span><span class="se">\&#39;</span><span class="s1"> is already registered.&#39;</span> <span class="o">%</span> <span class="n">clazz</span><span class="o">.</span><span class="n">jvm_name</span><span class="p">)</span>
+<a id="__codelineno-0-19" name="__codelineno-0-19"></a><span class="sd">        :param clazz: PyClass</span>
+<a id="__codelineno-0-20" name="__codelineno-0-20"></a><span class="sd">        &quot;&quot;&quot;</span>
 <a id="__codelineno-0-21" name="__codelineno-0-21"></a>
-<a id="__codelineno-0-22" name="__codelineno-0-22"></a>        <span class="k">if</span> <span class="p">(</span><span class="n">clazz</span><span class="o">.</span><span class="n">class_object</span> <span class="o">==</span> <span class="kc">None</span><span class="p">):</span>
-<a id="__codelineno-0-23" name="__codelineno-0-23"></a>            <span class="c1">#FIXME 两个emulaotr add_class是同一个class 实例,会互相影响</span>
-<a id="__codelineno-0-24" name="__codelineno-0-24"></a>            <span class="n">clazz</span><span class="o">.</span><span class="n">class_object</span> <span class="o">=</span> <span class="n">Class</span><span class="p">(</span><span class="n">clazz</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span>
-<a id="__codelineno-0-25" name="__codelineno-0-25"></a>
-<a id="__codelineno-0-26" name="__codelineno-0-26"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">class_by_id</span><span class="p">[</span><span class="n">clazz</span><span class="o">.</span><span class="n">jvm_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">clazz</span>
-<a id="__codelineno-0-27" name="__codelineno-0-27"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">class_by_name</span><span class="p">[</span><span class="n">clazz</span><span class="o">.</span><span class="n">jvm_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">clazz</span>
-<a id="__codelineno-0-28" name="__codelineno-0-28"></a>
-<a id="__codelineno-0-29" name="__codelineno-0-29"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">find_class_by_id</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">jvm_id</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s1">&#39;JavaClassDef&#39;</span><span class="p">:</span>
-<a id="__codelineno-0-30" name="__codelineno-0-30"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
-<a id="__codelineno-0-31" name="__codelineno-0-31"></a><span class="sd">        Find a PyClass by its ID</span>
-<a id="__codelineno-0-32" name="__codelineno-0-32"></a>
-<a id="__codelineno-0-33" name="__codelineno-0-33"></a><span class="sd">        :param jvm_id: ID</span>
-<a id="__codelineno-0-34" name="__codelineno-0-34"></a><span class="sd">        :return: PyClass</span>
-<a id="__codelineno-0-35" name="__codelineno-0-35"></a><span class="sd">        &quot;&quot;&quot;</span>
-<a id="__codelineno-0-36" name="__codelineno-0-36"></a>
-<a id="__codelineno-0-37" name="__codelineno-0-37"></a>        <span class="k">if</span> <span class="n">jvm_id</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">class_by_id</span><span class="p">:</span>
-<a id="__codelineno-0-38" name="__codelineno-0-38"></a>            <span class="k">return</span> <span class="kc">None</span>
-<a id="__codelineno-0-39" name="__codelineno-0-39"></a>
-<a id="__codelineno-0-40" name="__codelineno-0-40"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">class_by_id</span><span class="p">[</span><span class="n">jvm_id</span><span class="p">]</span>
-<a id="__codelineno-0-41" name="__codelineno-0-41"></a>
-<a id="__codelineno-0-42" name="__codelineno-0-42"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">find_class_by_name</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s1">&#39;JavaClassDef&#39;</span><span class="p">:</span>
-<a id="__codelineno-0-43" name="__codelineno-0-43"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
-<a id="__codelineno-0-44" name="__codelineno-0-44"></a><span class="sd">        Find a PyClass by its name</span>
+<a id="__codelineno-0-22" name="__codelineno-0-22"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">clazz</span><span class="p">,</span> <span class="n">JavaClassDef</span><span class="p">):</span>
+<a id="__codelineno-0-23" name="__codelineno-0-23"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Expected a JavaClassDef.&#39;</span><span class="p">)</span>
+<a id="__codelineno-0-24" name="__codelineno-0-24"></a>
+<a id="__codelineno-0-25" name="__codelineno-0-25"></a>        <span class="k">if</span> <span class="n">clazz</span><span class="o">.</span><span class="n">jvm_name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">class_by_name</span><span class="p">:</span>
+<a id="__codelineno-0-26" name="__codelineno-0-26"></a>            <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="s1">&#39;The class </span><span class="se">\&#39;</span><span class="si">%s</span><span class="se">\&#39;</span><span class="s1"> is already registered.&#39;</span> <span class="o">%</span> <span class="n">clazz</span><span class="o">.</span><span class="n">jvm_name</span><span class="p">)</span>
+<a id="__codelineno-0-27" name="__codelineno-0-27"></a>
+<a id="__codelineno-0-28" name="__codelineno-0-28"></a>        <span class="k">if</span> <span class="p">(</span><span class="n">clazz</span><span class="o">.</span><span class="n">class_object</span> <span class="o">==</span> <span class="kc">None</span><span class="p">):</span>
+<a id="__codelineno-0-29" name="__codelineno-0-29"></a>            <span class="c1">#FIXME 两个emulaotr add_class是同一个class 实例,会互相影响</span>
+<a id="__codelineno-0-30" name="__codelineno-0-30"></a>            <span class="n">clazz</span><span class="o">.</span><span class="n">class_object</span> <span class="o">=</span> <span class="n">Class</span><span class="p">(</span><span class="n">clazz</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span>
+<a id="__codelineno-0-31" name="__codelineno-0-31"></a>
+<a id="__codelineno-0-32" name="__codelineno-0-32"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">class_by_id</span><span class="p">[</span><span class="n">clazz</span><span class="o">.</span><span class="n">jvm_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">clazz</span>
+<a id="__codelineno-0-33" name="__codelineno-0-33"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">class_by_name</span><span class="p">[</span><span class="n">clazz</span><span class="o">.</span><span class="n">jvm_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">clazz</span>
+<a id="__codelineno-0-34" name="__codelineno-0-34"></a>
+<a id="__codelineno-0-35" name="__codelineno-0-35"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">find_class_by_id</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">jvm_id</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s1">&#39;JavaClassDef&#39;</span><span class="p">:</span>
+<a id="__codelineno-0-36" name="__codelineno-0-36"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<a id="__codelineno-0-37" name="__codelineno-0-37"></a><span class="sd">        Find a PyClass by its ID</span>
+<a id="__codelineno-0-38" name="__codelineno-0-38"></a>
+<a id="__codelineno-0-39" name="__codelineno-0-39"></a><span class="sd">        :param jvm_id: ID</span>
+<a id="__codelineno-0-40" name="__codelineno-0-40"></a><span class="sd">        :return: PyClass</span>
+<a id="__codelineno-0-41" name="__codelineno-0-41"></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-0-42" name="__codelineno-0-42"></a>
+<a id="__codelineno-0-43" name="__codelineno-0-43"></a>        <span class="k">if</span> <span class="n">jvm_id</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">class_by_id</span><span class="p">:</span>
+<a id="__codelineno-0-44" name="__codelineno-0-44"></a>            <span class="k">return</span> <span class="kc">None</span>
 <a id="__codelineno-0-45" name="__codelineno-0-45"></a>
-<a id="__codelineno-0-46" name="__codelineno-0-46"></a><span class="sd">        :param name: Name</span>
-<a id="__codelineno-0-47" name="__codelineno-0-47"></a><span class="sd">        :return: PyClass</span>
-<a id="__codelineno-0-48" name="__codelineno-0-48"></a><span class="sd">        &quot;&quot;&quot;</span>
-<a id="__codelineno-0-49" name="__codelineno-0-49"></a>        <span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">class_by_name</span><span class="p">:</span>
-<a id="__codelineno-0-50" name="__codelineno-0-50"></a>            <span class="k">return</span> <span class="kc">None</span>
+<a id="__codelineno-0-46" name="__codelineno-0-46"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">class_by_id</span><span class="p">[</span><span class="n">jvm_id</span><span class="p">]</span>
+<a id="__codelineno-0-47" name="__codelineno-0-47"></a>
+<a id="__codelineno-0-48" name="__codelineno-0-48"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">find_class_by_name</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s1">&#39;JavaClassDef&#39;</span><span class="p">:</span>
+<a id="__codelineno-0-49" name="__codelineno-0-49"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<a id="__codelineno-0-50" name="__codelineno-0-50"></a><span class="sd">        Find a PyClass by its name</span>
 <a id="__codelineno-0-51" name="__codelineno-0-51"></a>
-<a id="__codelineno-0-52" name="__codelineno-0-52"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">class_by_name</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+<a id="__codelineno-0-52" name="__codelineno-0-52"></a><span class="sd">        :param name: Name</span>
+<a id="__codelineno-0-53" name="__codelineno-0-53"></a><span class="sd">        :return: PyClass</span>
+<a id="__codelineno-0-54" name="__codelineno-0-54"></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-0-55" name="__codelineno-0-55"></a>        <span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">class_by_name</span><span class="p">:</span>
+<a id="__codelineno-0-56" name="__codelineno-0-56"></a>            <span class="k">return</span> <span class="kc">None</span>
+<a id="__codelineno-0-57" name="__codelineno-0-57"></a>
+<a id="__codelineno-0-58" name="__codelineno-0-58"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">class_by_name</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
 </code></pre></div></td></tr></table></div>
               </details>
 
@@ -1398,7 +1481,7 @@
 <div class="doc doc-object doc-function">
 
 
-<h4 id="androidemu.java.java_classloader.JavaClassLoader.add_class" class="doc doc-heading">
+<h4 id="androidemu.java.classloader.JavaClassLoader.add_class" class="doc doc-heading">
             <code class="highlight language-python"><span class="n">add_class</span><span class="p">(</span><span class="n">clazz</span><span class="p">)</span></code>
 
 </h4>
@@ -1425,7 +1508,7 @@
                 <code>clazz</code>
             </td>
             <td>
-                  <code><span title="androidemu.java.java_class_def.JavaClassDef">JavaClassDef</span></code>
+                  <code><span title="androidemu.java.class_def.JavaClassDef">JavaClassDef</span></code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -1441,14 +1524,8 @@
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>androidemu/java/java_classloader.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-9"> 9</a></span>
-<span class="normal"><a href="#__codelineno-0-10">10</a></span>
-<span class="normal"><a href="#__codelineno-0-11">11</a></span>
-<span class="normal"><a href="#__codelineno-0-12">12</a></span>
-<span class="normal"><a href="#__codelineno-0-13">13</a></span>
-<span class="normal"><a href="#__codelineno-0-14">14</a></span>
-<span class="normal"><a href="#__codelineno-0-15">15</a></span>
+              <summary>Source code in <code>androidemu/java/classloader.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-15">15</a></span>
 <span class="normal"><a href="#__codelineno-0-16">16</a></span>
 <span class="normal"><a href="#__codelineno-0-17">17</a></span>
 <span class="normal"><a href="#__codelineno-0-18">18</a></span>
@@ -1460,25 +1537,31 @@
 <span class="normal"><a href="#__codelineno-0-24">24</a></span>
 <span class="normal"><a href="#__codelineno-0-25">25</a></span>
 <span class="normal"><a href="#__codelineno-0-26">26</a></span>
-<span class="normal"><a href="#__codelineno-0-27">27</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-9" name="__codelineno-0-9"></a><span class="k">def</span><span class="w"> </span><span class="nf">add_class</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">clazz</span><span class="p">:</span> <span class="n">JavaClassDef</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-10" name="__codelineno-0-10"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<a id="__codelineno-0-11" name="__codelineno-0-11"></a><span class="sd">    Add a PyClass to the classloader</span>
-<a id="__codelineno-0-12" name="__codelineno-0-12"></a>
-<a id="__codelineno-0-13" name="__codelineno-0-13"></a><span class="sd">    :param clazz: PyClass</span>
-<a id="__codelineno-0-14" name="__codelineno-0-14"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-15" name="__codelineno-0-15"></a>
-<a id="__codelineno-0-16" name="__codelineno-0-16"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">clazz</span><span class="p">,</span> <span class="n">JavaClassDef</span><span class="p">):</span>
-<a id="__codelineno-0-17" name="__codelineno-0-17"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Expected a JavaClassDef.&#39;</span><span class="p">)</span>
+<span class="normal"><a href="#__codelineno-0-27">27</a></span>
+<span class="normal"><a href="#__codelineno-0-28">28</a></span>
+<span class="normal"><a href="#__codelineno-0-29">29</a></span>
+<span class="normal"><a href="#__codelineno-0-30">30</a></span>
+<span class="normal"><a href="#__codelineno-0-31">31</a></span>
+<span class="normal"><a href="#__codelineno-0-32">32</a></span>
+<span class="normal"><a href="#__codelineno-0-33">33</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-15" name="__codelineno-0-15"></a><span class="k">def</span><span class="w"> </span><span class="nf">add_class</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">clazz</span><span class="p">:</span> <span class="n">JavaClassDef</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-16" name="__codelineno-0-16"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<a id="__codelineno-0-17" name="__codelineno-0-17"></a><span class="sd">    Add a PyClass to the classloader</span>
 <a id="__codelineno-0-18" name="__codelineno-0-18"></a>
-<a id="__codelineno-0-19" name="__codelineno-0-19"></a>    <span class="k">if</span> <span class="n">clazz</span><span class="o">.</span><span class="n">jvm_name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">class_by_name</span><span class="p">:</span>
-<a id="__codelineno-0-20" name="__codelineno-0-20"></a>        <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="s1">&#39;The class </span><span class="se">\&#39;</span><span class="si">%s</span><span class="se">\&#39;</span><span class="s1"> is already registered.&#39;</span> <span class="o">%</span> <span class="n">clazz</span><span class="o">.</span><span class="n">jvm_name</span><span class="p">)</span>
+<a id="__codelineno-0-19" name="__codelineno-0-19"></a><span class="sd">    :param clazz: PyClass</span>
+<a id="__codelineno-0-20" name="__codelineno-0-20"></a><span class="sd">    &quot;&quot;&quot;</span>
 <a id="__codelineno-0-21" name="__codelineno-0-21"></a>
-<a id="__codelineno-0-22" name="__codelineno-0-22"></a>    <span class="k">if</span> <span class="p">(</span><span class="n">clazz</span><span class="o">.</span><span class="n">class_object</span> <span class="o">==</span> <span class="kc">None</span><span class="p">):</span>
-<a id="__codelineno-0-23" name="__codelineno-0-23"></a>        <span class="c1">#FIXME 两个emulaotr add_class是同一个class 实例,会互相影响</span>
-<a id="__codelineno-0-24" name="__codelineno-0-24"></a>        <span class="n">clazz</span><span class="o">.</span><span class="n">class_object</span> <span class="o">=</span> <span class="n">Class</span><span class="p">(</span><span class="n">clazz</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span>
-<a id="__codelineno-0-25" name="__codelineno-0-25"></a>
-<a id="__codelineno-0-26" name="__codelineno-0-26"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">class_by_id</span><span class="p">[</span><span class="n">clazz</span><span class="o">.</span><span class="n">jvm_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">clazz</span>
-<a id="__codelineno-0-27" name="__codelineno-0-27"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">class_by_name</span><span class="p">[</span><span class="n">clazz</span><span class="o">.</span><span class="n">jvm_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">clazz</span>
+<a id="__codelineno-0-22" name="__codelineno-0-22"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">clazz</span><span class="p">,</span> <span class="n">JavaClassDef</span><span class="p">):</span>
+<a id="__codelineno-0-23" name="__codelineno-0-23"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Expected a JavaClassDef.&#39;</span><span class="p">)</span>
+<a id="__codelineno-0-24" name="__codelineno-0-24"></a>
+<a id="__codelineno-0-25" name="__codelineno-0-25"></a>    <span class="k">if</span> <span class="n">clazz</span><span class="o">.</span><span class="n">jvm_name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">class_by_name</span><span class="p">:</span>
+<a id="__codelineno-0-26" name="__codelineno-0-26"></a>        <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="s1">&#39;The class </span><span class="se">\&#39;</span><span class="si">%s</span><span class="se">\&#39;</span><span class="s1"> is already registered.&#39;</span> <span class="o">%</span> <span class="n">clazz</span><span class="o">.</span><span class="n">jvm_name</span><span class="p">)</span>
+<a id="__codelineno-0-27" name="__codelineno-0-27"></a>
+<a id="__codelineno-0-28" name="__codelineno-0-28"></a>    <span class="k">if</span> <span class="p">(</span><span class="n">clazz</span><span class="o">.</span><span class="n">class_object</span> <span class="o">==</span> <span class="kc">None</span><span class="p">):</span>
+<a id="__codelineno-0-29" name="__codelineno-0-29"></a>        <span class="c1">#FIXME 两个emulaotr add_class是同一个class 实例,会互相影响</span>
+<a id="__codelineno-0-30" name="__codelineno-0-30"></a>        <span class="n">clazz</span><span class="o">.</span><span class="n">class_object</span> <span class="o">=</span> <span class="n">Class</span><span class="p">(</span><span class="n">clazz</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span>
+<a id="__codelineno-0-31" name="__codelineno-0-31"></a>
+<a id="__codelineno-0-32" name="__codelineno-0-32"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">class_by_id</span><span class="p">[</span><span class="n">clazz</span><span class="o">.</span><span class="n">jvm_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">clazz</span>
+<a id="__codelineno-0-33" name="__codelineno-0-33"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">class_by_name</span><span class="p">[</span><span class="n">clazz</span><span class="o">.</span><span class="n">jvm_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">clazz</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -1488,7 +1571,7 @@
 <div class="doc doc-object doc-function">
 
 
-<h4 id="androidemu.java.java_classloader.JavaClassLoader.find_class_by_id" class="doc doc-heading">
+<h4 id="androidemu.java.classloader.JavaClassLoader.find_class_by_id" class="doc doc-heading">
             <code class="highlight language-python"><span class="n">find_class_by_id</span><span class="p">(</span><span class="n">jvm_id</span><span class="p">)</span></code>
 
 </h4>
@@ -1541,7 +1624,7 @@
       <tbody>
           <tr class="doc-section-item">
             <td>
-                  <code><span title="androidemu.java.java_class_def.JavaClassDef">JavaClassDef</span></code>
+                  <code><span title="androidemu.java.class_def.JavaClassDef">JavaClassDef</span></code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -1554,30 +1637,30 @@
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>androidemu/java/java_classloader.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-29">29</a></span>
-<span class="normal"><a href="#__codelineno-0-30">30</a></span>
-<span class="normal"><a href="#__codelineno-0-31">31</a></span>
-<span class="normal"><a href="#__codelineno-0-32">32</a></span>
-<span class="normal"><a href="#__codelineno-0-33">33</a></span>
-<span class="normal"><a href="#__codelineno-0-34">34</a></span>
-<span class="normal"><a href="#__codelineno-0-35">35</a></span>
+              <summary>Source code in <code>androidemu/java/classloader.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-35">35</a></span>
 <span class="normal"><a href="#__codelineno-0-36">36</a></span>
 <span class="normal"><a href="#__codelineno-0-37">37</a></span>
 <span class="normal"><a href="#__codelineno-0-38">38</a></span>
 <span class="normal"><a href="#__codelineno-0-39">39</a></span>
-<span class="normal"><a href="#__codelineno-0-40">40</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-29" name="__codelineno-0-29"></a><span class="k">def</span><span class="w"> </span><span class="nf">find_class_by_id</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">jvm_id</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s1">&#39;JavaClassDef&#39;</span><span class="p">:</span>
-<a id="__codelineno-0-30" name="__codelineno-0-30"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<a id="__codelineno-0-31" name="__codelineno-0-31"></a><span class="sd">    Find a PyClass by its ID</span>
-<a id="__codelineno-0-32" name="__codelineno-0-32"></a>
-<a id="__codelineno-0-33" name="__codelineno-0-33"></a><span class="sd">    :param jvm_id: ID</span>
-<a id="__codelineno-0-34" name="__codelineno-0-34"></a><span class="sd">    :return: PyClass</span>
-<a id="__codelineno-0-35" name="__codelineno-0-35"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-36" name="__codelineno-0-36"></a>
-<a id="__codelineno-0-37" name="__codelineno-0-37"></a>    <span class="k">if</span> <span class="n">jvm_id</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">class_by_id</span><span class="p">:</span>
-<a id="__codelineno-0-38" name="__codelineno-0-38"></a>        <span class="k">return</span> <span class="kc">None</span>
-<a id="__codelineno-0-39" name="__codelineno-0-39"></a>
-<a id="__codelineno-0-40" name="__codelineno-0-40"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">class_by_id</span><span class="p">[</span><span class="n">jvm_id</span><span class="p">]</span>
+<span class="normal"><a href="#__codelineno-0-40">40</a></span>
+<span class="normal"><a href="#__codelineno-0-41">41</a></span>
+<span class="normal"><a href="#__codelineno-0-42">42</a></span>
+<span class="normal"><a href="#__codelineno-0-43">43</a></span>
+<span class="normal"><a href="#__codelineno-0-44">44</a></span>
+<span class="normal"><a href="#__codelineno-0-45">45</a></span>
+<span class="normal"><a href="#__codelineno-0-46">46</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-35" name="__codelineno-0-35"></a><span class="k">def</span><span class="w"> </span><span class="nf">find_class_by_id</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">jvm_id</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s1">&#39;JavaClassDef&#39;</span><span class="p">:</span>
+<a id="__codelineno-0-36" name="__codelineno-0-36"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<a id="__codelineno-0-37" name="__codelineno-0-37"></a><span class="sd">    Find a PyClass by its ID</span>
+<a id="__codelineno-0-38" name="__codelineno-0-38"></a>
+<a id="__codelineno-0-39" name="__codelineno-0-39"></a><span class="sd">    :param jvm_id: ID</span>
+<a id="__codelineno-0-40" name="__codelineno-0-40"></a><span class="sd">    :return: PyClass</span>
+<a id="__codelineno-0-41" name="__codelineno-0-41"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-42" name="__codelineno-0-42"></a>
+<a id="__codelineno-0-43" name="__codelineno-0-43"></a>    <span class="k">if</span> <span class="n">jvm_id</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">class_by_id</span><span class="p">:</span>
+<a id="__codelineno-0-44" name="__codelineno-0-44"></a>        <span class="k">return</span> <span class="kc">None</span>
+<a id="__codelineno-0-45" name="__codelineno-0-45"></a>
+<a id="__codelineno-0-46" name="__codelineno-0-46"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">class_by_id</span><span class="p">[</span><span class="n">jvm_id</span><span class="p">]</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -1587,7 +1670,7 @@
 <div class="doc doc-object doc-function">
 
 
-<h4 id="androidemu.java.java_classloader.JavaClassLoader.find_class_by_name" class="doc doc-heading">
+<h4 id="androidemu.java.classloader.JavaClassLoader.find_class_by_name" class="doc doc-heading">
             <code class="highlight language-python"><span class="n">find_class_by_name</span><span class="p">(</span><span class="n">name</span><span class="p">)</span></code>
 
 </h4>
@@ -1640,7 +1723,7 @@
       <tbody>
           <tr class="doc-section-item">
             <td>
-                  <code><span title="androidemu.java.java_class_def.JavaClassDef">JavaClassDef</span></code>
+                  <code><span title="androidemu.java.class_def.JavaClassDef">JavaClassDef</span></code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -1653,28 +1736,28 @@
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>androidemu/java/java_classloader.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-42">42</a></span>
-<span class="normal"><a href="#__codelineno-0-43">43</a></span>
-<span class="normal"><a href="#__codelineno-0-44">44</a></span>
-<span class="normal"><a href="#__codelineno-0-45">45</a></span>
-<span class="normal"><a href="#__codelineno-0-46">46</a></span>
-<span class="normal"><a href="#__codelineno-0-47">47</a></span>
-<span class="normal"><a href="#__codelineno-0-48">48</a></span>
+              <summary>Source code in <code>androidemu/java/classloader.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-48">48</a></span>
 <span class="normal"><a href="#__codelineno-0-49">49</a></span>
 <span class="normal"><a href="#__codelineno-0-50">50</a></span>
 <span class="normal"><a href="#__codelineno-0-51">51</a></span>
-<span class="normal"><a href="#__codelineno-0-52">52</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-42" name="__codelineno-0-42"></a><span class="k">def</span><span class="w"> </span><span class="nf">find_class_by_name</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s1">&#39;JavaClassDef&#39;</span><span class="p">:</span>
-<a id="__codelineno-0-43" name="__codelineno-0-43"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<a id="__codelineno-0-44" name="__codelineno-0-44"></a><span class="sd">    Find a PyClass by its name</span>
-<a id="__codelineno-0-45" name="__codelineno-0-45"></a>
-<a id="__codelineno-0-46" name="__codelineno-0-46"></a><span class="sd">    :param name: Name</span>
-<a id="__codelineno-0-47" name="__codelineno-0-47"></a><span class="sd">    :return: PyClass</span>
-<a id="__codelineno-0-48" name="__codelineno-0-48"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-49" name="__codelineno-0-49"></a>    <span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">class_by_name</span><span class="p">:</span>
-<a id="__codelineno-0-50" name="__codelineno-0-50"></a>        <span class="k">return</span> <span class="kc">None</span>
+<span class="normal"><a href="#__codelineno-0-52">52</a></span>
+<span class="normal"><a href="#__codelineno-0-53">53</a></span>
+<span class="normal"><a href="#__codelineno-0-54">54</a></span>
+<span class="normal"><a href="#__codelineno-0-55">55</a></span>
+<span class="normal"><a href="#__codelineno-0-56">56</a></span>
+<span class="normal"><a href="#__codelineno-0-57">57</a></span>
+<span class="normal"><a href="#__codelineno-0-58">58</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-48" name="__codelineno-0-48"></a><span class="k">def</span><span class="w"> </span><span class="nf">find_class_by_name</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s1">&#39;JavaClassDef&#39;</span><span class="p">:</span>
+<a id="__codelineno-0-49" name="__codelineno-0-49"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<a id="__codelineno-0-50" name="__codelineno-0-50"></a><span class="sd">    Find a PyClass by its name</span>
 <a id="__codelineno-0-51" name="__codelineno-0-51"></a>
-<a id="__codelineno-0-52" name="__codelineno-0-52"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">class_by_name</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+<a id="__codelineno-0-52" name="__codelineno-0-52"></a><span class="sd">    :param name: Name</span>
+<a id="__codelineno-0-53" name="__codelineno-0-53"></a><span class="sd">    :return: PyClass</span>
+<a id="__codelineno-0-54" name="__codelineno-0-54"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-55" name="__codelineno-0-55"></a>    <span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">class_by_name</span><span class="p">:</span>
+<a id="__codelineno-0-56" name="__codelineno-0-56"></a>        <span class="k">return</span> <span class="kc">None</span>
+<a id="__codelineno-0-57" name="__codelineno-0-57"></a>
+<a id="__codelineno-0-58" name="__codelineno-0-58"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">class_by_name</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
