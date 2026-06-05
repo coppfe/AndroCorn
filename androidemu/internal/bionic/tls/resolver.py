@@ -1,16 +1,16 @@
 from typing import TYPE_CHECKING
-from ...native.helpers.method import native_method
+from ....native.helpers.method import native_method
 
-from ...types import ptr_t
+from ....types import ptr_t
 
 if TYPE_CHECKING:
-    from ...core.emulator import Emulator
-    from .tls_bionic import BionicTLS
+    from ....core.emulator import Emulator
+    from .init import BionicTLSInitialization
 
 # not used
 
 class TLSSymbolResolver:
-    def __init__(self, emu: 'Emulator', state: 'BionicTLS'):
+    def __init__(self, emu: 'Emulator', state: 'BionicTLSInitialization'):
         self.emu = emu
         self.mu = emu.mu
         self.ptr_sz = ptr_t.size
@@ -35,7 +35,7 @@ class TLSSymbolResolver:
         return tls_block + offset
 
     def _allocate_dynamic_tls(self, module_id: int) -> int:
-        if not hasattr(self.state, 'modules') or module_id not in self.state.modules:
+        if not hasattr(self.state, 'modules') or module_id not in self.state.modules: # ?
              raise RuntimeError("TLS metadata missing for module %d" % module_id)
 
         meta = self.state.modules[module_id]

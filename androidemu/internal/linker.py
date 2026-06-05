@@ -16,7 +16,7 @@ from .module import Module
 from ..utils.parsers.elf import ELFReader
 from .soinfo import SoinfoWriter
 from .relocator import ARM32Relocator, ARM64Relocator
-from .bionic.tls_bionic import BionicTLS
+from .bionic.tls.init import BionicTLSInitialization
 
 if TYPE_CHECKING:
     from ..core.emulator import Emulator
@@ -48,7 +48,7 @@ class AndroidLinker:
         self.tls_area_size = config.TLS_SIZE
 
         # --- State ---
-        self.tls: BionicTLS = self.emu.tls_state
+        self.tls: BionicTLSInitialization = self.emu.tls_state
         self.tls_initialized = False
         self._last_next_field_addr = 0 # For soinfo linked list
 

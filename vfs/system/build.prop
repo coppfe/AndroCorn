@@ -363,3 +363,5 @@ ro.sf.lcd_density=320
 ro.com.google.clientidbase=android-xiaomi
 ro.expect.recovery_id=0xe392b97963f4650d8ef4aeead8302bfd84008256000000000000000000000000
 
+ro.boot.verifiedbootstate=green
+ro.bootloader=NCKCNFI

@@ -135,7 +135,7 @@ class SignalSyscalls:
                 mu.mem_write(oact + 8 + sigsetsize, old_flags.to_bytes(8, 'little'))
                 mu.mem_write(oact + 8 + sigsetsize + 8, old_rest.to_bytes(8, 'little'))
 
-        handler = helpers.read_ptr_sz(mu, act, self._ptr_sz)
+        handler = helpers.read_ptr_sz(mu, act)
         mask = helpers.read_ptr_sz(mu, act + self._ptr_sz)
         flags = helpers.read_ptr_sz(mu, act + self._ptr_sz + sigsetsize)
         rest = helpers.read_ptr_sz(mu, act + self._ptr_sz + sigsetsize + self._ptr_sz)

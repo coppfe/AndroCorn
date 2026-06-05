@@ -60,12 +60,20 @@ def read_args_syscall(mu: 'Uc', args_count: int, registers: 'RegistersMapping', 
 def read_args(mu: 'Uc', args_count: int, registers: 'RegistersMapping') -> List[int]:
     """
     Reads function arguments according to AAPCS.
-    First 4 arguments are passed via registers, the rest are on the stack.
+    First 4 (8 in arm64) arguments are passed via registers, the rest are on the stack.
     """
-    reg_set = (registers.any_0, registers.any_1, registers.any_2, registers.any_3)
+    if ptr_t.size == 8:
+        reg_set = (
+            registers.any_0, registers.any_1, registers.any_2, registers.any_3,
+            registers.any_4, registers.any_5, registers.any_6, registers.any_7
+        )
+        max_reg_args = 8
+    else:
+        reg_set = (registers.any_0, registers.any_1, registers.any_2, registers.any_3)
+        max_reg_args = 4
     reg_args = mu.reg_read_batch(reg_set)
     
-    if args_count <= 4:
+    if args_count <= max_reg_args:
         return list(reg_args[:args_count])
         
     native_args = list(reg_args)

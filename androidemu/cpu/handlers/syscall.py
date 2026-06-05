@@ -68,10 +68,7 @@ class SyscallsHandler:
             if result is not None:
                 mu.reg_write(self._registers.ret, result)
 
-                if logging.root.level <= logging.DEBUG and handler.name not in (
-                    "read",
-                    "lseek",
-                ):
+                if logging.root.level <= logging.DEBUG:
                     logging.debug("syscall %s returned %#x", handler.name, result)
 
         else:

@@ -5,13 +5,13 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from androidemu.utils.memory.map import MemoryMap
     from unicorn import Uc
-    from ...utils.parsers.elf import ELFReader
-    from .tls_bionic import BionicTLS
+    from ....utils.parsers.elf import ELFReader
+    from .init import BionicTLSInitialization
 
 logger = logging.getLogger(__name__)
 
 class TLSModuleLoader:
-    def __init__(self, memory: 'MemoryMap', mu: 'Uc', state: 'BionicTLS'):
+    def __init__(self, memory: 'MemoryMap', mu: 'Uc', state: 'BionicTLSInitialization'):
         self.mu = mu
         self.memory = memory
 

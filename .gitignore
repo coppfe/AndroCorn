@@ -22,7 +22,7 @@ test.py
 keystone_in/
 androidemu/highlevel/host
 vfs/data/*
-
+commit_msg.txt
 
 tests/bin/*
 tests/bin64/

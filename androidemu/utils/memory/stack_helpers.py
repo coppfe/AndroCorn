@@ -12,11 +12,7 @@ if TYPE_CHECKING:
 class StackHelper():
     def __init__(self, emu: 'Emulator'):
         self.__emu: 'Emulator' = emu
-        arch = emu.arch
-        if arch == emu_const.ARCH_ARM32:
-            sp_reg = UC_ARM_REG_SP
-        elif arch == emu_const.ARCH_ARM64:
-            sp_reg = UC_ARM64_REG_SP
+        sp_reg = emu.registers.sp
         sp = emu.mu.reg_read(sp_reg)
         self.__sp = sp
         self.__sp_reg = sp_reg

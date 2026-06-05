@@ -35,8 +35,8 @@ from .state._global      import GlobalContextMachine
 from ..cpu.handlers.syscall import SyscallsHandler
 from ..kernel.init import SysInit
 
-from ..internal.bionic.tls_factory import create_tls_backend
-from ..internal.bionic.tls_bionic import BionicTLS
+from ..internal.bionic.tls.factory import create_tls_backend
+from ..internal.bionic.tls.init import BionicTLSInitialization
 from ..internal.linker import AndroidLinker
 
 from ..java.classloader import JavaClassLoader
@@ -291,8 +291,8 @@ class Emulator:
         self.pcb = ProcessControlBlock(self.mu, self.config, self.ctx)  # Process Control Block
         self._setup_env()
 
-        self.tls_state: "BionicTLS" = create_tls_backend(
-            self.memory, self.mu, self.arch
+        self.tls_state: "BionicTLSInitialization" = create_tls_backend(
+            self.memory, self.mu, self.registers
         )
         self.linker = AndroidLinker(self, self.vfs_root)
 
