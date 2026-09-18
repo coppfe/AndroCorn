@@ -1,5 +1,5 @@
-STATUS_TEMPLATE = """
-Name:\t{pkg_name}
+STATUS_TEMPLATE = """Name:\t{pkg_name}
+Umask:\t0022
 State:\tR (running)
 Tgid:\t{pid}
 Pid:\t{pid}
@@ -26,9 +26,9 @@ Threads:\t{threads}
 SigQ:\t0/11500
 SigPnd:\t0000000000000000
 ShdPnd:\t0000000000000000
-SigBlk:\t0000000000001204
+SigBlk:\t0000000000000000
 SigIgn:\t0000000000000000
-SigCgt:\t00000002000094f8
+SigCgt:\t0000000000000000
 CapInh:\t0000000000000000
 CapPrm:\t0000000000000000
 CapEff:\t0000000000000000

@@ -1,6 +1,5 @@
 import logging
 import os
-import time
 import random
 import struct
 
@@ -10,14 +9,16 @@ from ....const.android import *
 from ....const.linux import *
 from ....const import emu_const
 from ....utils.memory import helpers
-from ...dev.prctl import PrctlHandler
+
+from .helpers.prctl import PrctlHandler
 
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from androidemu import Emulator
+    from androidemu.core.pcb import ProcessControlBlock
     from androidemu.data.config import Config
-    from androidemu.data.states.system import SystemState
-    from androidemu.core.state._global import GlobalContextMachine
+    from androidemu.core.state.time_manager import TimeManager
 
 class SystemSyscalls:
 
@@ -25,47 +26,40 @@ class SystemSyscalls:
     # INIT
     # =========================================================
 
-    def __init__(self, mu: 'Uc', config: 'Config', ctx: 'GlobalContextMachine'):
-        
-        self._ctx: 'SystemState' = ctx
+    def __init__(self, config: 'Config'):
         dev = config.pkg.device
-
         self._kernel = dev.kernel
         self._mem_cfg = dev.memory
 
-        self._prctl_cb = PrctlHandler(mu, ctx)
-
-
-        self._ctx.t0 = time.time()
-        self._ctx.uptime_bias = random.randint(50000, 100000)
+        self._prctl_cb = PrctlHandler()
 
     # =========================================================
     # PRCTL
     # =========================================================
 
-    def _prctl(self, mu, option, arg2, arg3, arg4, arg5):
-        return self._prctl_cb.handle(option, arg2, arg3, arg4, arg5)
+    def _prctl(self, emu: 'Emulator', option, arg2, arg3, arg4, arg5):
+        return self._prctl_cb.handle(emu, option, arg2, arg3, arg4, arg5)
 
     # =========================================================
     # GETTERS
     # =========================================================
 
-    def _getcpu(self, mu: 'Uc', cpu_ptr, node_ptr, cache):
+    def _getcpu(self, emu: 'Emulator', cpu_ptr, node_ptr, cache):
         if cpu_ptr:
-            mu.mem_write(cpu_ptr, (1).to_bytes(4, "little"))
+            emu.mu.mem_write(cpu_ptr, (1).to_bytes(4, "little"))
         return 0
 
-    def _getrandom(self, mu, buf, count, flags):
+    def _getrandom(self, emu: 'Emulator', buf, count, flags):
         try:
             data = os.urandom(count)
-            mu.mem_write(buf, data)
+            emu.mu.mem_write(buf, data)
             logging.debug("getrandom n=%d flags=%x", count, flags)
             return count
         except Exception as e:
             logging.error("getrandom failed: %s", e)
             return -EPERM
         
-    def _getrlimit(self, mu, resource, rlim_ptr):
+    def _getrlimit(self, emu: 'Emulator', resource, rlim_ptr):
         # int getrlimit(int resource, struct rlimit *rlim);
         # struct rlimit {
         #     rlim_t rlim_cur;  // soft limit
@@ -82,7 +76,7 @@ class SystemSyscalls:
 
         data = struct.pack("<II", rlim_cur, rlim_max)
 
-        mu.mem_write(rlim_ptr, data)
+        emu.mu.mem_write(rlim_ptr, data)
         return 0
 
 
@@ -90,8 +84,8 @@ class SystemSyscalls:
     # UNAME
     # =========================================================
 
-    def _uname(self, mu: 'Uc', buf):
-        is32 = mu._arch == emu_const.ARCH_ARM32
+    def _uname(self, emu: 'Emulator', buf):
+        is32 = emu.arch == emu_const.ARCH_ARM32
 
         fields = [
             self._kernel.sysname,
@@ -105,7 +99,7 @@ class SystemSyscalls:
         offsets = [0, 65, 130, 195, 260, 325]
 
         for off, val in zip(offsets, fields):
-            helpers.write_utf8(mu, buf + off, val)
+            helpers.write_utf8(emu.mu, buf + off, val)
 
         return 0
 
@@ -113,31 +107,25 @@ class SystemSyscalls:
     # SYSINFO MODEL
     # =========================================================
 
-    def _build_sysinfo_model(self):
+    def _build_sysinfo_model(self, tm: 'TimeManager'):
         total_mb = self._mem_cfg.ram_total_mb
         total_bytes = total_mb * 1024 * 1024
-
         mem_unit = 1024
 
         base_free_pct = self._mem_cfg.ram_free_percent_start
         jitter = random.uniform(-1.0, 1.0)
         free_pct = max(0.0, min(100.0, base_free_pct + jitter))
-
         free_bytes = int(total_bytes * (free_pct / 100.0))
 
-        uptime = int(self._ctx.uptime_bias + (time.time() - self._ctx.t0))
+        uptime, _ = tm.get_clock_monotonic()
 
         loads_base = (503328, 504576, 537280)
-        loads = [
-            int(x * (0.8 + random.random() * 0.4))
-            for x in loads_base
-        ]
+        loads = [int(x * (0.8 + random.random() * 0.4)) for x in loads_base]
 
         buffer_ram = total_bytes // 20
         shared_ram = 0
         swap_total = 0
         swap_free = 0
-
         procs = random.randint(500, 1500)
 
         high_threshold = 896 * 1024
@@ -146,19 +134,14 @@ class SystemSyscalls:
         return {
             "uptime": uptime,
             "loads": loads,
-
             "total": total_bytes,
             "free": free_bytes,
-
             "shared": shared_ram,
             "buffer": buffer_ram,
-
             "swap_total": swap_total,
             "swap_free": swap_free,
-
             "procs": procs,
             "mem_unit": mem_unit,
-
             "high_total": high_total,
         }
 
@@ -166,12 +149,12 @@ class SystemSyscalls:
     # SYSINFO SERIALIZER
     # =========================================================
 
-    def _sysinfo(self, mu: Uc, ptr):
-        m = self._build_sysinfo_model()
-        arch32 = mu._arch == emu_const.ARCH_ARM32
+    def _sysinfo(self, emu: 'Emulator', ptr):
+        m = self._build_sysinfo_model(emu.time_manager)
+        arch32 = emu.arch == emu_const.ARCH_ARM32
 
         def w(off, val, size):
-            mu.mem_write(ptr + off, int(val).to_bytes(size, "little", signed=False))
+            emu.mu.mem_write(ptr + off, int(val).to_bytes(size, "little", signed=False))
 
         if arch32:
             w(0, m["uptime"], 4)
@@ -213,6 +196,15 @@ class SystemSyscalls:
             w(104, m["mem_unit"], 4)
 
         return 0
+    
+    def _swapoff(self, emu: 'Emulator', path_ptr):
+        try:
+            swap_path = helpers.read_utf8(emu.mu, path_ptr) if path_ptr else "NULL"
+            logging.debug("[sys_swapoff] App tried to disable swap on: %s", swap_path)
+        except Exception:
+            return -EFAULT
+
+        return -EPERM
     
     # =========================================================
     # UTILS

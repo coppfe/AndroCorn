@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from ..classes.clazz import Class
+    from ..classes.java.lang.clazz import Class
 
 class jobject:
 

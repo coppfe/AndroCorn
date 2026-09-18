@@ -1,56 +1,34 @@
-from ..backend.memory import MemorySyscalls
-from ..backend.sysproc import ProcessSyscalls
-from ..backend.sysproc import NetworkSyscalls
-from ..backend.sysproc import SystemSyscalls
-from ..backend.sysproc import SignalSyscalls
-from ..backend.sysproc import TimeSyscalls
-from ..backend.sysproc.arm import ARMSyscalls
-from ..backend.filesystem import FileSystemIO
-from ..backend.filesystem import FileSystemIOUtils
-from ..backend.filesystem import FileSystemManager
-from ..backend.filesystem import FileSystemUtils
-
-from ..dev.content import ContentGenerator
-
-from ..backend.mocks import success
-
 from typing import TYPE_CHECKING
 
+from ..backend.filesystem import FileSystemIO, FileSystemManager
+from ..backend.memory import MemorySyscalls
+from ..backend.mocks import success
+from ..backend.selinux import SELinuxHandler
+from ..backend.sysproc import (
+    ARMSyscalls,
+    NetworkSyscalls,
+    ProcessSyscalls,
+    SignalSyscalls,
+    SystemSyscalls,
+    TimeSyscalls,
+)
+
 if TYPE_CHECKING:
-    from androidemu.arguments.system import SystemArgumentsBlock
-    from androidemu.arguments.process import ProcessArgumentsBlock
+    from androidemu.core import Emulator
+
 
 class CallbacksARM32:
-    def __init__(
-        self, process: 'ProcessArgumentsBlock', system: "SystemArgumentsBlock"
-    ):
-        super().__init__()
-
-        self._ARM_cacheflush = success("ARM_cacheflush")
-
-        self._arm_syscalls = ARMSyscalls(process.tls)
-        self._process_syscalls = ProcessSyscalls(
-            process, system.properties, system.config
-        )
-        self._network_syscalls = NetworkSyscalls(process.control_block)
-        self._system_syscalls = SystemSyscalls(process.mu, system.config, process.ctx)
-        self._signal_syscalls = SignalSyscalls(process.emu, process.ctx)
-        self._memory_syscalls = MemorySyscalls(process)
-        self._time_syscalls = TimeSyscalls(process.scheduler, system.clock)
-
-        self._generator = ContentGenerator(process, system)
-        self._fs_helper = FileSystemUtils(
-            process.control_block, system.config, self._generator, system.clock, process.ctx, system.mount
-        )
-        self._fs_io_helper = FileSystemIOUtils(
-            process.control_block, self._generator, self._fs_helper
-        )
-        self._system_calls = FileSystemManager(
-            process.mu, process.control_block, self._generator, self._fs_helper
-        )
-        self._io_calls = FileSystemIO(
-            process.mu, process.control_block, self._fs_io_helper, self._fs_helper
-        )
+    def __init__(self, emu: 'Emulator'):
+        self._io_calls = FileSystemIO()
+        self._system_calls = FileSystemManager()
+        self._process_syscalls = ProcessSyscalls()
+        self._network_syscalls = NetworkSyscalls()
+        self._system_syscalls = SystemSyscalls(emu.config)
+        self._signal_syscalls = SignalSyscalls()
+        self._memory_syscalls = MemorySyscalls()
+        self._time_syscalls = TimeSyscalls()
+        self._selinux_syscalls = SELinuxHandler()
+        self._arm_syscalls = ARMSyscalls()
 
         sysproc = {
             0x1: ("exit", 1, self._process_syscalls._exit),
@@ -64,6 +42,7 @@ class CallbacksARM32:
             0x43: ("sigaction", 3, self._signal_syscalls._sigaction),
             0x4E: ("gettimeofday", 2, self._time_syscalls._gettimeofday),
             0x72: ("wait4", 4, self._process_syscalls._wait4),
+            0x73: ("swapoff", 1, self._system_syscalls._swapoff),
             0x74: ("sysinfo", 1, self._system_syscalls._sysinfo),
             0x78: ("clone", 5, self._process_syscalls._clone),
             0x7A: ("uname", 1, self._system_syscalls._uname),
@@ -93,7 +72,7 @@ class CallbacksARM32:
             0x166: ("dup3", 3, self._process_syscalls._dup3),
             0x167: ("pipe2", 2, self._process_syscalls._pipe2),
             0x180: ("getrandom", 3, self._system_syscalls._getrandom),
-            0xF0002: ("ARM_cacheflush", 0, self._ARM_cacheflush),
+            0xF0002: ("ARM_cacheflush", 0, success("ARM_cacheflush")),
             0xF0005: ("ARM_set_tls", 1, self._arm_syscalls._ARM_set_tls),
         }
 
@@ -103,7 +82,7 @@ class CallbacksARM32:
             0x7D: ("mprotect", 3, self._memory_syscalls._handle_mprotect),
             0xC0: ("mmap2", 6, self._memory_syscalls._handle_mmap2),
             0xDC: ("madvise", 3, self._memory_syscalls._handle_madvise),
-            0x178:("process_vm_readv", 6, self._memory_syscalls._handle_process_vm_readv)
+            0x178: ("process_vm_readv", 6, self._memory_syscalls._handle_process_vm_readv),
         }
 
         filesystem = {
@@ -137,9 +116,15 @@ class CallbacksARM32:
             0x14E: ("faccessat", 4, self._system_calls._faccessat),
         }
 
+        selinux = {
+            0xE5: ("getxattr", 4, self._selinux_syscalls._getxattr),
+            0xE6: ("lgetxattr", 4, self._selinux_syscalls._lgetxattr),
+            0xE7: ("fgetxattr", 4, self._selinux_syscalls._fgetxattr)
+
+        }
+
         self._syscall_table = {}
-
-
         self._syscall_table.update(sysproc)
         self._syscall_table.update(memory)
         self._syscall_table.update(filesystem)
+        self._syscall_table.update(selinux)

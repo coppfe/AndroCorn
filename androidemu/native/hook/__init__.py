@@ -1,1 +1,1 @@
-from .base import HookAddress
+from .manager import HookManager

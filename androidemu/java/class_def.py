@@ -52,10 +52,22 @@ class JavaClassDef(type):
     def __new__(cls, name, base, ns, **kargs):
         return type.__new__(cls, name, base, ns)
 
+    # def register_native(cls, name, signature, ptr_func) -> None:
+    #     found = False
+
+    #     # Search for a defined jvm method.
+    #     for method in cls.jvm_methods.values():
+    #         if method.name == name and method.signature == signature:
+    #             method.native_addr = ptr_func
+    #             found = True
+    #             break
+            
+    #     if not found:
+    #         raise RuntimeError("Register native ('%s', '%s') failed on class %s. Not found method" % (name, signature, cls.__name__))
+    
     def register_native(cls, name, signature, ptr_func) -> None:
         found = False
 
-        # Search for a defined jvm method.
         for method in cls.jvm_methods.values():
             if method.name == name and method.signature == signature:
                 method.native_addr = ptr_func
@@ -63,8 +75,12 @@ class JavaClassDef(type):
                 break
             
         if not found:
-            raise RuntimeError("Register native ('%s', '%s') failed on class %s. Not found method" % (name, signature, cls.__name__))
-    
+            from .method_def import JavaMethodDef
+            method = JavaMethodDef(name, None, name, signature, native=True)
+            method.native_addr = ptr_func
+            cls.jvm_methods[method.jvm_id] = method
+            cls._name_sig_cache[(name, signature)] = method
+
     def find_method(cls, name: str, signature: str) -> 'JavaMethodDef':
         """
         Find a PyMethod by its name and signature

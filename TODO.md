@@ -1,19 +1,19 @@
 1. execve -1 and -2 implementation
-   In real Linux, if the path is not found, it returns -2 and doesn't kill current process.
+   In real Linux, if the path is not found, it returns -2 and doesn't kill current process. Maybe
 
 2. Collect offsets to offset_cfg.py
 
-3. More flexability in VFS and Kernel: SELinux, ContentGenerator, Device File Properties.
+3. Type syscall functions by own `types`
 
-4. Make Correct File Stats
+4. Implement Android 8+ Property Dir Support.
 
-5. Type syscall functions by own `types`
+~~More flexability in VFS and Kernel: SELinux, ContentGenerator, Device File Properties.~~
 
-6. Make it faster as possible.
+~~Make Correct File Stats~~
 
-7. Remove fcntl module!!! Not working on Windows and not working with Virtual Files.
+~~Remove fcntl module!!! Not working on Windows and not working with Virtual Files.~~
 
-~~ Types in syscalls, correct int transformation from native. ~~
+~~Types in syscalls, correct int transformation from native.~~
 
 ~~Nested calls~~
 

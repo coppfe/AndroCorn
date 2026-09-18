@@ -28,3 +28,5 @@ tests/bin/*
 tests/bin64/
 
 !tests/bin/libcms.so
+
+trash

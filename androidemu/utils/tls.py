@@ -9,7 +9,7 @@ from ..types import ptr_t
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from unicorn.unicorn import Uc
-    from androidemu.objects.registers import RegistersMapping
+    from androidemu.core.registers import RegistersMapping
 
 class BionicTLSUtils:
 

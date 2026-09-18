@@ -32,6 +32,6 @@ class StructWriter:
         """
         value_utf8 = str_val.encode(encoding="utf-8") + b"\x00"
         n = len(value_utf8)
-        addr = self._memory.dynamic_alloc(n, is_ptr_array=True)
+        addr = self._memory.dynamic_alloc(n, is_ptr_array=False)
         self._mu.mem_write(addr, value_utf8)
         return addr

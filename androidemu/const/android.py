@@ -27,4 +27,5 @@ IOCTL_SIOCGIFCONF               =   0x8912
 IOCTL_BINDER_VERSION            =   0xc0046209
 IOCTL_TIOCGPTN                  =   0x80045430
 IOCTL_TIOCGPTPEER               =   0x40045431
-IOCTL_TIOCGSERIAL               =   0x5412
+IOCTL_TIOCSTI                   =   0x5412
+IOCTL_TIOCSPTLCK                =   0x40045431

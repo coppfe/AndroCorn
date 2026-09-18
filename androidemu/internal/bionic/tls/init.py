@@ -6,14 +6,14 @@ from ..dtv_builder import DTVBuilder
 from ..pthread_builder import PThreadBuilder
 
 from ....const import linux
-from ....data.mem_map import PAGE_SIZE, TLS_BASE
+from ....data.layout import PAGE_SIZE, TLS_BASE
 from ....utils.memory.struct_writer import StructWriter
 from ....types.alias import ptr_t
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from androidemu.utils.memory.map import MemoryMap
-    from androidemu.objects.registers import RegistersMapping
+    from androidemu.core.registers import RegistersMapping
     from unicorn import Uc
 
 logger = logging.getLogger(__name__)
@@ -92,7 +92,7 @@ class BionicTLSInitialization:
             )
             
             self.mu.mem_write(self.tp, tls_bytes)
-            self.mu.reg_write(self.registers.any_9, self.tp) # backward
+            self.registers.v_reg_9 = self.tp
         else:
             # 0x0:  Self
             # 0x8:  pthread

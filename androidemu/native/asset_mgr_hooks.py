@@ -9,32 +9,28 @@ from ..java.jni.main import JNIEnv
 from unicorn import *
 
 if TYPE_CHECKING:
-    from ..utils.hooker import Hooker
-    from ..internal.linker import AndroidLinker
     from ..core.emulator import Emulator
     
 
 logger = logging.getLogger(__name__)
 class AssetManagerHooks:
-    def __init__(self, emu: 'Emulator', linker: 'AndroidLinker', hooker: 'Hooker', vfs_root: str):
+    def __init__(self, emu: 'Emulator'):
         self._emu = emu
-        self._linker = linker
-        self.__vfs_root = vfs_root
-        self.__hooker = hooker
+
         self.__local_ptr_off = 0x98765432
         self.__local_ptr_map = {}
 
         self.__local_asset_ptr_off = 0x87654321
         self.__local_asset_ptr_map = {}
-    #
+
+        self.register()
 
     def register(self):
-        self._linker.add_symbol_hook('AAssetManager_fromJava', self.__hooker.write_function(self.__AAssetManager_fromJava))
-        self._linker.add_symbol_hook('AAssetManager_open', self.__hooker.write_function(self.__AAssetManager_open))
-        self._linker.add_symbol_hook('AAsset_close', self.__hooker.write_function(self.__AAsset_close))
-        self._linker.add_symbol_hook('AAsset_read', self.__hooker.write_function(self.__AAsset_read))
-        self._linker.add_symbol_hook('AAsset_getLength', self.__hooker.write_function(self.__AAsset_getLength))
-    #
+        self._emu.hook_manager.stub('AAssetManager_fromJava',       self.__AAssetManager_fromJava)
+        self._emu.hook_manager.stub('AAssetManager_open',           self.__AAssetManager_open)
+        self._emu.hook_manager.stub('AAsset_close',                 self.__AAsset_close)
+        self._emu.hook_manager.stub('AAsset_read',                  self.__AAsset_read)
+        self._emu.hook_manager.stub('AAsset_getLength',             self.__AAsset_getLength)
 
 
     @native_method
@@ -50,7 +46,6 @@ class AssetManagerHooks:
         r = self.__local_ptr_off
         self.__local_ptr_off = self.__local_ptr_off + 1
         return r
-    #
 
     @native_method
     def __AAssetManager_open(self, emu, amgr_ptr, filename_ptr, mode):
@@ -64,15 +59,12 @@ class AssetManagerHooks:
         self.__local_asset_ptr_off = self.__local_asset_ptr_off + 1
         
         return r
-    #
 
     @native_method
     def __AAsset_close(self, emu, asset_ptr):
         asset_sa = self.__local_asset_ptr_map.pop(asset_ptr)
         asset_obj = asset_sa[0]
         asset_obj.close()
-    #
-
 
     @native_method
     def __AAsset_read(self, emu, asset_ptr, buf_ptr, count):
@@ -82,12 +74,10 @@ class AssetManagerHooks:
         if b is None:
             raise RuntimeError("AAsset_read return None...")
             return -1
-        #
         n = len(b)
         emu.mu.mem_write(buf_ptr, b)
 
         return n
-    #
 
     @native_method
     def __AAsset_getLength(self, emu, asset_ptr):
@@ -97,6 +87,3 @@ class AssetManagerHooks:
         info = zipf.getinfo(asset_filename)
         n = info.file_size
         return n
-    #
-
-#

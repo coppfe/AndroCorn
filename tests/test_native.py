@@ -2,15 +2,22 @@ import unittest
 import time
 import logging
 
+# logging.basicConfig(level=logging.DEBUG)
+
 from androidemu.core.emulator import Emulator
 from androidemu.java.class_def import JavaClassDef
 from androidemu.java.method_def import java_method_def
-from androidemu.java.classes.array import ByteArray
+from androidemu.java.classes.java.lang.array import ByteArray
 from androidemu.java.jni.reference import jobject
-from androidemu.java.classes.list import List
+from androidemu.java.classes.java.util.list import List
+
+from androidemu.utils.java.loader import load_mocks
 
 from unicorn import *
 from unicorn.arm_const import *
+
+# logging.basicConfig(level=logging.DEBUG)
+
 
 class com_ss_sys_ces_a(metaclass=JavaClassDef, jvm_name='com/ss/sys/ces/a'):
     @java_method_def(name='meta', args_list=["jint", "jobject", "jobject"], signature='(ILandroid/content/Context;Ljava/lang/Object;)Ljava/lang/Object;', native=False)
@@ -101,9 +108,11 @@ def call_leviathan(emulator: Emulator, i1, timestamp, payload_bytes):
 
 def init():
     emulator = Emulator(vfs_root="vfs", muti_task=True, arch=1)
-    
+
     emulator.java_classloader.add_class(com_ss_sys_ces_a)
     emulator.java_classloader.add_class(java_lang_Thread)
+
+    load_mocks(emulator.java_classloader)
     
     libml = emulator.load_library(f"tests/bin/libcms.so", do_init=True, main_lib=True)
     print(f"[*] Base address libcms: {hex(libml.base)}")

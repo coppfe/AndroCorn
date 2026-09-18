@@ -1,36 +1,113 @@
 {
-	"_pkg_name":"parent_pkg_name",
-	"pkg_name": "main_pkg_name",
-	"uid": 10123,
-	"pid": 4386,
-	"ppid": 821,
-	"debuggable": true,
-	"start_timestamp": 1774458140,
-	"build_at": 1678884069,
-	"sign_hex": "hex",
-	"version_code": 1,
-	
-	"device": {
-		"memory": {
-			"ram_total_mb": 8192,
-			"ram_free_percent_start": 45,
-			"swap_total_mb": 2048
-		},
-
-		"kernel": {
-			"release": "5.10.43-android12-9-00001-g532147395026",
-			"version": "#1 SMP PREEMPT Wed Mar 15 12:41:09 UTC 2023"
-		},
-
-		"net": {
-			"ip": "192.168.1.52",
-			"mac": "cc:fa:a6:00:8a:a9",
-			"dns": "8.8.8.8",
-			"ssid": "Massive",
-			"gateway": "89.207.132.170"
-		},
-
-		"android_id": "hex",
-		"config": "mcc250-mnc01-ru-rRU,ldltr,sw360dp,w360dp,h640dp,320dpi,nokeys,vga,notouch,keysasaccent\nabi: arm64-v8a,armeabi-v7a,armeabi"
-	}
+  "pkg_name": "com.google.android.youtube",
+  "version_name": "18.32.39",
+  "version_code": 1539293120,
+  "uid": 10245,
+  "pid": 5420,
+  "ppid": 910,
+  "debuggable": false,
+  "sign_hex": "308202b9308201a2a0030201020204",
+  "start_timestamp": 1774458140,
+  "first_install_time": 1769200000,
+  "last_update_time": 1773000000,
+  "permissions": [
+    "android.permission.INTERNET",
+    "android.permission.ACCESS_NETWORK_STATE",
+    "android.permission.ACCESS_WIFI_STATE",
+    "android.permission.POST_NOTIFICATIONS"
+  ],
+  "device": {
+    "build": {
+      "brand": "google",
+      "manufacturer": "Google",
+      "model": "Pixel 7",
+      "device": "panther",
+      "product": "panther",
+      "board": "cloudripper",
+      "hardware": "cloudripper",
+      "bootloader": "panther-1.0-9425488",
+      "fingerprint": "google/panther/panther:13/TQ3A.230605.012/10204971:user/release-keys",
+      "sdk_int": 33,
+      "release": "13",
+      "security_patch": "2023-06-05",
+      "abi": "arm64-v8a",
+      "supported_abis": ["arm64-v8a"]
+    },
+    "cpu": {
+      "cores": 8,
+      "arch": "aarch64",
+      "implementer": 65,
+      "architecture": 8,
+      "variant": 1,
+      "part": 3338,
+      "revision": 1,
+      "bogomips": 44.0,
+      "hardware": "Tensor G2",
+      "features": ["fp", "asimd", "evtstrm", "aes", "pmull", "sha1", "sha2", "crc32", "atomics", "fphp", "asimdhp"]
+    },
+    "gpu": {
+      "vendor": "ARM",
+      "renderer": "Mali-G710",
+      "version": "OpenGL ES 3.2 v1.r38p0-01eac0.53696803886f376",
+      "gl_extensions": [
+        "GL_OES_EGL_image",
+        "GL_OES_depth24",
+        "GL_ARM_rgba8",
+        "GL_EXT_texture_buffer"
+      ]
+    },
+    "display": {
+      "width": 1080,
+      "height": 2400,
+      "density_dpi": 420,
+      "scale": 2.625,
+      "refresh_rate": 90.0,
+      "orientation": 0
+    },
+    "battery": {
+      "level": 92,
+      "temperature": 280,
+      "status": 3,
+      "plugged": 0,
+      "voltage": 4250,
+      "present": true,
+      "health": 2
+    },
+    "telephony": {
+      "imei": "358240101234567",
+      "imsi": "310260123456789",
+      "phone_number": "+14155552671",
+      "sim_operator": "310260",
+      "sim_operator_name": "T-Mobile",
+      "network_operator": "310260",
+      "network_operator_name": "T-Mobile",
+      "country_iso": "us",
+      "network_type": 20
+    },
+    "network": {
+      "ip": "10.0.0.124",
+      "mac": "22:ee:44:aa:11:bb",
+      "dns": "1.1.1.1",
+      "ssid": "HomeNetwork_5G",
+      "gateway": "10.0.0.1"
+    },
+    "memory": {
+      "ram_total_mb": 8192,
+      "ram_free_percent_start": 52,
+      "swap_total_mb": 4096
+    },
+    "kernel": {
+      "sysname": "Linux",
+      "nodename": "localhost",
+      "release": "5.10.157-android13-9-00021-g32626e25539a",
+      "version": "#1 SMP PREEMPT Fri May 12 18:22:41 UTC 2023",
+      "domain": "localdomain"
+    },
+    "secure": {
+      "android_id": "a1b2c3d4e5f67890",
+      "gaid": "7b8f9e01-2345-6789-abcd-ef0123456789",
+      "development_settings_enabled": 0,
+      "adb_enabled": 0
+    }
+  }
 }

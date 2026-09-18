@@ -1,5 +1,5 @@
 import itertools
-from ...data import mem_map as config
+from ...data import layout as config
 
 g_next_jvm_id = itertools.count(start=1)
 g_next_jvm_method_id = itertools.count(start=config.JMETHOD_ID_BASE, step=4)

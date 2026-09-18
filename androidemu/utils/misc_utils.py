@@ -13,7 +13,12 @@ from ..const.linux import *
 def vfs_path_to_system_path(vfs_root, path):
     if os.name == 'nt': # ???
         path = path.replace(':', '_')
-    fullpath = "%s/%s"%(vfs_root, path)
+    fullpath = None
+
+    if path[0] != "/":
+        fullpath = f"{vfs_root}/{path}"
+    else:
+        fullpath = vfs_root + path
     return fullpath
 
 def system_path_to_vfs_path(vfs_root, path):

@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from .numbers import NumType
 from ..const.emu_const import ARCH_ARM32
 
-_current_arch = ARCH_ARM32
+_current_arch = 0 # Undefined
 _os = platform.system()
 
 def set_types(arch: int):

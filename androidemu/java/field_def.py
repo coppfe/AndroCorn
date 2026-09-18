@@ -1,6 +1,8 @@
 from .jvm.id_counter import *
 
-from typing import Any
+from typing import Any, TYPE_CHECKING
+if TYPE_CHECKING:
+    from androidemu.java.classloader import JavaClassLoader
 
 class JavaFieldDef:
 

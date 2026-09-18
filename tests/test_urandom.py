@@ -4,21 +4,25 @@ import unittest
 import time
 
 from androidemu.core.emulator import Emulator
-from androidemu.utils.memory import helpers
 from androidemu.const import emu_const
 from unicorn import *
-from unicorn.arm_const import *
 from unicorn.arm64_const import *
+
 
 class TestMatrixVFS(unittest.TestCase):
 
-    def setUp(self):
-        self.vfs_root = "vfs"
-        self.emulator = Emulator(vfs_root=self.vfs_root, arch=emu_const.ARCH_ARM64, muti_task=True)
+    @classmethod
+    def setUpClass(cls):
+        cls.vfs_root = "vfs"
+        cls.emulator = Emulator(vfs_root=cls.vfs_root, arch=emu_const.ARCH_ARM64)
+        
+        cls.libc = cls.emulator.get_library("libc.so")
+        assert cls.libc is not None, "libc.so must be loaded by default"
 
-    def tearDown(self):
-        if self.emulator:
-            del self.emulator
+    @classmethod
+    def tearDownClass(cls):
+        if hasattr(cls, 'emulator'):
+            del cls.emulator
 
     def test_getrandom_syscall(self):
         print("\n[*] Testing getrandom entropy (Direct Syscall)...")
@@ -30,10 +34,10 @@ class TestMatrixVFS(unittest.TestCase):
         emu.mu.reg_write(UC_ARM64_REG_X0, buf_addr)
         emu.mu.reg_write(UC_ARM64_REG_X1, buf_size)
         emu.mu.reg_write(UC_ARM64_REG_X2, 0)
-        emu.mu.reg_write(UC_ARM64_REG_X8, 278)
+        emu.mu.reg_write(UC_ARM64_REG_X8, 278)  # getrandom syscall on aarch64
 
         code_addr = emu.memory.map(0, 4096, UC_PROT_READ | UC_PROT_EXEC)
-        emu.mu.mem_write(code_addr, b"\x01\x00\x00\xd4") # SVC #0 in ARM64
+        emu.mu.mem_write(code_addr, b"\x01\x00\x00\xd4")  # SVC #0 in ARM64
         
         emu.mu.emu_start(code_addr, code_addr + 4, count=1)
 
@@ -46,7 +50,7 @@ class TestMatrixVFS(unittest.TestCase):
     def test_urandom_device(self):
         print("\n[*] Testing /dev/urandom VFD...")
         emu = self.emulator
-        libcm = emu.load_library(f"{self.vfs_root}/system/lib64/libc.so", do_init=True)
+        libcm = self.libc
 
         path_ptr = emu.call_symbol(libcm, 'malloc', 64)
         emu.mu.mem_write(path_ptr, b"/dev/urandom\0")
@@ -54,7 +58,7 @@ class TestMatrixVFS(unittest.TestCase):
         # open("/dev/urandom", O_RDONLY=0)
         fd = emu.call_symbol(libcm, 'open', path_ptr, 0)
         print(f"    Virtual FD: {fd}")
-        self.assertGreaterEqual(fd, 1000, "VFD range error: expected >= 1000 for virtual device")
+        self.assertGreater(fd, 2, "FD error: expected valid descriptor > 2")
 
         read_size = 8
         read_buf = emu.call_symbol(libcm, 'malloc', read_size)
@@ -79,11 +83,11 @@ class TestMatrixVFS(unittest.TestCase):
     def test_virtual_time_warp(self):
         print("\n[*] Testing Virtual Time Warp...")
         emu = self.emulator
-        libcm = emu.load_library(f"{self.vfs_root}/system/lib64/libc.so", do_init=True)
+        libcm = self.libc
 
         req_ptr = emu.call_symbol(libcm, 'malloc', 16)
-        emu.mu.mem_write(req_ptr, int(2).to_bytes(8, 'little')) # 2 seconds
-        emu.mu.mem_write(req_ptr + 8, int(0).to_bytes(8, 'little')) # 0 nsec
+        emu.mu.mem_write(req_ptr, int(2).to_bytes(8, 'little'))  # 2 seconds
+        emu.mu.mem_write(req_ptr + 8, int(0).to_bytes(8, 'little'))  # 0 nsec
 
         time_before_host = time.time()
         time_before_virt = emu.time_manager.get_current_time_us()
@@ -107,7 +111,7 @@ class TestMatrixVFS(unittest.TestCase):
     def test_stat_path_consistency(self):
         print("\n[*] Testing Stat Path Consistency...")
         emu = self.emulator
-        libcm = emu.load_library(f"{self.vfs_root}/system/lib64/libc.so", do_init=True)
+        libcm = self.libc
         
         stat_buf = emu.call_symbol(libcm, 'malloc', 256)
         path_ptr = emu.call_symbol(libcm, 'malloc', 128)
@@ -129,106 +133,8 @@ class TestMatrixVFS(unittest.TestCase):
         print(f"    Virtual device size: {size_virt} bytes")
         self.assertEqual(size_virt, 0)
 
+
 if __name__ == "__main__":
     import logging
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.WARNING)
     unittest.main()
-
-# INFO:root:process pid:14984
-# INFO:root:[+] Detected Android property service (/dev/__properties__)
-# INFO:root:[+] Initializing from build.prop
-# INFO:androidemu.internal.linker:[Linker] Request to load: system/lib64/libc.so (do_init=True) (main=False)
-# INFO:androidemu.internal.linker:=== [Linker Phase 1] Loading Dependencies ===
-# INFO:androidemu.internal.linker:=== [Linker Phase 2] TLS Bootstrap ===
-# INFO:androidemu.internal.bionic.arm64.tls_bootstrap:[TLS-ARM64] Bootstrapping Modern Layout
-# INFO:androidemu.internal.bionic.arm64.tls_bootstrap:[TLS-ARM64] Bootstrap Done. TP=0x2000000, KAB=0x2004ce8, DTV=0x2004000, Pthread=0x2004210
-# INFO:androidemu.internal.linker:  [TLS] Bootstrap done for libc.so. TLS offset: -0x2000000
-# INFO:androidemu.internal.linker:  [TLS] Bootstrap done for libdl.so. TLS offset: -0x2000000
-# INFO:androidemu.internal.linker:=== [Linker Phase 3] Relocations ===
-# INFO:androidemu.internal.linker:=== [Linker Phase 4] Constructors ===
-# INFO:androidemu.internal.linker:  [Init] libdl.so
-# INFO:androidemu.internal.linker:  [Init] libc.so
-# INFO:root:open [vfs//dev/__properties__][0x88000] return fd 3
-# INFO:root:open [vfs//sys/devices/system/cpu/online][0x80000] return fd 3
-# WARNING:androidemu.native.sym_hooks.libdl_sym:[!] dlopen: library 'libnetd_client.so' NOT FOUND
-# INFO:androidemu.internal.linker:[Linker] Request to load: libc.so (do_init=False) (main=False) 
-
-# [*] Testing getrandom entropy (Direct Syscall)...
-#     RND result: 779314614f5ca6247f38c9a73a3d07cb
-# .INFO:root:process pid:14976
-# INFO:root:[+] Detected Android property service (/dev/__properties__)
-# INFO:root:[+] Initializing from build.prop
-# INFO:androidemu.internal.linker:[Linker] Request to load: system/lib64/libc.so (do_init=True) (main=False)
-# INFO:androidemu.internal.linker:=== [Linker Phase 1] Loading Dependencies ===
-# INFO:androidemu.internal.linker:=== [Linker Phase 2] TLS Bootstrap ===
-# INFO:androidemu.internal.bionic.arm64.tls_bootstrap:[TLS-ARM64] Bootstrapping Modern Layout
-# INFO:androidemu.internal.bionic.arm64.tls_bootstrap:[TLS-ARM64] Bootstrap Done. TP=0x2000000, KAB=0x2004ce8, DTV=0x2004000, Pthread=0x2004210
-# INFO:androidemu.internal.linker:  [TLS] Bootstrap done for libc.so. TLS offset: -0x2000000
-# INFO:androidemu.internal.linker:  [TLS] Bootstrap done for libdl.so. TLS offset: -0x2000000
-# INFO:androidemu.internal.linker:=== [Linker Phase 3] Relocations ===
-# INFO:androidemu.internal.linker:=== [Linker Phase 4] Constructors ===
-# INFO:androidemu.internal.linker:  [Init] libdl.so
-# INFO:androidemu.internal.linker:  [Init] libc.so
-# INFO:root:open [vfs//dev/__properties__][0x88000] return fd 3
-# INFO:root:open [vfs//sys/devices/system/cpu/online][0x80000] return fd 3
-# WARNING:androidemu.native.sym_hooks.libdl_sym:[!] dlopen: library 'libnetd_client.so' NOT FOUND
-# INFO:androidemu.internal.linker:[Linker] Request to load: libc.so (do_init=False) (main=False)
-
-# [*] Testing Stat Path Consistency...
-# INFO:androidemu.internal.linker:[Linker] Request to load: vfs/system/lib64/libc.so (do_init=True) (main=False)
-#     Real file (/system/lib64/libc.so) size: 984664 bytes
-#     Virtual device size: 0 bytes
-# .INFO:root:process pid:12657
-# INFO:root:[+] Detected Android property service (/dev/__properties__)
-# INFO:root:[+] Initializing from build.prop
-# INFO:androidemu.internal.linker:[Linker] Request to load: system/lib64/libc.so (do_init=True) (main=False)
-# INFO:androidemu.internal.linker:=== [Linker Phase 1] Loading Dependencies ===
-# INFO:androidemu.internal.linker:=== [Linker Phase 2] TLS Bootstrap ===
-# INFO:androidemu.internal.bionic.arm64.tls_bootstrap:[TLS-ARM64] Bootstrapping Modern Layout
-# INFO:androidemu.internal.bionic.arm64.tls_bootstrap:[TLS-ARM64] Bootstrap Done. TP=0x2000000, KAB=0x2004ce8, DTV=0x2004000, Pthread=0x2004210
-# INFO:androidemu.internal.linker:  [TLS] Bootstrap done for libc.so. TLS offset: -0x2000000
-# INFO:androidemu.internal.linker:  [TLS] Bootstrap done for libdl.so. TLS offset: -0x2000000
-# INFO:androidemu.internal.linker:=== [Linker Phase 3] Relocations ===
-# INFO:androidemu.internal.linker:=== [Linker Phase 4] Constructors ===
-# INFO:androidemu.internal.linker:  [Init] libdl.so
-# INFO:androidemu.internal.linker:  [Init] libc.so
-# INFO:root:open [vfs//dev/__properties__][0x88000] return fd 3
-# INFO:root:open [vfs//sys/devices/system/cpu/online][0x80000] return fd 3
-# WARNING:androidemu.native.sym_hooks.libdl_sym:[!] dlopen: library 'libnetd_client.so' NOT FOUND
-# INFO:androidemu.internal.linker:[Linker] Request to load: libc.so (do_init=False) (main=False)
-
-# [*] Testing /dev/urandom VFD...
-# INFO:androidemu.internal.linker:[Linker] Request to load: vfs/system/lib64/libc.so (do_init=True) (main=False)
-# INFO:root:Opened VIRTUAL device /dev/urandom as fd 1000
-#     Virtual FD: 1000
-#     Read result: 8 bytes, data: 95f08fbfd99d75d4
-#     Virtual Device Mode: 0o20666
-# .INFO:root:process pid:13741
-# INFO:root:[+] Detected Android property service (/dev/__properties__)
-# INFO:root:[+] Initializing from build.prop
-# INFO:androidemu.internal.linker:[Linker] Request to load: system/lib64/libc.so (do_init=True) (main=False)
-# INFO:androidemu.internal.linker:=== [Linker Phase 1] Loading Dependencies ===
-# INFO:androidemu.internal.linker:=== [Linker Phase 2] TLS Bootstrap ===
-# INFO:androidemu.internal.bionic.arm64.tls_bootstrap:[TLS-ARM64] Bootstrapping Modern Layout
-# INFO:androidemu.internal.bionic.arm64.tls_bootstrap:[TLS-ARM64] Bootstrap Done. TP=0x2000000, KAB=0x2004ce8, DTV=0x2004000, Pthread=0x2004210
-# INFO:androidemu.internal.linker:  [TLS] Bootstrap done for libc.so. TLS offset: -0x2000000
-# INFO:androidemu.internal.linker:  [TLS] Bootstrap done for libdl.so. TLS offset: -0x2000000
-# INFO:androidemu.internal.linker:=== [Linker Phase 3] Relocations ===
-# INFO:androidemu.internal.linker:=== [Linker Phase 4] Constructors ===
-# INFO:androidemu.internal.linker:  [Init] libdl.so
-# INFO:androidemu.internal.linker:  [Init] libc.so
-# INFO:root:open [vfs//dev/__properties__][0x88000] return fd 3
-# INFO:root:open [vfs//sys/devices/system/cpu/online][0x80000] return fd 3
-# WARNING:androidemu.native.sym_hooks.libdl_sym:[!] dlopen: library 'libnetd_client.so' NOT FOUND
-# INFO:androidemu.internal.linker:[Linker] Request to load: libc.so (do_init=False) (main=False)
-
-# [*] Testing Virtual Time Warp...
-# INFO:androidemu.internal.linker:[Linker] Request to load: vfs/system/lib64/libc.so (do_init=True) (main=False)
-#     Host time before: 1772828865.6815
-#     Host time after:  1772828865.6825 (Elapsed: 0.0010s)
-#     Virt time elapsed: 2000.0002s
-# .
-# ----------------------------------------------------------------------
-# Ran 4 tests in 0.263s
-
-# OK

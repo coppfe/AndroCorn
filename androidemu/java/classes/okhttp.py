@@ -1,6 +1,6 @@
-from ..class_def import JavaClassDef
-from ..field_def import JavaFieldDef
-from ..method_def import java_method_def, JavaMethodDef
+from androidemu.java.class_def import JavaClassDef
+from androidemu.java.field_def import JavaFieldDef
+from androidemu.java.method_def import java_method_def, JavaMethodDef
 
 
 class Buffer(metaclass=JavaClassDef, jvm_name='okio/Buffer'):

@@ -83,6 +83,8 @@ class ELFReader:
             DT.FINI: "DT_FINI",
             DT.FINI_ARRAY: "DT_FINI_ARRAY",
             DT.FINI_ARRAYSZ: "DT_FINI_ARRAYSZ",
+            DT.PREINIT_ARRAY: "DT_PREINIT_ARRAY",
+            DT.PREINIT_ARRAYSZ: "DT_PREINIT_ARRAYSZ",
             DT.RELR: "DT_RELR",
             DT.SONAME: "DT_SONAME",
         }

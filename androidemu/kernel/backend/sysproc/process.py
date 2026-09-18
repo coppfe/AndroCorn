@@ -1,225 +1,150 @@
-import logging
 import struct
-
-from unicorn import Uc
-
-from ....utils.memory import helpers
+from typing import TYPE_CHECKING
 
 from ....const.linux import *
-
 from ....types import ptr_t
-
+from ....utils.memory import helpers
 from .helpers.execve import ExecveHandler
 from .helpers.process_helper import ProcessHelper
-from .helpers.process_io_helper import ProcessIOHelper
-
-from typing import TYPE_CHECKING, Dict
+from ...fs.nodes.devices import VirtualPipe, PipeReadNode, PipeWriteNode
 
 if TYPE_CHECKING:
-    from androidemu.arguments.process import ProcessArgumentsBlock
-    from androidemu.data.states.process import ProcessState
-    from androidemu.data.config import Config
-
+    from androidemu.core import Emulator
 
 class ProcessSyscalls:
-    def __init__(self, process: 'ProcessArgumentsBlock', system_properties: Dict, config: 'Config'):
-        pcb = process.control_block
-        scheduler = process.scheduler
-        ctx = process.ctx
-
-        self._proc = ProcessHelper(scheduler)
-        self._io = ProcessIOHelper(pcb)
-
-        self._ctx: 'ProcessState' = ctx
-        
-        self._execve_cb = ExecveHandler(pcb, system_properties, config, process.ctx)
-
+    def __init__(self):
         self._ptr_size = ptr_t.size
 
-        self._sch = scheduler
-        self._pcb = pcb
+        self._proc = ProcessHelper()
+        self._execve_cb = ExecveHandler()
 
         self._tid_map = {}
 
-    # =========================================================
-    # BASIC INFO
-    # =========================================================
+    def _getpid(self,  emu: 'Emulator'):  return emu.pcb.pid
+    def _getppid(self, emu: 'Emulator'):  return emu.pcb.ppid
+    def _getuid(self,  emu: 'Emulator'):  return emu.pcb.uid
+    def _gettid(self,  emu: 'Emulator'):  return emu.pcb.current_tid
+    def _geteuid(self, emu: 'Emulator'):  return 0
 
-    def _getpid(self, mu):  return self._ctx.pid
-    def _getppid(self, mu): return self._ctx.ppid
-    def _getuid(self, mu):  return self._ctx.uid
-    def _gettid(self, mu):  return self._ctx.current_tid
-    def _geteuid(self, mu): return 0
-    
-    def _getresuid32(self, mu: 'Uc', ruid_ptr, euid_ptr, suid_ptr):
-        uid = self._ctx.uid
+    def _getresuid32(self, emu: 'Emulator', ruid_ptr, euid_ptr, suid_ptr):
+        uid = emu.pcb.uid
+        mu = emu.mu
+
         data = struct.pack("<I", uid)
         try:
             mu.mem_write(ruid_ptr, data)
             mu.mem_write(euid_ptr, data)
             mu.mem_write(suid_ptr, data)
             return 0
-        except Exception as e:
+        except Exception:
             return -EFAULT
-        
-    def _ptrace(self, mu, request, pid, addr, data):
-        ctx: 'ProcessState' = self._ctx
+
+    def _ptrace(self, emu: 'Emulator', request, pid, addr, data):
         if request == PTRACE_TRACEME:
-            if ctx.ptrace == pid or ctx.ptrace == True:
-                return 0
-            else:
-                return -EPERM
+            return 0 if (emu.pcb.ptrace == pid or emu.pcb.ptrace is True) else -EPERM
         elif request == PTRACE_DETACH:
-            ctx.ptrace = 0
+            emu.pcb.ptrace = 0
             return 0
+        return -EPERM
 
-    # =========================================================
-    # PIPE
-    # =========================================================
+    def _pipe_common(self, emu: 'Emulator', files_ptr: int, flags: int) -> int:
+        pipe = VirtualPipe()
+    
+        fd0 = emu.vfs.create_fd_for_node(PipeReadNode(pipe))
+        fd1 = emu.vfs.create_fd_for_node(PipeWriteNode(pipe))
+    
+        emu.mu.mem_write(files_ptr, int(fd0).to_bytes(4, byteorder='little'))
+        emu.mu.mem_write(files_ptr + 4, int(fd1).to_bytes(4, byteorder='little'))
+        return 0
+    
+    def _pipe(self, emu: 'Emulator', ptr):
+        return self._pipe_common(emu, ptr, 0)
 
-    def _pipe(self, mu, ptr):
-        return self._io._pipe_common(mu, ptr, 0)
+    def _pipe2(self, emu: 'Emulator', ptr, flags):
+        return self._pipe_common(emu, ptr, flags)
 
-    def _pipe2(self, mu, ptr, flags):
-        return self._io._pipe_common(mu, ptr, flags)
+    def _fork(self, emu: 'Emulator'):
+        return self._proc._do_fork(emu.scheduler)
 
-    # =========================================================
-    # FORK / CLONE
-    # =========================================================
+    def _vfork(self, emu: 'Emulator'):
+        return self._proc._do_fork(emu.scheduler)
 
-    def _fork(self, mu):
-        return self._proc._do_fork(mu)
+    def _clone(self, emu: 'Emulator', flags, stack, ptid, tls, ctid):
+        return self._proc._clone(emu, flags, stack, ptid, tls, ctid)
 
-    def _vfork(self, mu):
-        return self._proc._do_fork(mu)
-
-    def _clone(self, mu, flags, stack, ptid, tls, ctid):
-        return self._proc._clone(mu, flags, stack, ptid, tls, ctid)
-
-    # =========================================================
-    # EXIT / WAIT
-    # =========================================================
-
-    def _exit(self, mu: Uc, code):
-        tid = self._ctx.current_tid
-
-        # futex cleanup
+    def _exit(self, emu: 'Emulator', code):
+        tid = emu.pcb.current_tid
         if tid in self._tid_map:
             addr = self._tid_map.pop(tid)
-            self._sch.futex_wake(addr)
-
-        self._sch.exit_current_task()
+            emu.scheduler.futex_wake(addr)
+        emu.scheduler.exit_current_task()
         return 0
 
-    def _wait4(self, mu, pid, status, options, rusage):
-        assert rusage == 0
-        return self._sch.wait4_task(pid, status, options)
+    def _wait4(self, emu: 'Emulator', pid, status, options, rusage):
+        return emu.scheduler.wait4_task(pid, status, options)
 
-    # =========================================================
-    # EXECVE
-    # =========================================================
-
-    def _execve(self, mu: Uc, filename_ptr, argv_ptr, envp_ptr):
-        filename = helpers.read_utf8(mu, filename_ptr)
-
+    def _execve(self, emu: 'Emulator', filename_ptr, argv_ptr, envp_ptr):
+        filename = helpers.read_utf8(emu.mu, filename_ptr)
         argv = []
         ptr = argv_ptr
 
         while True:
-            off = helpers.read_ptr_sz(mu, ptr)
+            off = helpers.read_ptr_sz(emu.mu, ptr)
             if not off:
                 break
-            argv.append(helpers.read_utf8(mu, off))
+            argv.append(helpers.read_utf8(emu.mu, off))
             ptr += self._ptr_size
 
-        res = self._execve_cb.execute(filename, argv)
-
-        logging.debug("execve %s -> exit current task", filename)
-        self._sch.exit_current_task()
-
+        res = self._execve_cb.execute(emu, filename, argv)
+        emu.scheduler.exit_current_task()
         return res
 
-    # =========================================================
-    # DUP
-    # =========================================================
-
-    def _dup3(self, mu, oldfd, newfd, flags):
+    def _dup3(self, emu: 'Emulator', oldfd, newfd, flags):
         if oldfd == newfd:
             return -EINVAL
 
-        vfs = self._pcb.virtual_files
-
-        old = vfs.get_fd_detail(oldfd)
-        if not old:
+        old_handle = emu.vfs.get_handle(oldfd)
+        if not old_handle:
             return -EBADF
 
-        if vfs.has_fd(newfd):
-            vfs.remove_fd(newfd)
-
-        vfs._fds[newfd] = old
-        old.ref_count += 1
-
-        logging.debug("dup3 %d -> %d", oldfd, newfd)
+        emu.vfs.close(newfd)
+        emu.vfs.create_fd_for_node(old_handle.node, flags=old_handle.flags, specific_fd=newfd)
         return 0
 
-    # =========================================================
-    # TID ADDRESS
-    # =========================================================
-
-    def _set_tid_address(self, mu, addr):
-        tid = self._ctx.current_tid
-
+    def _set_tid_address(self, emu: 'Emulator', addr):
+        tid = emu.pcb.current_tid
         if addr:
             self._tid_map[tid] = addr
         else:
             self._tid_map.pop(tid, None)
-
         return tid
 
-    # =========================================================
-    # FUTEX (CLEANED)
-    # =========================================================
-
-    def _futex(self, mu: 'Uc', uaddr, op, val, timeout_ptr, uaddr2, val3):
+    def _futex(self, emu: 'Emulator', uaddr, op, val, timeout_ptr, uaddr2, val3):
         cmd = op & FUTEX_CMD_MASK
-        sch = self._sch
+        sch = emu.scheduler
+        mu = emu.mu
 
         value = int.from_bytes(mu.mem_read(uaddr, 4), "little")
-
-        # -------------------------
-        # WAIT
-        # -------------------------
+        
         if cmd in (FUTEX_WAIT, FUTEX_WAIT_BITSET):
             if value == val:
                 timeout = -1
-
                 if timeout_ptr:
                     ptr_sz = self._ptr_size
                     sec = helpers.read_ptr_sz(mu, timeout_ptr, ptr_sz)
                     nsec = helpers.read_ptr_sz(mu, timeout_ptr + ptr_sz, ptr_sz)
                     timeout = int(sec * 1000 + nsec / 1_000_000)
-
                 sch.futex_wait(uaddr, timeout)
-
             return 0
 
-        # -------------------------
-        # WAKE
-        # -------------------------
         if cmd in (FUTEX_WAKE, FUTEX_WAKE_BITSET):
             count = 0
-
             for _ in range(val):
                 if not sch.futex_wake(uaddr):
                     break
                 count += 1
-
             if count:
                 sch.yield_task()
-
             return count
 
-        # -------------------------
-        # NOT IMPLEMENTED
-        # -------------------------
-        raise NotImplementedError("futex cmd=%#x", cmd)
+        raise NotImplementedError(f"futex cmd={cmd:#x}")

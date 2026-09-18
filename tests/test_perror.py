@@ -6,7 +6,7 @@ logging.basicConfig(level=logging.DEBUG)
 class TestBionicPerror(unittest.TestCase):
 
     def setUp(self):
-        self.arch = emu_const.ARCH_ARM32
+        self.arch = emu_const.ARCH_ARM64
         self.emulator = Emulator(vfs_root="vfs", arch=self.arch, muti_task=True)
 
     def tearDown(self):
@@ -19,7 +19,7 @@ class TestBionicPerror(unittest.TestCase):
         libc_path = f"{vfs_path}/system/lib64/libc.so" if self.arch == emu_const.ARCH_ARM64 else f"{vfs_path}/system/lib/libc.so"
         libc = emulator.load_library(libc_path, do_init=True)
 
-        test_errno = 127
+        test_errno = 2 # ENOENT
         emulator.tls_utils.set_errno(test_errno)
         
         print(f"[*] Force-set errno to {test_errno}. Now calling perror...")
@@ -29,7 +29,7 @@ class TestBionicPerror(unittest.TestCase):
         emulator.mu.mem_write(prefix_ptr, prefix_str)
 
         print("--- Native perror output start ---")
-        emulator.call_symbol(libc, "perror", prefix_ptr)
+        emulator.call_symbol(libc, "perror", prefix_ptr) # AndroCorn_Report: No such file or directory
         print("--- Native perror output end ---")
 
         emulator.call_symbol(libc, "free", prefix_ptr)

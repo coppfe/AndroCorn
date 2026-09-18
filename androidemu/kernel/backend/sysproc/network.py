@@ -1,48 +1,34 @@
 import logging
 import socket
-
 from typing import TYPE_CHECKING, Dict
-
 from ....const.linux import *
+from ...fs.nodes.devices import SocketNode
 
 if TYPE_CHECKING:
-    from ....core.process.pcb import ProcessControlBlock
-
+    from androidemu import Emulator
 
 class NetworkSyscalls:
-    def __init__(self, pcb: 'ProcessControlBlock'):
-        self._pcb: 'ProcessControlBlock' = pcb
+    SUSPICIOUS_PORTS = {
+                    23946,
+                    23947,
+                    27042,
+                    27043,
+                    1234,
+                    5555
+    }
+    
+    def __init__(self):
+        self._real_sockets: Dict[int, socket.socket] = {}
 
-        self._real_sockets: Dict[str, 'socket.SocketIO'] = {}
+    def _socket(self, emu: 'Emulator', family: int, type_in, protocol):
+        type_in &= 0xFF
 
-    # =========================================================
-    # SOCKET
-    # =========================================================
-
-    def _socket(self, mu, family, type_in, protocol):
-        type_in &= 0xff
-
-        # -------------------------
-        # AF_NETLINK (virtual)
-        # -------------------------
+        # AF_NETLINK / AF_UNIX
         if family == 16:
-            return self._pcb.virtual_files.add_virtual_fd(
-                "[netlink]",
-                "netlink_socket"
-            )
-
-        # -------------------------
-        # AF_UNIX (virtual)
-        # -------------------------
+            return emu.vfs.create_fd_for_node(SocketNode("[netlink]"))
         if family == 1:
-            return self._pcb.virtual_files.add_virtual_fd(
-                "[unix]",
-                "unix_socket"
-            )
+            return emu.vfs.create_fd_for_node(SocketNode("[unix]"))
 
-        # -------------------------
-        # REAL SOCKET
-        # -------------------------
         try:
             s = socket.socket(family, type_in, protocol)
             s.setblocking(False)
@@ -52,82 +38,49 @@ class NetworkSyscalls:
 
         fd = s.fileno()
         self._real_sockets[fd] = s
+        return emu.vfs.create_fd_for_node(SocketNode(f"[socket:{fd}]", sock=s), specific_fd=fd)
 
-        self._pcb.virtual_files.add_fd(
-            "[socket:%d]" % fd,
-            "network_socket",
-            fd
-        )
+    def _setsockopt(self, emu: 'Emulator', fd, level, optname, optval, optlen):
+        return 0 # ?
 
-        return fd
+    def _connect(self, emu: 'Emulator', fd, addr_ptr, addr_len):
+        handle = emu.vfs.get_handle(fd)
+        if not handle:
+            return -EBADF
 
-    # =========================================================
-    # SETSOCKOPT
-    # =========================================================
-
-    def _setsockopt(self, mu, fd, level, optname, optval, optlen):
-        logging.warning("setsockopt not implemented (fd=%d)", fd)
-        return 0
-
-    # =========================================================
-    # CONNECT
-    # =========================================================
-
-    def _connect(self, mu, fd, addr_ptr, addr_len):
-        sock = self._pcb.virtual_files.get_fd_detail(fd)
-        if not sock:
-            return -EPERM
-
-        data = mu.mem_read(addr_ptr, addr_len)
+        data = emu.mu.mem_read(addr_ptr, addr_len)
         family = int.from_bytes(data[0:2], "little")
 
-        # -------------------------
-        # AF_UNIX
-        # -------------------------
         if family == 1:
-            logging.debug("AF_UNIX connect (virtual)")
-            return 0
+            return 0  # AF_UNIX success
 
-        # -------------------------
-        # AF_INET
-        # -------------------------
-        if family == 2:
+        if family == 2:  # AF_INET
             port = int.from_bytes(data[2:4], "big")
             ip = ".".join(str(b) for b in data[4:8])
-
             logging.info("connect -> %s:%d", ip, port)
+
+            if (ip in ("127.0.0.1", "0.0.0.0", "localhost")) and (port in self.SUSPICIOUS_PORTS):
+                logging.warning("[Anti-Debug Trap] Blocked probe to %s:%d -> Returning -ECONNREFUSED", ip, port)
+                return -ECONNREFUSED
 
             real = self._real_sockets.get(fd)
             if not real:
                 return -EPERM
-
             try:
                 real.connect((ip, port))
             except BlockingIOError:
                 pass
+            except ConnectionRefusedError:
+                return -ECONNREFUSED
             except Exception as e:
                 logging.warning("connect error: %s", e)
                 return -EPERM
-
             return 0
 
         return 0
 
-    # =========================================================
-    # BIND
-    # =========================================================
-
-    def _bind(self, mu, fd, addr_ptr, addr_len):
-        sock = self._pcb.virtual_files.get_fd_detail(fd)
-        if not sock:
-            return -EPERM
-
-        data = mu.mem_read(addr_ptr, addr_len)
-
-        # skip sockaddr parsing noise safely
-        addr = data[2:].split(b"\x00")[0].decode(errors="ignore")
-
-        logging.info("bind -> %s", addr)
-
-        sock.bound = True
+    def _bind(self, emu: 'Emulator', fd, addr_ptr, addr_len):
+        handle = emu.vfs.get_handle(fd)
+        if not handle:
+            return -EBADF
         return 0

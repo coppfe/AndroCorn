@@ -1,41 +1,56 @@
-from typing import TYPE_CHECKING, List
+import sys
 
-from .jvm.id_counter import *
+from typing import List, Optional, Callable, TYPE_CHECKING
+
 from .class_def import JavaClassDef
 from .jni.reference import *
 from ..const import emu_const
-import sys
 
+from .jvm.id_counter import next_method_id
 from .jvm.constants import JAVA_NULL
 
 if TYPE_CHECKING:
     from ..core.emulator import Emulator
 
 class JavaMethodDef:
-
     """
     Define a java method
-
-    :param name: Name
-    :param signature: Signature
-    :param native: Is native
-    :param args_list: Args list
-    :param modifier: Modifier
-    :param ignore: Ignore
     """
 
-    def __init__(self, func_name: str, func: callable, name: str, signature: str, native: bool, args_list: List = None, modifier: int = None, ignore: bool = None):
-        self.jvm_id:        int                 = next_method_id()
-        self.func_name:     str             = func_name
-        self.func:          callable        = func
-        self.name:          str             = name
-        self.signature:     str             = signature
-        self.native:        bool            = native
-        self.native_addr:   int             = None
-        self.args_list:     List            = args_list
-        self.modifier:      int             = modifier
-        self.ignore:        bool            = ignore
+    __slots__ = (
+        "jvm_id",
+        "func_name",
+        "func",
+        "name",
+        "signature",
+        "native",
+        "native_addr",
+        "args_list",
+        "modifier",
+        "ignore",
+    )
 
+    def __init__(
+        self,
+        func_name: str,
+        func: Optional[Callable],
+        name: str,
+        signature: str,
+        native: bool,
+        args_list: Optional[List[str]] = None,
+        modifier: Optional[int] = None,
+        ignore: bool = False,
+    ):
+        self.jvm_id = next_method_id()
+        self.func_name = func_name
+        self.func = func
+        self.name = name
+        self.signature = signature
+        self.native = native
+        self.native_addr = None
+        self.args_list = args_list
+        self.modifier = modifier
+        self.ignore = ignore
 
 def java_method_def(name: str, signature: str, native: bool=False, args_list: List=None, modifier: int=None, ignore: bool=False) -> callable:
     """

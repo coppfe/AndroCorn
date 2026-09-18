@@ -1,166 +1,103 @@
-import os
-
-from ....utils.memory import helpers as memory_helpers
-
-from ....const.linux import *
-
-from ....types import ptr_t
-
-from ...dev.ioctl import IoctlHandler
-
 from typing import TYPE_CHECKING
 
-from ....types.alias import *
-from ....runtime.precompile import define
+from ....const.linux import AT_FDCWD, EINVAL, EFAULT
+from ....types import ptr_t
+from ....utils.memory import helpers as memory_helpers
 
 if TYPE_CHECKING:
-    from unicorn import Uc
-    from ....core.process.pcb import ProcessControlBlock
-    from .helpers._io import FileSystemIOUtils
-    from .helpers.utils import FileSystemUtils
+    from androidemu import Emulator
 
 
 class FileSystemIO:
-    def __init__(self, mu: 'Uc', pcb: 'ProcessControlBlock', fs_io_helper: 'FileSystemIOUtils', fs_helper: 'FileSystemUtils'):
-        self._mu = mu
-        self._pcb = pcb
+    """
+    Stateless VFS Input/Output syscalls.
+    """
 
-        self._fs_io = fs_io_helper
-        self._fs = fs_helper
+    def __init__(self) -> None:
+        pass
 
-        self._ptr_size = ptr_t.size
+    def _open(self, emu: 'Emulator', filename_ptr: int, flags: int, mode: int) -> int:
+        path = memory_helpers.read_utf8(emu.mu, filename_ptr) if filename_ptr else ""
+        return emu.vfs.openat(AT_FDCWD, path, flags, mode)
 
-        self._ioctl_cb = IoctlHandler(self._mu)
+    def _openat(self, emu: 'Emulator', dfd: int, filename_ptr: int, flags: int, mode: int) -> int:
+        path = memory_helpers.read_utf8(emu.mu, filename_ptr) if filename_ptr else ""
+        norm_dfd = memory_helpers.normalize_dirfd(dfd)
+        return emu.vfs.openat(norm_dfd, path, flags, mode)
 
-    # =========================================================
-    # FD HELPER (UNIFIED ACCESS)
-    # =========================================================
+    def _close(self, emu: 'Emulator', fd: int) -> int:
+        return emu.vfs.close(fd)
 
-    def _fd(self, fd):
-        return self._pcb.virtual_files.get_fd_detail(fd)
+    def _read(self, emu: 'Emulator', fd: int, buf_addr: int, count: int) -> int:
+        ret, data = emu.vfs.read(fd, count)
+        if ret > 0:
+            emu.mu.mem_write(buf_addr, data)
+        return ret
 
-    # =========================================================
-    # IOCTL / POLL
-    # =========================================================
+    def _write(self, emu: 'Emulator', fd: int, buf_addr: int, count: int) -> int:
+        data = emu.mu.mem_read(buf_addr, count)
+        return emu.vfs.write(fd, data)
 
-    def _ioctl(self, mu, fd, cmd, a1, a2, a3, a4):
-        return self._ioctl_cb.handle(fd, cmd, a1, a2, a3, a4)
-
-    def _poll(self, mu, pollfd_ptr, nfds, timeout):
-        return self._fs_io._do_poll(mu, pollfd_ptr, nfds, timeout)
-
-    def _ppoll(self, mu, pollfd_ptr, nfds, timeout_ts_ptr, sigmask_ptr):
-        timeout = -1
-
-        if timeout_ts_ptr:
-            ptr_sz = self._ptr_size
-            sec = memory_helpers.read_ptr_sz(mu, timeout_ts_ptr, ptr_sz)
-            nsec = memory_helpers.read_ptr_sz(mu, timeout_ts_ptr + ptr_sz, ptr_sz)
-            timeout = int(sec * 1000 + nsec / 1_000_000)
-
-        return self._fs_io._do_poll(mu, pollfd_ptr, nfds, timeout)
-
-    # =========================================================
-    # OPEN / CLOSE
-    # =========================================================
-
-    def _open(self, mu, filename_ptr, flags, mode):
-        path = memory_helpers.read_utf8(mu, filename_ptr)
-        return self._fs_io._open_file(mu, path, flags)
-
-    def _openat(self, mu, dfd, filename_ptr, flags, mode):
-        path = memory_helpers.read_utf8(mu, filename_ptr)
-        return self._fs_io._open_file(mu, path, flags)
-
-    def _close(self, mu, fd):
-        return self._fs_io._close_file(mu, fd)
-
-    # =========================================================
-    # SEEK
-    # =========================================================
-
-    @define
-    def _lseek(self, mu, fd: int32_t, offset: off_t, whence: int32_t):
-        # // off_t lseek(int fd, off_t offset, int whence);
-        vf = self._fd(fd)
-        if not vf:
-            return -EBADF
-        
-        return vf.seek(offset, whence)
-
-    def _llseek(self, mu, fd, hi, lo, result_ptr, whence):
-        vf = self._fd(fd)
-        if not vf:
-            return -EBADF
-
-        offset = (hi << 32) | (lo & 0xffffffff)
-        new_off = vf.seek(offset, whence)
-
-        if new_off < 0:
-            return -EINVAL
-
-        try:
-            mu.mem_write(result_ptr, new_off.to_bytes(8, "little"))
-        except Exception:
-            return -EFAULT
-
-        return 0
-
-    # =========================================================
-    # READ / WRITE
-    # =========================================================
-
-    def _read(self, mu, fd, buf_addr, count):
-        vf = self._fd(fd)
-        if not vf:
-            return -EBADF
-        return vf.read(buf_addr, count)
-
-    def _write(self, mu, fd, buf_addr, count):
-        vf = self._fd(fd)
-        if not vf:
-            return -EBADF
-
-        data = mu.mem_read(buf_addr, count)
-        return vf.write(data)
-
-    def _writev(self, mu, fd, vec, vlen):
-        vf = self._fd(fd)
-        if not vf:
-            return -EBADF
-
-        ptr_sz = self._ptr_size
+    def _writev(self, emu: 'Emulator', fd: int, vec: int, vlen: int) -> int:
+        mu = emu.mu
+        ptr_sz = ptr_t.size
         vec_sz = 2 * ptr_sz
-
-        total = bytearray()
+        total_written = 0
 
         for i in range(vlen):
             addr = memory_helpers.read_ptr_sz(mu, vec + i * vec_sz)
             size = memory_helpers.read_ptr_sz(mu, vec + i * vec_sz + ptr_sz)
-            total += mu.mem_read(addr, size)
-        return vf.write(total)
+            chunk = mu.mem_read(addr, size)
+            written = emu.vfs.write(fd, chunk)
+            if written < 0:
+                return written if total_written == 0 else total_written
+            total_written += written
 
-    # =========================================================
-    # ACCESS / FS OPS
-    # =========================================================
+        return total_written
 
-    def _mkdir(self, mu, path_ptr, mode):
-        path = memory_helpers.read_utf8(mu, path_ptr)
-        host = self._fs._translate_path(path)
+    def _lseek(self, emu: 'Emulator', fd: int, offset: int, whence: int) -> int:
+        if ptr_t.size == 4 and (offset & 0x80000000):
+            offset = offset - 0x100000000
+        return emu.vfs.lseek(fd, offset, whence)
 
-        if not os.path.exists(host):
-            os.makedirs(host)
+    def _llseek(self, emu: 'Emulator', fd: int, hi: int, lo: int, result_ptr: int, whence: int) -> int:
+        offset = (hi << 32) | (lo & 0xFFFFFFFF)
+        if offset & (1 << 63):
+            offset -= (1 << 64)
 
-        return 0
+        new_off = emu.vfs.lseek(fd, offset, whence)
+        if new_off < 0:
+            return -EINVAL
 
-    def _mkdirat(self, mu, dfd, path_ptr, mode):
-        path = self._fs._dirfd_2_path(dfd, memory_helpers.read_utf8(mu, path_ptr))
-        if not path:
-            return -EPERM
+        try:
+            emu.mu.mem_write(result_ptr, new_off.to_bytes(8, "little", signed=False))
+            return 0
+        except Exception:
+            return -EFAULT
 
-        host = self._fs._translate_path(path)
+    def _ioctl(self, emu: 'Emulator', fd: int, cmd: int, arg1: int, arg2: int, arg3: int, arg4: int) -> int:
+        return emu.vfs.ioctl(fd, cmd, arg1, emu.mu)
 
-        if not os.path.exists(host):
-            os.makedirs(host)
+    def _poll(self, emu: 'Emulator', pollfd_ptr: int, nfds: int, timeout: int) -> int:
+        mu = emu.mu
+        ready = 0
+        for i in range(nfds):
+            ptr = pollfd_ptr + (i * 8)
+            fd = int.from_bytes(mu.mem_read(ptr, 4), 'little')
+            events = int.from_bytes(mu.mem_read(ptr + 4, 2), 'little')
 
-        return 0
+            handle = emu.vfs.get_handle(fd)
+            if not handle:
+                mu.mem_write(ptr + 6, (0x0020).to_bytes(2, 'little'))  # POLLNVAL
+                continue
+
+            # POLLIN (0x1) | POLLOUT (0x4)
+            revents = events & 0x0005
+            mu.mem_write(ptr + 6, revents.to_bytes(2, 'little'))
+            if revents:
+                ready += 1
+
+        return ready
+
+    def _ppoll(self, emu: 'Emulator', pollfd_ptr: int, nfds: int, timeout_ts_ptr: int, sigmask_ptr: int) -> int:
+        return self._poll(emu, pollfd_ptr, nfds, 0)

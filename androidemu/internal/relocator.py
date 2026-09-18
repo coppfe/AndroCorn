@@ -1,149 +1,236 @@
 import logging
-
-from typing import TYPE_CHECKING
-
-from unicorn.arm_const import *
-from unicorn.arm64_const import *
-
+from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING, List, Tuple
 from lief.ELF import Relocation
 
-from ..types import ptr_t
+from unicorn.arm_const import UC_ARM_REG_R0
+from unicorn.arm64_const import UC_ARM64_REG_X0
 
 if TYPE_CHECKING:
     from ..core.emulator import Emulator
-
-R_ARM_ABS32 = Relocation.TYPE.ARM_ABS32
-R_ARM_GLOB_DAT = Relocation.TYPE.ARM_GLOB_DAT
-R_ARM_JUMP_SLOT = Relocation.TYPE.ARM_JUMP_SLOT
-R_ARM_RELATIVE = Relocation.TYPE.ARM_RELATIVE
-R_ARM_IRELATIVE = Relocation.TYPE.ARM_IRELATIVE
-R_ARM_TLS_DTPOFF32 = Relocation.TYPE.ARM_TLS_DTPOFF32
-R_ARM_TLS_TPOFF32 = Relocation.TYPE.ARM_TLS_TPOFF32
-
-R_AARCH64_ABS64 = Relocation.TYPE.AARCH64_ABS64
-R_AARCH64_COPY = Relocation.TYPE.AARCH64_COPY
-R_AARCH64_GLOB_DAT = Relocation.TYPE.AARCH64_GLOB_DAT
-R_AARCH64_JUMP_SLOT = Relocation.TYPE.AARCH64_JUMP_SLOT
-R_AARCH64_RELATIVE = Relocation.TYPE.AARCH64_RELATIVE
-R_AARCH64_TLS_TPREL64 = Relocation.TYPE.AARCH64_TLS_TPREL64
-R_AARCH64_IRELATIVE = Relocation.TYPE.AARCH64_IRELATIVE
+    from .module import Module
+    from .resolver import SymbolResolver
 
 logger = logging.getLogger(__name__)
 
-class Relocator:
-    def __init__(self, emu: 'Emulator', load_bias):
+
+class BaseRelocator(ABC):
+    def __init__(self, emu: 'Emulator', module: 'Module', resolver: 'SymbolResolver'):
         self.emu = emu
-        self.load_bias = load_bias
-        self.word_size = ptr_t.size
+        self.module = module
+        self.resolver = resolver
+        self.bias = module.bias
+        self.tp = emu.tls_state.tp if hasattr(emu, 'tls_state') and emu.tls_state else 0
+        
+        self.deferred_ifuncs: List[Tuple[int, int, int]] = []
 
-    def write_val(self, addr, value):        
-        try:
-            mask = (1 << (self.word_size * 8)) - 1
-            data = (value & mask).to_bytes(self.word_size, 'little')
-            self.emu.mu.mem_write(addr, data)
-        except Exception as e:
-            logger.error("[Relocator] Write fault at 0x%x: %s", addr, e)
+    @abstractmethod
+    def relocate_all(self, all_modules: List['Module']) -> None:
+        pass
 
-    def read_val(self, addr):
+    def _resolve_deferred_ifuncs(self, hwcap: int) -> None:
+        mu = self.emu.mu
+        reg_arg0 = UC_ARM64_REG_X0 if self.word_size == 8 else UC_ARM_REG_R0
+
+        for r_addr, resolver_func, addend in self.deferred_ifuncs:
+            try:
+                mu.reg_write(reg_arg0, hwcap)
+                resolved_addr = self.emu.call_native(resolver_func)
+                final_val = resolved_addr + addend
+                self.write_val(r_addr, final_val)
+                logger.debug("  [IFUNC] Resolved 0x%X -> 0x%X (at 0x%X)", resolver_func, final_val, r_addr)
+            except Exception as e:
+                logger.error("Failed to execute IFUNC resolver at 0x%X: %s", resolver_func, e)
+                raise
+
+    def write_val(self, addr: int, value: int) -> None:
+        mask = (1 << (self.word_size * 8)) - 1
+        data = (value & mask).to_bytes(self.word_size, 'little')
+        self.emu.mu.mem_write(addr, data)
+
+    def read_val(self, addr: int) -> int:
         return int.from_bytes(self.emu.mu.mem_read(addr, self.word_size), 'little')
 
-class ARM32Relocator(Relocator):
 
-    def apply(self, r_type, r_addr, sym_addr, sym_name, addend, tls_info=None, is_ifunc=False):
-        implicit = self.read_val(r_addr)
-        new_val = None
-        
-        # Hooks
-        if sym_name in self.emu.linker.symbol_hooks:
-            hook_addr = self.emu.linker.symbol_hooks[sym_name]
-            self.write_val(r_addr, hook_addr)
+class ARM32Relocator(BaseRelocator):
+    word_size = 4
+
+    def __init__(self, emu: 'Emulator', module: 'Module', resolver: 'SymbolResolver'):
+        super().__init__(emu, module, resolver)
+
+        self._handlers = {
+            Relocation.TYPE.ARM_RELATIVE:    self._rel_relative,
+            Relocation.TYPE.ARM_ABS32:       self._rel_abs32,
+            Relocation.TYPE.ARM_GLOB_DAT:    self._rel_glob_dat,
+            Relocation.TYPE.ARM_JUMP_SLOT:   self._rel_jump_slot,
+            Relocation.TYPE.ARM_TLS_TPOFF32: self._rel_tls_tpoff,
+            Relocation.TYPE.ARM_IRELATIVE:   self._rel_irelative,
+        }
+
+    def relocate_all(self, all_modules: List['Module']) -> None:
+        reader = self.module._reader
+        if not reader:
             return
-        
-        # R_ARM_RELATIVE (B + A)
-        if r_type == R_ARM_RELATIVE:
-            new_val = self.load_bias + implicit
-            self.write_val(r_addr, new_val)
 
-        # SYM RELOC (S + A)
-        elif r_type in (R_ARM_GLOB_DAT, R_ARM_JUMP_SLOT):
-            if sym_addr:
-                if is_ifunc:
-                    self.emu.mu.reg_write(UC_ARM_REG_R0, 0x3FF) # HWCAP
-                    new_val = self.emu.call_native(sym_addr)
-                    self.write_val(r_addr, new_val)
-                else:
-                    new_val = sym_addr
-                    self.write_val(r_addr, new_val)
+        relocs = reader.relocations
+        phase1_relative = []
+        phase2_symbolic = []
+
+        for rel in relocs:
+            if rel.type in (Relocation.TYPE.ARM_RELATIVE, Relocation.TYPE.ARM_IRELATIVE):
+                phase1_relative.append(rel)
             else:
-                new_val = 0
-                self.write_val(r_addr, new_val)
+                phase2_symbolic.append(rel)
 
-        # ABS32 (implicit) (S + A)
-        elif r_type == R_ARM_ABS32:
-            if sym_addr:
-                if is_ifunc:
-                    self.emu.mu.reg_write(UC_ARM_REG_R0, 0x3FF)
-                    new_val = self.emu.call_native(sym_addr)
-                    self.write_val(r_addr, new_val + implicit)
-                else:
-                    new_val = sym_addr + implicit
-                    self.write_val(r_addr, new_val)
+        for rel in phase1_relative:
+            r_addr = self.bias + rel.address
+            handler = self._handlers.get(rel.type)
+            if handler:
+                handler(r_addr, rel, all_modules)
+
+        # Symbolic & TLS
+        for rel in phase2_symbolic:
+            r_addr = self.bias + rel.address
+            handler = self._handlers.get(rel.type)
+            if handler:
+                handler(r_addr, rel, all_modules)
             else:
-                new_val = implicit
-                self.write_val(r_addr, new_val)
+                logger.warning("[ARM32Relocator] Unsupported relocation type: %s at 0x%X", rel.type, r_addr)
 
-        # IRELATIVE
-        elif r_type == R_ARM_IRELATIVE:
-            resolver_addr = self.load_bias + implicit
-            self.emu.mu.reg_write(UC_ARM_REG_R0, 0x3FF) # HWCAP
-            new_val = self.emu.call_native(resolver_addr)
-            self.write_val(r_addr, new_val)
+        # IFUNC
+        self._resolve_deferred_ifuncs(hwcap=0x3FF)
 
-        elif r_type == R_ARM_TLS_TPOFF32:
-            new_val = r_addr
-            if tls_info:
-                self.write_val(r_addr, tls_info['offset'])
+    def _rel_relative(self, r_addr: int, rel: Relocation, all_modules: List['Module']) -> None:
+        implicit_addend = self.read_val(r_addr)
+        self.write_val(r_addr, self.bias + implicit_addend)
+
+    def _rel_irelative(self, r_addr: int, rel: Relocation, all_modules: List['Module']) -> None:
+        implicit_addend = self.read_val(r_addr)
+        resolver_addr = self.bias + implicit_addend
+
+        self.deferred_ifuncs.append((r_addr, resolver_addr, 0))
+
+    def _rel_abs32(self, r_addr: int, rel: Relocation, all_modules: List['Module']) -> None:
+        implicit_addend = self.read_val(r_addr)
+        sym_name = rel.symbol.name if rel.has_symbol else ""
+        res = self.resolver.resolve(sym_name, self.module, all_modules)
+
+        if res.found:
+            if res.is_ifunc:
+                self.deferred_ifuncs.append((r_addr, res.address, implicit_addend))
             else:
-                self.write_val(r_addr, 0)
-        
+                self.write_val(r_addr, res.address + implicit_addend)
         else:
-            logger.warning("[ARM32Relocator] Unsupported relocation type: %s", r_type)
+            self.write_val(r_addr, implicit_addend)
 
-class ARM64Relocator(Relocator):
-    def apply(self, r_type, r_addr, sym_addr, sym_name, addend, tls_info=None, is_ifunc=False):
-        if sym_name in self.emu.linker.symbol_hooks:
-            hook_addr = self.emu.linker.symbol_hooks[sym_name]
-            self.write_val(r_addr, hook_addr)
+    def _rel_glob_dat(self, r_addr: int, rel: Relocation, all_modules: List['Module']) -> None:
+        sym_name = rel.symbol.name if rel.has_symbol else ""
+        res = self.resolver.resolve(sym_name, self.module, all_modules)
+
+        if res.found:
+            if res.is_ifunc:
+                self.deferred_ifuncs.append((r_addr, res.address, 0))
+            else:
+                self.write_val(r_addr, res.address)
+        else:
+            self.write_val(r_addr, 0)
+
+    def _rel_jump_slot(self, r_addr: int, rel: Relocation, all_modules: List['Module']) -> None:
+        self._rel_glob_dat(r_addr, rel, all_modules)
+
+    def _rel_tls_tpoff(self, r_addr: int, rel: Relocation, all_modules: List['Module']) -> None:
+        sym_name = rel.symbol.name if rel.has_symbol else ""
+        res = self.resolver.resolve(sym_name, self.module, all_modules)
+        tls_offset = res.tls_offset if res.found else getattr(self.module, 'tls_offset', 0)
+        self.write_val(r_addr, tls_offset)
+
+class ARM64Relocator(BaseRelocator):
+    word_size = 8
+
+    def __init__(self, emu: 'Emulator', module: 'Module', resolver: 'SymbolResolver'):
+        super().__init__(emu, module, resolver)
+
+        self._handlers = {
+            Relocation.TYPE.AARCH64_RELATIVE:    self._rel_relative,
+            Relocation.TYPE.AARCH64_ABS64:       self._rel_abs64,
+            Relocation.TYPE.AARCH64_GLOB_DAT:    self._rel_glob_dat,
+            Relocation.TYPE.AARCH64_JUMP_SLOT:   self._rel_jump_slot,
+            Relocation.TYPE.AARCH64_TLS_TPREL64: self._rel_tls_tprel64,
+            Relocation.TYPE.AARCH64_IRELATIVE:   self._rel_irelative,
+        }
+
+    def relocate_all(self, all_modules: List['Module']) -> None:
+        reader = self.module._reader
+        if not reader:
             return
 
-        # RELATIVE: B + A
-        if r_type == R_AARCH64_RELATIVE:
-            val = self.load_bias + addend
-            self.write_val(r_addr, val)
+        relocs = reader.relocations
+        phase1_relative = []
+        phase2_symbolic = []
 
-        # ABS64 / GLOB_DAT / JUMP_SLOT: S + A
-        elif r_type in (R_AARCH64_ABS64, R_AARCH64_GLOB_DAT, R_AARCH64_JUMP_SLOT):
-            if sym_addr:
-                if is_ifunc:
-                    self.emu.mu.reg_write(UC_ARM64_REG_X0, 0xFF) # HWCAP
-                    val = self.emu.call_native(sym_addr) + addend
-                else:
-                    val = sym_addr + addend
+        for rel in relocs:
+            if rel.type in (Relocation.TYPE.AARCH64_RELATIVE, Relocation.TYPE.AARCH64_IRELATIVE):
+                phase1_relative.append(rel)
             else:
-                val = self.load_bias + addend
-            self.write_val(r_addr, val)
+                phase2_symbolic.append(rel)
 
-        # IRELATIVE: B + A -> call IFUNC resolver
-        elif r_type == R_AARCH64_IRELATIVE:
-            resolver_addr = self.load_bias + addend
-            self.emu.mu.reg_write(UC_ARM64_REG_X0, 0xFF) # HWCAP
-            result = self.emu.call_native(resolver_addr)
-            self.write_val(r_addr, result)
+        for rel in phase1_relative:
+            r_addr = self.bias + rel.address
+            handler = self._handlers.get(rel.type)
+            if handler:
+                handler(r_addr, rel, all_modules)
 
-        # 5. TLS (TPREL64)
-        elif r_type == R_AARCH64_TLS_TPREL64:
-            tp = self.emu.mu.reg_read(UC_ARM64_REG_TPIDR_EL0)
+        # Symbolic & TLS
+        for rel in phase2_symbolic:
+            r_addr = self.bias + rel.address
+            handler = self._handlers.get(rel.type)
+            if handler:
+                handler(r_addr, rel, all_modules)
+            else:
+                logger.warning("[ARM64Relocator] Unsupported relocation type: %s at 0x%X", rel.type, r_addr)
 
-            val = (sym_addr if sym_addr else 0) + addend - tp
-            
-            self.write_val(r_addr, val)
+        # IFUNC
+        self._resolve_deferred_ifuncs(hwcap=0xFF)
+
+    def _rel_relative(self, r_addr: int, rel: Relocation, all_modules: List['Module']) -> None:
+        self.write_val(r_addr, self.bias + rel.addend)
+
+    def _rel_irelative(self, r_addr: int, rel: Relocation, all_modules: List['Module']) -> None:
+        resolver_addr = self.bias + rel.addend
+        self.deferred_ifuncs.append((r_addr, resolver_addr, 0))
+
+    def _rel_abs64(self, r_addr: int, rel: Relocation, all_modules: List['Module']) -> None:
+        sym_name = rel.symbol.name if rel.has_symbol else ""
+        res = self.resolver.resolve(sym_name, self.module, all_modules)
+
+        if res.found:
+            if res.is_ifunc:
+                self.deferred_ifuncs.append((r_addr, res.address, rel.addend))
+            else:
+                self.write_val(r_addr, res.address + rel.addend)
+        else:
+            self.write_val(r_addr, self.bias + rel.addend)
+
+    def _rel_glob_dat(self, r_addr: int, rel: Relocation, all_modules: List['Module']) -> None:
+        sym_name = rel.symbol.name if rel.has_symbol else ""
+        res = self.resolver.resolve(sym_name, self.module, all_modules)
+
+        if res.found:
+            if res.is_ifunc:
+                self.deferred_ifuncs.append((r_addr, res.address, rel.addend))
+            else:
+                self.write_val(r_addr, res.address + rel.addend)
+        else:
+            self.write_val(r_addr, self.bias + rel.addend)
+
+    def _rel_jump_slot(self, r_addr: int, rel: Relocation, all_modules: List['Module']) -> None:
+        self._rel_glob_dat(r_addr, rel, all_modules)
+
+    def _rel_tls_tprel64(self, r_addr: int, rel: Relocation, all_modules: List['Module']) -> None:
+        sym_name = rel.symbol.name if rel.has_symbol else ""
+        res = self.resolver.resolve(sym_name, self.module, all_modules)
+        
+        sym_base = res.address if res.found else 0
+        # TLS = sym + addend - TP
+        val = sym_base + rel.addend - self.tp
+        self.write_val(r_addr, val)

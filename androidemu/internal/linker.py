@@ -1,229 +1,121 @@
 import logging
 import os
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
-from lief.ELF import Symbol
-
-from typing import List, Dict, Optional, Tuple, TYPE_CHECKING
-
-from unicorn import UC_PROT_READ, UC_PROT_WRITE, UC_PROT_EXEC, UcError
-
-from ..types import ptr_t
+from unicorn import UC_PROT_EXEC, UC_PROT_READ, UC_PROT_WRITE, UcError
 
 from ..const import emu_const
-from ..data import mem_map as config
+from ..data import layout as config
+from ..types import ptr_t
 from ..utils import misc_utils
-from .module import Module
+from ..utils.memory.helpers import align_down, align_up, read_ptr_array
 from ..utils.parsers.elf import ELFReader
-from .soinfo import SoinfoWriter
-from .relocator import ARM32Relocator, ARM64Relocator
 from .bionic.tls.init import BionicTLSInitialization
+from .module import Module
+from .relocator import ARM32Relocator, ARM64Relocator
+from .resolver import SymbolResolver
+from .soinfo import SoinfoWriter
 
 if TYPE_CHECKING:
     from ..core.emulator import Emulator
 
 logger = logging.getLogger(__name__)
 
+
 class AndroidLinker:
     """
-    High-precision Android 7.1 (Nougat) Dynamic Linker emulation.
-    Refactored for strict phase separation: Load -> Bootstrap -> Relocate -> Init.
-
-    Maybe will be work on Android 9 system libs...
+    Bionic Dynamic Linker Orchestrator
+    Lifecycle: Load Segments -> TLS Setup -> 3-Pass Relocations -> Init Constructors -> Memory Protect.
     """
 
     def __init__(self, emu: 'Emulator', vfs_root: str):
         self.emu = emu
         self.vfs_root = vfs_root
 
-        self.__global_symbol_cache = {}
-
-        # --- Storage ---
         self.modules: List[Module] = []
         self.modules_by_name: Dict[str, Module] = {}
         self.symbol_hooks: Dict[str, int] = {}
 
-        # --- Memory Allocators ---
-        self.current_mmap_addr = config.BASE_ADDR
+        self.resolver = SymbolResolver(self.symbol_hooks)
+
         self.soinfo_alloc_addr = config.SOINFO_START_BASE
         self.tls_area_size = config.TLS_SIZE
-
-        # --- State ---
         self.tls: BionicTLSInitialization = self.emu.tls_state
         self.tls_initialized = False
-        self._last_next_field_addr = 0 # For soinfo linked list
+        self._last_next_field_addr = 0
 
         try:
             emu.memory.map(config.TLS_BASE, self.tls_area_size, UC_PROT_READ | UC_PROT_WRITE)
-            emu.memory.map(config.SOINFO_START_BASE,
-                                         config.SOINFO_SIZE,
-                                         UC_PROT_READ | UC_PROT_WRITE)
+            emu.memory.map(config.SOINFO_START_BASE, config.SOINFO_SIZE, UC_PROT_READ | UC_PROT_WRITE)
         except UcError:
             pass
-    # =========================================================================
-    # Public API (Compatibility Layer for Emulator)
-    # =========================================================================
 
     def add_symbol_hook(self, symbol_name: str, addr: int) -> None:
-        """
-        Add a symbol hook to the linker. Works before relocations
-
-        :param symbol_name: Name of the symbol
-        :param addr: Address of the symbol
-        """
         self.symbol_hooks[symbol_name] = addr
+        self.resolver.invalidate_cache()
 
     def find_symbol_globally(self, symbol_name: str) -> int:
-        """
-        Find a symbol in the global symbol cache.
+        res = self.resolver.resolve(symbol_name, all_modules=self.modules)
+        return res.address if res.found else 0
 
-        :param symbol_name: Name of the symbol
-
-        :return: The address of the symbol or 0 if not found
-        """
-        if symbol_name in self.symbol_hooks:
-            return self.symbol_hooks[symbol_name]
-
-        return self.__global_symbol_cache.get(symbol_name, 0)
-
-    def find_function_by_name(self, symbol_name: str) -> Optional[Module]:
-        """
-        Find a function by name. Good for Runtime hooks
-
-        :param symbol_name: Name of the function
-
-        :return: The module or None
-        """
+    def find_function_by_name(self, symbol_name: str) -> int:
         for mod in self.modules:
             val = mod.find_function(symbol_name)
-            if val: return val
+            if val:
+                return val
         return 0
 
     def find_module_by_name(self, filename: str) -> Optional[Module]:
-        """
-        Find a module by name.
-
-        :param filename: Name of the module
-
-        :return: The module or None
-        """
         basename = os.path.basename(filename)
         return self.modules_by_name.get(basename, None)
 
-    def __get_ld_library_path(self):
-        if (self.emu.arch == emu_const.ARCH_ARM32):
-            return ["/system/lib/"]
-        else:
-            return ["/system/lib64/"]
-
-    def find_so_on_disk(self, so_path) -> Optional[str]:
-        """
-        Find a module on disk
-
-        :param so_path: Path to the module
-
-        :return: Full path to the module or None
-        """
+    def find_so_on_disk(self, so_path: str) -> Optional[str]:
         if os.path.isabs(so_path):
-            path = misc_utils.vfs_path_to_system_path(self.emu.vfs_root, so_path)
-            return path
-        else:
-            ld_library_path = self.__get_ld_library_path()
-            so_name = so_path
-            for lib_path in ld_library_path:
-                lib_full_path = "%s/%s"%(lib_path, so_name)
-                vfs_lib_path = misc_utils.vfs_path_to_system_path(self.emu.vfs_root, lib_full_path)
-                if (os.path.exists(vfs_lib_path)):
-                    return vfs_lib_path
+            return misc_utils.vfs_path_to_system_path(self.emu.vfs_root, so_path)
+
+        ld_dirs = ["/system/lib/"] if self.emu.arch == emu_const.ARCH_ARM32 else ["/system/lib64/"]
+        for lib_dir in ld_dirs:
+            full_path = misc_utils.vfs_path_to_system_path(self.emu.vfs_root, f"{lib_dir}{so_path}")
+            if os.path.exists(full_path):
+                return full_path
 
         return None
 
-    def load_module(self, filename: str, do_init: bool, main_lib: bool) -> Module:
-        """
-        Main entry point called by Emulator.
-        Handles both the initial executable load and subsequent dlopens.
+    def load_module(self, filename: str, do_init: bool = True, main_lib: bool = False) -> Module:
+        logger.info("[Linker] Request to load: %s (do_init=%s, main=%s)", filename, do_init, main_lib)
 
-        :param filename: Name of the module
-        :param do_init: Whether to initialize the module
-        :param main_lib: Whether this is the main executable
+        start_idx = len(self.modules)
+        target_module = self._load_recursive(filename)
+        if not target_module:
+            mod = self.find_module_by_name(filename)
+            if mod:
+                return mod
+            raise RuntimeError(f"Could not load module: {filename}")
 
-        :return: The loaded module
-        """
-        logger.info("[Linker] Request to load: %s (do_init=%s) (main=%s)", filename, do_init, main_lib)
+        target_module.main_executable = main_lib
+        target_module.dynamic = not main_lib
+
+        new_modules = self.modules[start_idx:]
 
         if not self.tls_initialized:
-            lib = self._pipeline_load_executable(filename)
+            self._bootstrap_tls(target_module)
         else:
-            lib = self._pipeline_dlopen(filename, do_init)
-            lib.dynamic = True
+            if self.tls:
+                for mod in new_modules:
+                    mod.tls_offset = self.tls.setup_static_tls(mod._reader, mod.bias)
 
-        return lib
-
-    # =========================================================================
-    # Core Pipelines
-    # =========================================================================
-
-    def _pipeline_load_executable(self, filename: str) -> Module:
-        """Pipeline for the initial process startup."""
-        logger.info("=== [Linker Phase 1] Loading Dependencies ===")
-        main_module = self._load_recursive(filename)
-        if not main_module:
-            raise RuntimeError("Could not load executable: %s", filename)
-
-        logger.info("=== [Linker Phase 2] TLS Bootstrap ===")
-        self._bootstrap_tls(main_module)
-
-        logger.info("=== [Linker Phase 3] Relocations ===")
-        for mod in self.modules:
+        self.resolver.invalidate_cache()
+        for mod in new_modules:
             self._relocate_module(mod)
-            self._protect_module(mod)
-
-        logger.info("=== [Linker Phase 4] Constructors ===")
-
-        self.emu.hooks.init_address_hooks()
-        self._initialize_graph(main_module)
-
-        for mod in self.modules:
-            mod.reader.close()
-
-        return main_module
-
-    def _pipeline_dlopen(self, filename: str, do_init: bool) -> Module:
-        """Pipeline for dynamic loading after startup."""
-
-        # Load new modules
-        start_index = len(self.modules)
-        new_module = self._load_recursive(filename)
-
-        if not new_module:
-            # Already loaded?
-            m = self.find_module_by_name(filename)
-            if m: return m
-            else: raise RuntimeError(f"dlopen failed: {filename}")
-
-        new_modules_list = self.modules[start_index:]
-
-        if self.tls:
-            for mod in new_modules_list:
-                mod.tls_offset = self.tls.setup_static_tls(mod.reader, mod.bias)
-
-                logger.debug("[Linker] Dynamic TLS registered for %s",
-                            os.path.basename(mod.filename))
-
-        for mod in new_modules_list:
-            self._relocate_module(mod)
-            self._protect_module(mod)
 
         if do_init:
-            self._initialize_graph(new_module)
+            self._initialize_graph(target_module)
 
-        for mod in self.modules:
-            mod.reader.close()
+        for mod in new_modules:
+            self._protect_module(mod)
+            mod._unload_reader()
 
-        return new_module
-
-    # =========================================================================
-    # Internal Logic
-    # =========================================================================
+        return target_module
 
     def _load_recursive(self, filename: str) -> Optional[Module]:
         path = self._resolve_path(filename)
@@ -240,20 +132,12 @@ class AndroidLinker:
 
         base, bias, size = self._map_elf_segments(reader)
 
-        for sym_name, sym_offset in reader.exported_symbols.items():
-            if sym_name not in self.__global_symbol_cache:
-                abs_addr = base + sym_offset
-
-                self.__global_symbol_cache[sym_name] = abs_addr
-
         module = Module(path, base, bias, size, reader.dyn_addr, reader.exported_symbols, reader)
-
         self.modules.append(module)
         self.modules_by_name[basename] = module
 
         self._setup_soinfo(module, reader)
 
-        # Load Dependencies
         for dep in reader.needed_libs:
             dep_mod = self._load_recursive(dep)
             if dep_mod:
@@ -261,93 +145,39 @@ class AndroidLinker:
 
         return module
 
-    def _bootstrap_tls(self, main_module: Module):
-        if self.tls_initialized: return
+    def _bootstrap_tls(self, main_module: Module) -> None:
+        if self.tls_initialized or not self.tls:
+            return
 
         libc_mod = self.modules_by_name.get("libc.so")
-        if not libc_mod: return
+        if not libc_mod:
+            return
 
-        entry_point = main_module.base + main_module.reader.entry_point
+        entry_point = main_module.base + main_module._reader.entry_point
         self.tls.bootstrap(
-            main_module.base + main_module.reader.phoff,  # phdr_addr
-            main_module.reader.phdr_num,                  # phnum
+            main_module.base + main_module._reader.phoff,
+            main_module._reader.phdr_num,
             entry_point
         )
 
         for mod in self.modules:
-            mod.tls_offset = self.tls.setup_static_tls(mod.reader, mod.bias)
-
-            logger.info("  [TLS] Bootstrap done for %s. TLS offset: 0x%x",
-                        os.path.basename(mod.filename),
-                        mod.tls_offset)
+            mod.tls_offset = self.tls.setup_static_tls(mod._reader, mod.bias)
 
         self.tls_initialized = True
 
-    def _relocate_module(self, module: Module):
-        logger.debug("  [Reloc] Applying to %s", os.path.basename(module.filename))
-        reader = module.reader
-        bias = module.bias
-
-        is_64 = not reader.is_32
-        relocator = ARM64Relocator(self.emu, bias) if is_64 else ARM32Relocator(self.emu, bias)
+    def _relocate_module(self, module: Module) -> None:
+        logger.debug("  [Reloc] Applying 3-pass relocations to %s", os.path.basename(module.filename))
+        is_64 = (self.emu.arch == emu_const.ARCH_ARM64)
         
-        logger.debug("  [Reloc] Relocations: %d. is_64: %d. Bias: %#x",
-            len(reader.relocations), is_64, bias)
+        relocator_cls = ARM64Relocator if is_64 else ARM32Relocator
+        relocator = relocator_cls(self.emu, module, self.resolver)
+        relocator.relocate_all(self.modules)
 
-        for rel in reader.relocations:
-            r_type = rel.type
-            r_addr = bias + rel.address
-
-            sym_addr = 0
-            sym_name = None
-            sym_tls_off = 0
-            sym_ifunc = True if rel.symbol.type == Symbol.TYPE.GNU_IFUNC else False
-
-            if rel.has_symbol:
-                sym_name = rel.symbol.name
-                
-                if sym_name in self.symbol_hooks:
-                    sym_addr = self.symbol_hooks[sym_name]
-                else:
-                    for m in self.modules:
-                        addr = m.find_symbol(sym_name)
-                        if addr is not None:
-                            sym_addr = addr
-                            # logger.debug("[Linker] Symbol '%s' found in %s at %#x", 
-                            #              sym_name, os.path.basename(m.filename), sym_addr)
-                            break
-                    
-                    if not sym_addr:
-                        # logger.warning("[Linker] WARNING: Symbol '%s' NOT FOUND ANYWHERE!", sym_name)
-                        pass
-
-                if self.tls:
-                    for m in self.modules:
-                        if m.find_symbol(sym_name) is not None:
-                            sym_tls_off = getattr(m, 'tls_offset', 0)
-                            break
-
-            addend = rel.addend if is_64 else int.from_bytes(self.emu.mu.mem_read(r_addr, 4), 'little')
-            tls_ctx = {"tp": self.tls.tp, "offset": sym_tls_off} if self.tls else None
-
-            try:
-                relocator.apply(r_type, r_addr, sym_addr, sym_name, addend, tls_ctx, sym_ifunc)
-            except Exception as e:
-                import traceback
-                import sys
-                logger.error(f"Relocation failed for symbol {sym_name} at {r_addr:#x}")
-                traceback.print_exc()
-                sys.exit(1)
-
-
-    def _initialize_graph(self, root_module: Module):
+    def _initialize_graph(self, root_module: Module) -> None:
         visited = set()
 
         def visit(mod: Module):
-            if mod.initialized:
-                return
-                
-            if mod in visited:
+            if mod.initialized or mod in visited:
                 return
             visited.add(mod)
 
@@ -355,108 +185,110 @@ class AndroidLinker:
                 visit(dep)
 
             mod.initialized = True
-            
             self.call_constructors(mod)
 
         visit(root_module)
 
-    def call_constructors(self, module: Module):
-        reader = module.reader
+    def call_constructors(self, module: Module) -> None:
         bias = module.bias
-        ptr_sz = ptr_t.size
-
+        mu = self.emu.mu
         logger.info("  [Init] Initializing %s", os.path.basename(module.filename))
 
-        # DT_INIT
-        init = reader._dynamic_tags.get("DT_INIT")
+        # 1. DT_PREINIT_ARRAY
+        if module.main_executable:
+            preinit_off = module.dynamic_tags.get("DT_PREINIT_ARRAY")
+            preinit_sz = module.dynamic_tags.get("DT_PREINIT_ARRAYSZ")
+            if preinit_off and preinit_sz:
+                for func_va in read_ptr_array(mu, bias + preinit_off, preinit_sz):
+                    self.emu.call_native(func_va)
+
+        # 2. DT_INIT
+        init = module.dynamic_tags.get("DT_INIT")
         if init:
             self.emu.call_native(bias + init)
 
-        # DT_INIT_ARRAY
-        arr_off = reader._dynamic_tags.get("DT_INIT_ARRAY")
-        arr_sz = reader._dynamic_tags.get("DT_INIT_ARRAYSZ")
-
+        # 3. DT_INIT_ARRAY
+        arr_off = module.dynamic_tags.get("DT_INIT_ARRAY")
+        arr_sz = module.dynamic_tags.get("DT_INIT_ARRAYSZ")
         if arr_off and arr_sz:
-            count = arr_sz // ptr_sz
-            start = bias + arr_off
-            for i in range(count):
-                func_va = int.from_bytes(self.emu.mu.mem_read(start + i*ptr_sz, ptr_sz), 'little')
-                # Ignore empty slots (0 or -1)
-                if func_va not in (0, 2**(ptr_sz*8)-1):
-                    self.emu.call_native(func_va)
+            for func_va in read_ptr_array(mu, bias + arr_off, arr_sz):
+                self.emu.call_native(func_va)
 
-    def _setup_soinfo(self, module: Module, reader: ELFReader):
+    def _setup_soinfo(self, module: 'Module', reader: 'ELFReader') -> None:
         info_ptr = self.soinfo_alloc_addr
         module.soinfo_ptr = info_ptr
 
         writer = SoinfoWriter(self.emu)
         current_next_field_ptr = writer.write_soinfo(module, reader, info_ptr)
-
         self.soinfo_alloc_addr += 0x400
 
         if self._last_next_field_addr:
             ptr_sz = ptr_t.size
-            self.emu.mu.mem_write(self._last_next_field_addr,
-                                  info_ptr.to_bytes(ptr_sz, 'little'))
-
-        logger.debug("[*] soinfo: %#x for %s. Next field at: %#x",
-                     info_ptr, module.filename, current_next_field_ptr)
+            self.emu.mu.mem_write(self._last_next_field_addr, info_ptr.to_bytes(ptr_sz, 'little'))
+        else:
+            self._setup_linker_symbols(info_ptr)
 
         self._last_next_field_addr = current_next_field_ptr
 
-    def _protect_module(self, module: Module):
-        reader = module.reader
+    def _setup_linker_symbols(self, soinfo_head_ptr: int) -> None:
+        ptr_sz = ptr_t.size
+        linker_bin = "/system/bin/linker64" if self.emu.arch == emu_const.ARCH_ARM64 else "/system/bin/linker"
+        linker_path = self.find_so_on_disk(linker_bin)
+
+        if linker_path and os.path.exists(linker_path):
+            linker_reader = ELFReader(linker_path)
+            for sym_name in ["__dl__ZL6solist"]:
+                sym_offset = linker_reader.get_symbol_address(sym_name)
+                if sym_offset is not None:
+                    target_addr = config.LINKER_BASE + sym_offset
+                    self.emu.mu.mem_write(target_addr, soinfo_head_ptr.to_bytes(ptr_sz, 'little'))
+                    break
+            linker_reader.close()
+
+    def _protect_module(self, module: 'Module') -> None:
         bias = module.bias
 
-        for seg in reader.segments:
+        for seg in module.segments:
             if seg['p_type'] != "LOAD":
                 continue
-            
+
             flags = seg.get('p_flags', 7)
             prot = 0
             if flags & 4: prot |= UC_PROT_READ
             if flags & 2: prot |= UC_PROT_WRITE
             if flags & 1: prot |= UC_PROT_EXEC
-            
-            start = self._align_down(bias + seg['p_vaddr'])
-            size = self._align_up(bias + seg['p_vaddr'] + seg['p_memsz']) - start
-            
+
+            start = align_down(bias + seg['p_vaddr'])
+            size = align_up(bias + seg['p_vaddr'] + seg['p_memsz']) - start
             self.emu.memory.protect(start, size, prot)
 
-        for seg in reader.segments:
+        for seg in module.segments:
             if seg['p_type'] == "GNU_RELRO":
-                relro_start = self._align_down(bias + seg['p_vaddr'])
-                relro_size = self._align_up(bias + seg['p_vaddr'] + seg['p_memsz']) - relro_start
-                
-                self.emu.memory.protect(relro_start, relro_size, UC_PROT_READ)
-                logger.debug(f"  [Relro] Protected 0x{relro_start:x} size 0x{relro_size:x}")
+                relro_start = align_down(bias + seg['p_vaddr'])
+                relro_end = align_down(bias + seg['p_vaddr'] + seg['p_memsz'])
+                if relro_end > relro_start:
+                    self.emu.memory.protect(relro_start, relro_end - relro_start, UC_PROT_READ)
 
     def _map_elf_segments(self, reader: 'ELFReader') -> Tuple[int, int, int]:
         load_segs = [s for s in reader.segments if s['p_type'] == "LOAD"]
         if not load_segs:
-            raise RuntimeError("No LOAD segments found")
+            raise RuntimeError("No LOAD segments found in ELF")
 
         min_v = min(s['p_vaddr'] for s in load_segs)
         max_v = max(s['p_vaddr'] + s['p_memsz'] for s in load_segs)
 
-        aligned_min = self._align_down(min_v)
-        aligned_max = self._align_up(max_v)
+        aligned_min = align_down(min_v)
+        aligned_max = align_up(max_v)
         total_span = aligned_max - aligned_min
 
-        addr = self.emu.memory.find_free_region(size=total_span, start_search=config.BASE_ADDR) # static addr
-        base = self.emu.memory.map(
-            addr,
-            total_span,
-            prot=UC_PROT_READ | UC_PROT_WRITE | UC_PROT_EXEC 
-        )
-
+        addr = self.emu.memory.find_free_region(size=total_span, start_search=config.BASE_ADDR)
+        base = self.emu.memory.map(addr, total_span, prot=UC_PROT_READ | UC_PROT_WRITE | UC_PROT_EXEC)
         bias = base - min_v
 
         for seg in load_segs:
             vaddr = seg['p_vaddr']
             memsz = seg['p_memsz']
             content = bytes(seg.get('content', b''))
-
             dest = bias + vaddr
 
             if content:
@@ -464,44 +296,34 @@ class AndroidLinker:
 
             file_sz = len(content)
             if memsz > file_sz:
-                self.emu.mu.mem_write(
-                    dest + file_sz,
-                    b'\x00' * (memsz - file_sz)
-                )
+                self.emu.mu.mem_write(dest + file_sz, b'\x00' * (memsz - file_sz))
 
-        self.current_mmap_addr = base + total_span
         return base, bias, total_span
 
     def _resolve_path(self, filename: str) -> Optional[str]:
-        if os.path.exists(filename): return filename
+        if os.path.exists(filename):
+            return filename
 
         is_64 = (self.emu.arch == emu_const.ARCH_ARM64)
         lib_dir = "lib64" if is_64 else "lib"
-
+        marker = "arm64-v8a" if is_64 else "armeabi-v7a"
         base = os.path.basename(filename)
+
         paths = [
             f"/system/{lib_dir}/{base}",
             f"/vendor/{lib_dir}/{base}",
-            f"/data/data/{lib_dir}/{base}"
+            f"/data/app/{self.emu.config.pkg.pkg_name}/lib/{marker}/{base}"
         ]
 
         for p in paths:
-            # Conversion VFS -> Real OS path
             real = misc_utils.vfs_path_to_system_path(self.vfs_root, p)
-            if os.path.exists(real): return real
+            if os.path.exists(real):
+                return real
 
         return None
 
-    def _check_arch(self, reader: 'ELFReader', path):
+    def _check_arch(self, reader: 'ELFReader', path: str) -> None:
         is_32 = reader.is_32
         emu_32 = (self.emu.arch == emu_const.ARCH_ARM32)
         if is_32 != emu_32:
-            raise RuntimeError("Arch mismatch: %s. Expected %s" % (path, "ARM32" if is_32 else "ARM64"))
-
-    @staticmethod
-    def _align_down(x: int, p: int = config.PAGE_SIZE) -> int:
-        return x & ~(p - 1)
-
-    @staticmethod
-    def _align_up(x: int, p: int = config.PAGE_SIZE) -> int:
-        return (x + p - 1) & ~(p - 1)
+            raise RuntimeError(f"Arch mismatch: {path}. Expected {'ARM32' if emu_32 else 'ARM64'}")

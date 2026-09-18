@@ -1,0 +1,12 @@
+class SELinuxPolicy:
+    CONTEXT_SYSTEM     = b"u:object_r:system_file:s0\x00"
+    CONTEXT_VENDOR     = b"u:object_r:vendor_file:s0\x00"
+    CONTEXT_APK        = b"u:object_r:apk_data_file:s0\x00"
+    CONTEXT_APP_DATA   = b"u:object_r:app_data_file:s0\x00"
+    CONTEXT_PROPERTIES = b"u:object_r:properties_device:s0\x00"
+    CONTEXT_DEV_NULL   = b"u:object_r:null_device:s0\x00"
+    CONTEXT_DEV_RANDOM = b"u:object_r:urandom_device:s0\x00"
+    CONTEXT_BINDER     = b"u:object_r:binder_device:s0\x00"
+    CONTEXT_PROC       = b"u:object_r:proc:s0\x00"
+    CONTEXT_SYSFS      = b"u:object_r:sysfs:s0\x00"
+    CONTEXT_DEFAULT    = b"u:object_r:unlabeled:s0\x00"

@@ -34,7 +34,8 @@ class SoinfoWriter:
             return val & 0xFFFFFFFF
 
         def write_ptr(offset: int, val: int):
-            struct.pack_into(self.fmt, buffer, offset, safe_32(val))
+            v = safe_32(val) if not self.is_64 else (val & 0xFFFFFFFFFFFFFFFF)
+            struct.pack_into(self.fmt, buffer, offset, v)
         
         def write_u32(offset: int, val: int):
             struct.pack_into("<I", buffer, offset, safe_32(val))
@@ -42,8 +43,6 @@ class SoinfoWriter:
         dynamic_addr = reader.dyn_addr
 
         if not self.is_64:
-            # --- Android 7.1.2 ARM32 soinfo layout ---
-            # 0x00: name[128] (Inline string)
             name = os.path.basename(module.filename).encode('utf-8')[:127]
             buffer[0:len(name)] = name
             
@@ -66,6 +65,7 @@ class SoinfoWriter:
             # --- Android 7.1.2 ARM64 soinfo layout ---
             name_ptr = self.emu.memory.static_alloc(len(module.filename) + 1)
             self.emu.mu.mem_write(name_ptr, module.filename.encode() + b'\x00')
+            module.filename_ptr = name_ptr
             
             write_ptr(0x00, name_ptr)                                                # name ptr
             write_ptr(0x08, module.base + reader.header.program_header_offset)       # phdr

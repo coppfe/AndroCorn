@@ -1,7 +1,5 @@
-import posixpath
-import os.path
+import logging
 import unittest
-
 from androidemu.core.emulator import Emulator
 from androidemu.utils.memory import helpers
 from androidemu.const import emu_const

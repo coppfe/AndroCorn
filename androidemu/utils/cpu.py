@@ -1,6 +1,6 @@
 import struct
 
-from ..data.mem_map import ASM_CODE, PAGE_SIZE
+from ..data.layout import ASM_CODE, PAGE_SIZE
 
 from unicorn.arm64_const import *
 from unicorn.arm_const import *

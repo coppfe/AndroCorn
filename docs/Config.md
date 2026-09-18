@@ -1,43 +1,127 @@
-## Config values means
+# Configuration Schema & Device Profiles
 
-Emulator Config probably about package
+In AndroCorn v2.0+, the configuration subsystem is strictly typed using Python dataclasses (`androidemu.data.models`). The old unstructured dictionaries and hardcoded `"config"` strings for `am get-config` have been eliminated.
 
-```js
+Configurations can be passed as a Python `dict` (such as `DEFAULT_PACKAGE`) or loaded directly from a JSON file.
+
+---
+
+## Configuration Structure
+
+```json
 {
-	"_pkg_name":"parent_pkg_name",
-	"pkg_name": "main_pkg_name",
-	"uid": 0,                                                       // can be random int
-	"pid": 0,                                                       // can be random int
-	"ppid": 0,                                                      // can be random int
-	"debuggable": true | false,                                     // doesn't implemented
-	"start_timestamp": 1774458140,                                  // Freeze time
-	"build_at": 1678884069,                                         // Package install time. Probably bad idea bcs stat_to_memory using it for every file
-    "sign_hex": "apk_hex",
-    "version_code": 1,
-
-	"device": {                                                     // your device stat
-		"memory": {
-			"ram_total_mb": 8192,
-			"ram_free_percent_start": 45,
-			"swap_total_mb": 2048
-		},
-
-		"kernel": {                                                 // google pixel
-            "release": "3.18.31-g7915904",
-            "version": "#1 SMP PREEMPT Thu Jun 15 16:34:02 UTC 2017"
-        }
-
-		"net": {
-			"ip": "192.168.1.52",
-			"mac": "cc:fa:a6:00:8a:a9",
-			"dns": "8.8.8.8",
-			"ssid": "Massive",
-			"gateway": "89.207.132.170"
-		},
-
-        "android_id": "hex",                                         // random by default
-																	 // config: am get-config. device additional info
-		"config": "mcc250-mnc01-ru-rRU,ldltr,sw360dp,w360dp,h640dp,320dpi,nokeys,vga,notouch,keysasaccent\nabi: arm64-v8a,armeabi-v7a,armeabi"
-	}
+  "pkg_name": "io.github.vvb2060.mahoshojo",
+  "version_name": "1.0.0",
+  "version_code": 1,
+  "uid": 10123,
+  "pid": 13213,
+  "ppid": 821,
+  "debuggable": false,
+  "sign_hex": "308202b9308201a2a003...",
+  "start_timestamp": 1774458140,
+  "first_install_time": 1771866140,
+  "last_update_time": 1774026140,
+  "permissions": [
+    "android.permission.INTERNET",
+    "android.permission.ACCESS_NETWORK_STATE",
+    "android.permission.ACCESS_WIFI_STATE"
+  ],
+  "device": {
+    "build": {
+      "brand": "Xiaomi",
+      "manufacturer": "Xiaomi",
+      "model": "M2007J3SG",
+      "device": "apollo",
+      "product": "apollo_eea",
+      "board": "kona",
+      "hardware": "qcom",
+      "fingerprint": "Xiaomi/apollo_eea/apollo:11/RKQ1.200826.002/V12.5.3.0.RJDEUXM:user/release-keys",
+      "sdk_int": 30,
+      "release": "11",
+      "security_patch": "2021-06-01",
+      "abi": "arm64-v8a",
+      "supported_abis": ["arm64-v8a", "armeabi-v7a", "armeabi"]
+    },
+    "cpu": {
+      "cores": 8,
+      "arch": "aarch64",
+      "implementer": 81,
+      "architecture": 8,
+      "variant": 2,
+      "part": 517,
+      "revision": 1,
+      "bogomips": 38.4,
+      "hardware": "qcom",
+      "features": ["fp", "asimd", "evtstrm", "aes", "pmull", "sha1", "sha2", "crc32"]
+    },
+    "gpu": {
+      "vendor": "Qualcomm",
+      "renderer": "Adreno (TM) 650",
+      "version": "OpenGL ES 3.2 V@0490.0 (GIT@83bb17b, I66dc9c0d38)",
+      "gl_extensions": ["GL_OES_EGL_image", "GL_OES_depth24", "GL_ARM_rgba8"]
+    },
+    "display": {
+      "width": 1080,
+      "height": 2400,
+      "density_dpi": 440,
+      "scale": 2.75,
+      "refresh_rate": 144.0,
+      "orientation": 0
+    },
+    "battery": {
+      "level": 85,
+      "temperature": 295,
+      "status": 2,
+      "plugged": 1,
+      "voltage": 4120,
+      "present": true,
+      "health": 2
+    },
+    "telephony": {
+      "imei": "864234041234567",
+      "imsi": "250011234567890",
+      "phone_number": "+79991112233",
+      "sim_operator": "25001",
+      "sim_operator_name": "MegaFon",
+      "network_operator": "25001",
+      "network_operator_name": "MegaFon",
+      "country_iso": "ru",
+      "network_type": 13
+    },
+    "network": {
+      "ip": "192.168.1.52",
+      "mac": "cc:fa:a6:00:8a:a9",
+      "dns": "8.8.8.8",
+      "ssid": "Massive",
+      "gateway": "192.168.1.1"
+    },
+    "memory": {
+      "ram_total_mb": 8192,
+      "ram_free_percent_start": 45,
+      "swap_total_mb": 2048
+    },
+    "kernel": {
+      "sysname": "Linux",
+      "nodename": "localhost",
+      "release": "4.19.113-perf-g817c7b8",
+      "version": "#1 SMP PREEMPT Thu Mar 09 11:20:45 UTC 2021",
+      "domain": "localdomain"
+    },
+    "secure": {
+      "android_id": "39cc04a2ae83db0b",
+      "gaid": "550e8400-e29b-41d4-a716-446655440000",
+      "development_settings_enabled": 0,
+      "adb_enabled": 0
+    }
+  }
 }
 ```
+
+## Dynamic Telemetry Generation
+
+1. **`am get-config` Generation**: 
+   The emulator dynamically computes the terminal output for `/system/bin/am get-config` using `DisplayInfo.to_am_config()`. No more manual string stitching!
+2. **Deterministic Time**: 
+   `start_timestamp` locks the system clock, ensuring all cryptographic hashing and token generation procedures are 100% reproducible.
+3. **Telephony & Identity**: 
+   Java calls to `TelephonyManager.getDeviceId()`, `getSubscriberId()`, and `Settings.Secure.getString(..., "android_id")` automatically reflect the profile.

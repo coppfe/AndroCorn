@@ -1,30 +1,40 @@
-Androcorn is a android native library emulation for ARM libraries by Unicorn Translation Layer.
-It's builed as isolated framework for library. What does it's mean? All processes here trying to be kernel-free (actually, not clear, syscalls read/write/close and others are still a layer to your system.), so this mean you can run this project simillary on Windows and Linux!
+# AndroCorn Documentation
 
-I implemented in this framework more backward supports for libraries, like fork, execve, symlink and others. Also, if you read readme, new feature in the II generation of AndroCorn is a ASM code (like shell-code) exectuion. That's mean you can write your own scripts on asm and just map it to 0x1000 address. About Memory Mapping and other you will find out in this doc.
+**AndroCorn** is an advanced, kernel-free user-space emulation framework for Android native ARM/ARM64 libraries built on top of the Unicorn Engine.
 
-Other functionallity is basic: JNI Layer (not full implement), Java Layer (Java Types and Java Android Classes like android/net/wifi/WifiInfo and others, and yes not full implement!!!), Hooks (symbol hooks, address hooks aka function hooks), Interrupt handlers, Linker, Relocations, and other functional.
+It provides a fully simulated Android OS user-space environment, allowing you to load and execute heavily obfuscated `.so` files, anti-tamper protectors, and cryptors seamlessly on Windows, macOS, and Linux.
 
-Project was tested on libc, C++ shared, libstdc++, and TikTok libraries (metasec, cms), and bugs... like im not found lol.
+---
 
-AndroCorn is still a beta-test project, what's mean it's not stable. Here is still rolling release that can broke some functionallity. But im trying to not break compability with ExAndroidNativeEmu (my thanks to maiyao1988, this project was really helpful when i started writing a emulator! ❤️)
+## Key Highlights of Version 2.0
+
+* **Zero God-Objects**: Modular, context-driven design where interrupts and syscalls operate on pure stateless abstractions.
+* **Deterministic Memory Mapping**: Strict segmentation between emulator-internal storage (`0x60...`), process `[heap]` (`0x70...`), dynamic `mmap` (`0x80...`), and the stack (`0x10...`).
+* **POSIX VFS with In-Memory IPC**: Full object-oriented filesystem node architecture with support for character devices (`/dev/null`, `/dev/urandom`, `/dev/binder`, `/dev/ptmx`), dynamic procfs (`/proc/self/maps`), and non-blocking `VirtualPipe`.
+* **Auto-Arity JNI Dispatcher**: Dynamic argument extraction supporting methods with arbitrary parameter counts without hardcoded limits.
+* **Modern Hooking & Forensics**: Integrated `InlineHook`, caller-context `MemoryWatchpoint`, and block-level `CrossModuleTracer`.
+* **State Rollback**: Instant zero-copy memory snapshots for fuzzing and repetitive native function evaluation.
+
+---
+
+## Module Index
 
 ::: androidemu.core.emulator.Emulator
     options:
       filters: ["!^_"]
       show_root_heading: true
 
-::: androidemu.cpu.scheduler.Scheduler
+::: androidemu.core.registers.RegistersMapping
     options:
       filters: ["!^_"]
       show_root_heading: true
 
-::: androidemu.core.process.pcb.ProcessControlBlock
+::: androidemu.kernel.fs.manager.VFSManager
     options:
       filters: ["!^_"]
       show_root_heading: true
 
-::: androidemu.utils.hooker.Hooker
+::: androidemu.native.hook.manager.HookManager
     options:
       filters: ["!^_"]
       show_root_heading: true
@@ -34,7 +44,7 @@ AndroCorn is still a beta-test project, what's mean it's not stable. Here is sti
       filters: ["!^_"]
       show_root_heading: true
 
-::: androidemu.internal.module.Module
+::: androidemu.utils.memory.map.MemoryMap
     options:
       filters: ["!^_"]
       show_root_heading: true

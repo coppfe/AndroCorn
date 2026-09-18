@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from unicorn import Uc
     from androidemu.utils.memory.map import MemoryMap
-    from androidemu.objects.registers import RegistersMapping
+    from androidemu.core.registers import RegistersMapping
 
 logger = logging.getLogger(__name__)
 

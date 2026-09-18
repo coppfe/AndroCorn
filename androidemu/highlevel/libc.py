@@ -2,6 +2,9 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ..core.emulator import Emulator
 
+# it's a system class that used by JNI
+# if you sure your app isn't use JNI (probably JNI using by any app) - you can load emulator without initing sys libs
+
 class LibC:
     def __init__(self, emu: 'Emulator'):
         self._emu: 'Emulator' = emu
@@ -22,6 +25,5 @@ class LibC:
         return ptr
     
     def free(self, ptr: int):
-        # if ptr != 0:
-        #     self.__emu.call_symbol(self.libc, 'free', ptr)
-        pass # MAYBE BAD IDEA! probably good for logging.
+        if ptr != 0:
+            self._emu.call_symbol(self.libc, 'free', ptr)

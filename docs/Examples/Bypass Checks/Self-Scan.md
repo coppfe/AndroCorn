@@ -15,22 +15,21 @@ How it looks like?
 This example i take out when i'm test my env.
 
 ```python
-# 1. Open the original APK on your host machine
-fd = misc_utils.my_open("vfs/data/app/io.github.vvb2060.mahoshojo/momo-v4.0.0.apk", os.O_RDONLY)
-sz = os.path.getsize("vfs/data/app/io.github.vvb2060.mahoshojo/momo-v4.0.0.apk")
-
-# 2. Create a virtual file inside the emulator mapped to the real Android path
-vf = emulator.pcb.virtual_files.create_virtual_file(
-    "data/app/io.github.vvb2060.mahoshojo/momo-v4.0.0.apk", # virtual path. When library start reading proc/self/maps -> it would see this path.
-    "momo_hehehe", # "vfs/data/app/io.github.vvb2060.mahoshojo/momo-v4.0.0.apk", # actual host path. well actually not need for momo, it's for getdents
-    fd
+# Mount file to memory
+vf = emulator.vfs.mount_file(
+    "/data/app/io.github.vvb2060.mahoshojo/base.apk", 
+    "vfs/data/app/io.github.vvb2060.mahoshojo/base.apk", 
+    uid=1000
 )
 
-# 3. Map this file into the emulator's memory space with read permissions (UC_PROT_READ)
-addr = emulator.memory.map(0, sz, UC_PROT_READ, vf, 0)
-
-# 4. Close the host file descriptor; the emulator mapping is now independent
-os.close(fd)
+apk_size = vf.get_size()
+emulator.memory.map( # Map it for /proc/self/maps
+    0,
+    size=apk_size,
+    prot=UC_PROT_READ,
+    node=vf,
+    offset=0
+)
 ```
 
 Why this works? When the native library wakes up, checks /proc/self/maps, extracts the APK path, and attempts to open it. The emulator seamlessly serves the virtual_file. The library thinks it’s running on a real device, reads the valid bytes, and chills out. Clean bypass before the .so even gets a chance to complain.

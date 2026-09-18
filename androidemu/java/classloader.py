@@ -1,16 +1,20 @@
-import inspect
-
 from .class_def import JavaClassDef
-from .classes.clazz import Class
+from .classes.java.lang.clazz import Class
+from .method_def import java_method_def
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from androidemu.core.emulator import Emulator
+    from androidemu.java.classes.java.lang.string import String
 
 class JavaClassLoader(metaclass=JavaClassDef, jvm_name='java/lang/ClassLoader'):
     def __init__(self):
         self.class_by_id = dict()
         self.class_by_name = dict()
+
+    @java_method_def(name='loadClass', args_list=['jstring'], signature='(Ljava/lang/String;)Ljava/lang/Class;', native=False)
+    def loadClass(self, emu: 'Emulator', class_name: 'String'):
+        return self.find_class_by_name(class_name.get_py_string())
 
     def add_class(self, clazz: JavaClassDef) -> None:
         """
@@ -39,11 +43,7 @@ class JavaClassLoader(metaclass=JavaClassDef, jvm_name='java/lang/ClassLoader'):
         :param jvm_id: ID
         :return: PyClass
         """
-
-        if jvm_id not in self.class_by_id:
-            return None
-
-        return self.class_by_id[jvm_id]
+        return self.class_by_id.get(jvm_id, None)
 
     def find_class_by_name(self, name: str) -> 'JavaClassDef':
         """
@@ -52,7 +52,4 @@ class JavaClassLoader(metaclass=JavaClassDef, jvm_name='java/lang/ClassLoader'):
         :param name: Name
         :return: PyClass
         """
-        if name not in self.class_by_name:
-            return None
-
-        return self.class_by_name[name]
+        return self.class_by_name.get(name, None)

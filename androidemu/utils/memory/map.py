@@ -1,18 +1,23 @@
 import os
 import unicorn
+
 from unicorn import UC_PROT_READ, UC_PROT_WRITE, UC_ERR_MAP
-from typing import List, Tuple, Dict, TYPE_CHECKING
 
-from ...data.mem_map import PAGE_SIZE, STACK_ADDR
+from typing import List, Tuple, Dict, Optional, TYPE_CHECKING
 
-from ..memory.helpers import page_start, page_end
+from .structs.snapshot import Snapshot
+
+from ...data.layout import STACK_ADDR, PAGE_SIZE, MMAP_BASE
+
+from ..memory.helpers import page_start, page_end, align_up
 
 from ...types import ptr_t
 
 if TYPE_CHECKING:
     import io
     from unicorn import Uc
-    from ...objects.virtual_file import VirtualFile
+
+    from androidemu.kernel.fs.node import VfsNode
 
 class MemoryMap:
     def __init__(self, mu: 'Uc', alloc_min_addr: int, alloc_max_addr: int):
@@ -24,16 +29,10 @@ class MemoryMap:
 
         self._brk_ptr = alloc_min_addr
     
-        self._file_map_addr: Dict[int, Tuple[int, int, 'VirtualFile']] = {}
+        self._file_map_addr: Dict[int, Tuple[int, int, 'VfsNode']] = {}
         self._allocations: Dict[int, int] = {}
 
         self.map_generation = 0
-
-    @staticmethod
-    def _align_up(value: int, align: int) -> int:
-        if align == 0:
-            return value
-        return (value + align - 1) & ~(align - 1)
 
     def _is_mapped(self, addr: int, size: int) -> bool:
         """Check if the given range is already mapped in Unicorn."""
@@ -50,16 +49,11 @@ class MemoryMap:
         Allocate memory.
         If addr is provided, it acts as a fixed-base mapping (for TLS/Soinfo zones).
         If addr is None, it acts as a linear allocator (for general heap).
-
-        :param size: Size in bytes.
-        :param addr: Fixed base address.
-        :param align: Alignment in bytes.
-        :return: Base address of the allocated region.
         """
         if addr is not None:
-            target_addr = self._align_up(addr, align)
+            target_addr = align_up(addr, align)
         else:
-            target_addr = self._align_up(self._brk_ptr, align)
+            target_addr = align_up(self._brk_ptr, align)
 
         end = target_addr + size
         map_start = page_start(target_addr)
@@ -68,13 +62,15 @@ class MemoryMap:
         if map_end > self._alloc_max_addr:
             raise RuntimeError(f"MemoryMap: Out of address space. Requested end: {map_end:#x}, Max: {self._alloc_max_addr:#x}")
 
-        map_size = map_end - map_start
-        if not self._is_mapped(map_start, map_size):
-            try:
-                self._mu.mem_map(map_start, map_size, UC_PROT_READ | UC_PROT_WRITE)
-            except unicorn.UcError as e:
-                if e.errno != UC_ERR_MAP:
-                    raise e
+        cur_page = map_start
+        while cur_page < map_end:
+            if not self._is_mapped(cur_page, PAGE_SIZE):
+                try:
+                    self._mu.mem_map(cur_page, PAGE_SIZE, UC_PROT_READ | UC_PROT_WRITE)
+                except unicorn.UcError as e:
+                    if e.errno != UC_ERR_MAP:
+                        raise e
+            cur_page += PAGE_SIZE
 
         if addr is None:
             self._brk_ptr = end
@@ -97,7 +93,7 @@ class MemoryMap:
         return self.static_alloc(size)
 
     def map(self, address: int, size: int, prot: int = UC_PROT_READ | UC_PROT_WRITE,
-             vf: 'VirtualFile' = None, offset: int = 0) -> int:
+            node: Optional['VfsNode'] = None, offset: int = 0) -> int:
         """
         Standard memory mapping (page-aligned).
         If address is 0, finds a free region automatically.
@@ -105,7 +101,7 @@ class MemoryMap:
         :param address: Target address (must be page aligned if not 0).
         :param size: Size in bytes.
         :param prot: Protection flags (UC_PROT_...).
-        :param vf: Optional VirtualFile to load data from.
+        :param node: Optional VfsNode to load data from.
         :param offset: File offset.
         :return: Base address of the mapped region.
         """
@@ -113,16 +109,7 @@ class MemoryMap:
             raise ValueError("Size must be > 0")
 
         aligned_size = page_end(size)
-
-        if address == 0:
-            target_addr = self.find_free_region(aligned_size)
-        else:
-            if address % PAGE_SIZE != 0:
-                raise RuntimeError(f"Address {address:#x} is not page aligned")
-            target_addr = address
-
-        if target_addr + aligned_size > self._alloc_max_addr:
-            pass
+        target_addr = self.find_free_region(aligned_size) if address == 0 else address
 
         try:
             self._mu.mem_map(target_addr, aligned_size, prot)
@@ -132,16 +119,12 @@ class MemoryMap:
             else:
                 raise e
 
-        if vf is not None:
-            original_off = os.lseek(vf.descriptor, 0, os.SEEK_CUR)
-            os.lseek(vf.descriptor, offset, os.SEEK_SET)
-
-            data = self._read_fully(vf.descriptor, size)
+        if node is not None:
+            data = node.read(offset, size)
             if data:
                 self._mu.mem_write(target_addr, data)
 
-            self._file_map_addr[target_addr] = (target_addr + aligned_size, offset, vf)
-            os.lseek(vf.descriptor, original_off, os.SEEK_SET)
+            self._file_map_addr[target_addr] = (target_addr + aligned_size, offset, node)
 
         self._allocations[target_addr] = aligned_size
         self.map_generation += 1
@@ -151,14 +134,14 @@ class MemoryMap:
     def find_free_region(self, size: int, start_search: int = 0) -> int:
         """
         Finds a continuous unmapped memory region.
-        Slow operation: O(n) where n is number of mapped regions.
         """
         regions = sorted(self._mu.mem_regions())
 
         if start_search > 0:
             search_base = page_end(start_search)
         else:
-            search_base = page_end(self._brk_ptr + 0x1000000)
+            search_base = MMAP_BASE
+            
         candidate = page_end(search_base)
 
         for r_start, r_end, _ in regions:
@@ -216,6 +199,38 @@ class MemoryMap:
         stream.write(f"{'Start':<10} {'End':<10} {'Prot':<5}\n")
         for start, end, prot in regions:
             stream.write(f"{start:08x}-{end+1:08x} {prot:<5}\n")
+
+    def create_snapshot(self) -> 'Snapshot':
+        """
+        Takes a full snapshot of CPU registers and writable (RW) memory regions.
+        Ignores Read-Only/Execute code segments to save memory and time.
+        """
+        cpu_ctx = self._mu.context_save()
+
+        pages = {}
+        for start, end, prot in self._mu.mem_regions():
+            if prot & UC_PROT_WRITE:
+                size = end - start + 1
+                pages[start] = self._mu.mem_read(start, size)
+
+        return Snapshot(
+            cpu_context=cpu_ctx,
+            memory_pages=pages,
+            brk_ptr=self._brk_ptr,
+            generation=self.map_generation
+        )
+
+    def restore_snapshot(self, snapshot: 'Snapshot') -> None:
+        """
+        Restores CPU state and rolls back all writable memory pages to the snapshot.
+        """
+        self._mu.context_restore(snapshot.cpu_context)
+
+        for addr, data in snapshot.memory_pages.items():
+            self._mu.mem_write(addr, data)
+
+        self._brk_ptr = snapshot.brk_ptr
+        self.map_generation = snapshot.generation
 
     @property
     def current_brk(self) -> int:

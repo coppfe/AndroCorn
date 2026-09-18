@@ -110,4 +110,4 @@ class Hooker:
             mu.emu_stop()
             traceback.print_exc()
             logging.exception("catch error on _hook")
-            os._exit(-1)
+            raise
