@@ -206,9 +206,12 @@ class Emulator:
         from ..java.classes.java.lang.object import Object
         from ..java.classes.java.lang.string import String
         from ..java.classes.java.lang.system import System
-        from ..java.classes.java.lang.types import Boolean, Integer, Long, Float
+        from ..java.classes.java.lang.types import (
+            Boolean, Byte, Character, Double, Float, Integer, Long, Short
+        )
         from ..java.classes.java.lang.array import (
-            Array, ByteArray, ObjectArray, ClassArray, StringArray, IntArray
+            Array, ByteArray, ObjectArray, ClassArray, StringArray, IntArray,
+            BooleanArray, CharArray, ShortArray, LongArray, FloatArray, DoubleArray,
         )
         from ..java.classes.java.lang.reflect.constructor import Constructor
         from ..java.classes.java.lang.reflect.executable import Executable
@@ -223,8 +226,9 @@ class Emulator:
 
         base_classes = [
             Class, Object, String, System,
-            Boolean, Integer, Long, Float,
+            Boolean, Byte, Character, Double, Float, Integer, Long, Short,
             Array, ByteArray, ObjectArray, ClassArray, StringArray, IntArray,
+            BooleanArray, CharArray, ShortArray, LongArray, FloatArray, DoubleArray,
             AccessibleObject, Executable, Constructor, Field, Method, Proxy,
             File, JavaList, HashMap, JavaSet, TimeUnit,
         ]

@@ -13,8 +13,37 @@ if TYPE_CHECKING:
     from androidemu.core import Emulator
     from androidemu.java.classloader import JavaClassLoader
 
+class _PrimitiveType:
+    """Takes the place of the Python class behind int.class & co.: Class only needs its jvm_name (the JNI descriptor)."""
+    def __init__(self, descriptor: str):
+        self.jvm_name = descriptor
+#
+
 class Class(metaclass=JavaClassDef, jvm_name='java/lang/Class'):
     _basic_types = ["Z", "B", "C", "D", "F", "I", "J", "S"]
+
+    # JNI descriptor -> name Java gives to the primitive type's Class (Class.getName of int.class is "int")
+    _primitive_names = {
+        "Z": "boolean", "B": "byte", "C": "char", "D": "double", "F": "float",
+        "I": "int", "J": "long", "S": "short", "V": "void",
+    }
+    _primitive_classes = {}
+
+    @staticmethod
+    def primitive(descriptor: str) -> 'Class':
+        """
+        The Class object of a primitive type: int.class, Integer.TYPE, ... There is exactly one per
+        type, so identity checks (IsSameObject) work, and its descriptor is the primitive's letter,
+        which is what getDeclaredMethod expects for a primitive parameter type.
+        """
+        pyclass = Class._primitive_classes.get(descriptor)
+        if pyclass is None:
+            if descriptor not in Class._primitive_names:
+                raise ValueError(f"{descriptor!r} is not a primitive type descriptor")
+            pyclass = Class._primitive_classes[descriptor] = Class(_PrimitiveType(descriptor), None)
+        return pyclass
+    #
+
     def __init__(self, pyclazz, class_loader):
         self.class_loader: 'JavaClassLoader' = class_loader
         self.__pyclazz = pyclazz
@@ -85,8 +114,16 @@ class Class(metaclass=JavaClassDef, jvm_name='java/lang/Class'):
         name = self.__descriptor_represent
         assert name != None
 
+        if isinstance(self.__pyclazz, _PrimitiveType):
+            return String(Class._primitive_names[name])
+
         name = name.replace("/", ".")
         return String(name)
+    #
+
+    @java_method_def(name='isPrimitive', signature='()Z', native=False)
+    def isPrimitive(self, emu):
+        return isinstance(self.__pyclazz, _PrimitiveType)
     #
 
     @java_method_def(name='getCanonicalName', signature='()Ljava/lang/String;', native=False)

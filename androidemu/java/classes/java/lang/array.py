@@ -4,6 +4,9 @@ from androidemu.java.method_def import java_method_def, JavaMethodDef
 
 class Array(metaclass=JavaClassDef, jvm_name='java/lang/reflect/Array'):
 
+    # JNI type letter of the elements of a primitive array class ("I" for int[]), None when it is not known
+    jni_kind = None
+
     def __init__(self, pyitems):
         self.pyobject = pyitems
     #
@@ -50,6 +53,8 @@ class Array(metaclass=JavaClassDef, jvm_name='java/lang/reflect/Array'):
 
 #外面用到，因为与Array jvm name不同，所以暂时手动定义，与Array作用一样
 class ByteArray(Array, metaclass=JavaClassDef, jvm_name="[B", jvm_super=Array):
+    jni_kind = "B"
+
     def __init__(self, item_list):
         Array.__init__(self, item_list)
     #
@@ -79,5 +84,68 @@ class StringArray(Array, metaclass=JavaClassDef, jvm_name="[Ljava/lang/String;",
 #
 
 class IntArray(Array, metaclass=JavaClassDef, jvm_name="[I", jvm_super=Array):
+    jni_kind = "I"
+
     def __init__(self, item_list):
         Array.__init__(self, item_list)
+
+#
+
+# boolean[]: the items are Python numbers (ints, floats; a boolean is 0/1), as in IntArray
+class BooleanArray(Array, metaclass=JavaClassDef, jvm_name="[Z", jvm_super=Array):
+    jni_kind = "Z"
+
+    def __init__(self, item_list):
+        Array.__init__(self, item_list)
+    #
+
+#
+
+# char[]: the items are Python numbers (ints, floats; a boolean is 0/1), as in IntArray
+class CharArray(Array, metaclass=JavaClassDef, jvm_name="[C", jvm_super=Array):
+    jni_kind = "C"
+
+    def __init__(self, item_list):
+        Array.__init__(self, item_list)
+    #
+
+#
+
+# short[]: the items are Python numbers (ints, floats; a boolean is 0/1), as in IntArray
+class ShortArray(Array, metaclass=JavaClassDef, jvm_name="[S", jvm_super=Array):
+    jni_kind = "S"
+
+    def __init__(self, item_list):
+        Array.__init__(self, item_list)
+    #
+
+#
+
+# long[]: the items are Python numbers (ints, floats; a boolean is 0/1), as in IntArray
+class LongArray(Array, metaclass=JavaClassDef, jvm_name="[J", jvm_super=Array):
+    jni_kind = "J"
+
+    def __init__(self, item_list):
+        Array.__init__(self, item_list)
+    #
+
+#
+
+# float[]: the items are Python numbers (ints, floats; a boolean is 0/1), as in IntArray
+class FloatArray(Array, metaclass=JavaClassDef, jvm_name="[F", jvm_super=Array):
+    jni_kind = "F"
+
+    def __init__(self, item_list):
+        Array.__init__(self, item_list)
+    #
+
+#
+
+# double[]: the items are Python numbers (ints, floats; a boolean is 0/1), as in IntArray
+class DoubleArray(Array, metaclass=JavaClassDef, jvm_name="[D", jvm_super=Array):
+    jni_kind = "D"
+
+    def __init__(self, item_list):
+        Array.__init__(self, item_list)
+    #
+#

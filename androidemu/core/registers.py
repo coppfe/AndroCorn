@@ -260,6 +260,25 @@ class RegistersMapping:
             self._mu.mem_write(sp_new, payload)
             self.v_sp = sp_new
 
+    def set_fp_return(self, bits: int, is_double: bool = False) -> None:
+        """
+        Sets a float/double return value from its raw IEEE-754 bits.
+
+        ARM64 returns it in s0/d0. ARM32 Android uses the softfp ABI, so a float comes back
+        in r0 and a double in r0 (low word) : r1 (high word); hard-float ARM32 is not supported.
+        """
+        if self._mu is None:
+            raise RuntimeError("Unicorn instance is not set!")
+
+        if self._arch == emu_const.ARCH_ARM64:
+            # Writing Sn/Dn zeroes the rest of Vn, which is exactly what writing the
+            # zero-extended value to the whole Q register does.
+            self._mu.reg_write(UC_ARM64_REG_Q0, bits & (0xFFFFFFFFFFFFFFFF if is_double else 0xFFFFFFFF))
+        else:
+            self.v_reg_0 = bits & 0xFFFFFFFF
+            if is_double:
+                self.v_reg_1 = (bits >> 32) & 0xFFFFFFFF
+
     def set_return_val(self, val: Any, high_val: Optional[int] = None) -> None:
         """Sets return value in v_ret (and v_reg_1 if 64-bit pair on 32-bit)."""
         self.v_ret = val
