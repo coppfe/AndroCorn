@@ -3,6 +3,8 @@ import os
 from typing import List, Tuple, Optional, TYPE_CHECKING
 
 from ..node import VfsNode, VirtualDirNode
+from .devices import MemoryFileNode
+
 from ....data import layout
 from ....const.linux import DT_LNK, DT_DIR
 from ....const.templates import STATUS_TEMPLATE, MOUNTINFO
@@ -339,3 +341,25 @@ class SysCpuOnlineNode(VfsNode):
 
     def read(self, offset: int, count: int) -> bytes:
         return b"0-7\n"[offset:offset + count]
+
+class ProcPidDirNode(VirtualDirNode):
+
+    def __init__(self, pid: int, vfs: 'VFSManager'):
+        super().__init__(name=f"/proc/{pid}", mode=0o040555, uid=0, gid=0, dev=0x000C)
+        self.pid = pid
+        self.vfs = vfs
+        self.setxattr("security.selinux", SELinuxPolicy.CONTEXT_PROC)
+
+        self.add_child("maps", ProcMapsNode(vfs.emu.memory, vfs.emu.linker, vfs))
+        self.add_child("status", ProcStatusNode(vfs.ctx, vfs.config))
+        self.add_child("cmdline", ProcCmdlineNode(vfs.config))
+        self.add_child("mountinfo", ProcMountinfoNode())
+        self.add_child("fd", ProcFdDirNode(pid, vfs))
+
+        attr_dir = VirtualDirNode(name=f"/proc/{pid}/attr", mode=0o040555, uid=0, gid=0, dev=0x000C)
+        attr_dir.add_child("current", MemoryFileNode(
+            f"/proc/{pid}/attr/current", 
+            b"u:r:untrusted_app_30:s0:c512,c768\n", 
+            mode=0o100444
+        ))
+        self.add_child("attr", attr_dir)
