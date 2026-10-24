@@ -120,13 +120,19 @@ class ProcessSyscalls:
         return tid
 
     def _futex(self, emu: 'Emulator', uaddr, op, val, timeout_ptr, uaddr2, val3):
+        if not uaddr:
+            return -EFAULT
+
         cmd = op & FUTEX_CMD_MASK
         sch = emu.scheduler
         mu = emu.mu
 
-        value = int.from_bytes(mu.mem_read(uaddr, 4), "little")
-        
         if cmd in (FUTEX_WAIT, FUTEX_WAIT_BITSET):
+            try:
+                value = int.from_bytes(mu.mem_read(uaddr, 4), "little")
+            except Exception:
+                return -EFAULT
+
             if value == val:
                 timeout = -1
                 if timeout_ptr:
