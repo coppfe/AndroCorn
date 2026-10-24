@@ -89,6 +89,7 @@ class CallbacksARM64:
             0x3F: ("read",        3, self._io_calls._read),
             0x40: ("write",       3, self._io_calls._write),
             0x42: ("writev",      3, self._io_calls._writev),
+            0x43: ("pread64",     4, self._io_calls._pread64),
             0x49: ("ppoll",       4, self._io_calls._ppoll),
             0x4E: ("readlinkat",  4, self._system_calls._readlinkat),
             0x4F: ("newfstatat",  4, self._system_calls._fstatat64),

@@ -51,6 +51,7 @@ class CallbacksARM32:
             0xAC: ("prctl", 5, self._system_syscalls._prctl),
             0xAE: ("rt_sigaction", 4, self._signal_syscalls._rt_sigaction),
             0xAF: ("rt_sigprocmask", 4, self._signal_syscalls._rt_sigprocmask),
+            0xB4: ("pread64", 6, self._io_calls._pread64_arm32),
             0xBA: ("sigaltstack", 2, self._signal_syscalls._sigaltstack),
             0xBE: ("vfork", 0, self._process_syscalls._vfork),
             0xBF: ("getrlimit", 2, self._system_syscalls._getrlimit),
