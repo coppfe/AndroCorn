@@ -18,6 +18,11 @@ PR_TIMING_TIMESTAMP             =   1       #/* Accurate timestamp based
 PR_SET_NAME                     =   15		#/* Set process name */
 PR_GET_NAME                     =   16		#/* Get process name */
 
+PR_SET_SECCOMP                  = 0x16
+PR_TASK_PERF_EVENTS_DISABLE     = 31
+PR_TASK_PERF_EVENTS_ENABLE      = 32
+PR_SET_NO_NEW_PRIVS             = 0x26
+
 PR_SET_VMA                      =   0x53564d41
 PR_SET_PTRACER                  =   0x59616d61
 PR_SET_PTRACER_ANY              =   0xFFFFFFFF
