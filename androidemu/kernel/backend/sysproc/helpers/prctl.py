@@ -61,10 +61,10 @@ class PrctlHandler:
         self.register(PR_GET_DUMPABLE, self._get_dumpable)
         self.register(PR_SET_PTRACER, self._set_ptracer)
         self.register(PR_SET_VMA, self._mock_success)
-        self.register(PR_TASK_PERF_EVENTS_DISABLE, self._mock_success)
-        self.register(PR_TASK_PERF_EVENTS_ENABLE, self._mock_success)
         self.register(PR_SET_SECCOMP, self._mock_success)
         self.register(PR_SET_NO_NEW_PRIVS, self._mock_success)
+        self.register(PR_TASK_PERF_EVENTS_DISABLE, self._mock_success)
+        self.register(PR_TASK_PERF_EVENTS_ENABLE, self._mock_success)
 
     @staticmethod
     def _set_name(emu: 'Emulator', arg2: int, *args) -> int:
