@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from unicorn import Uc
+    from androidemu.core.registers import RegistersMapping
 
 class CPU_Utils:
 
@@ -28,23 +29,9 @@ class CPU_Utils:
     MRRC_BASE_32 = 0xEC500F00 # move from coprocessor register
     MCRR_BASE_32 = 0xEC400F00 # move to coprocessor register
 
-    # ID : (Op0, Op1, CRn, CRm, Op2)
-    REGS_64 = {
-        ARM64_CNTVCT_EL0: (3, 3, 14, 0, 2),
-        ARM64_CNTFRQ_EL0: (3, 3, 14, 0, 0),
-        ARM64_CNTKCTL_EL1: (3, 0, 14, 1, 0),
-    }
-
-    # ID : (is_64bit_reg, coproc, opc1, opc2, CRn, CRm)
-    REGS_32 = {
-        ARM32_CNTVCT: (True,  15, 1, 0, 0, 14), # CNTVCT (MRRC)
-        ARM32_CNTFRQ: (False, 15, 0, 0, 14, 0), # CNTFRQ (MRC)
-        ARM32_CNTKCTL: (False, 15, 0, 0, 14, 1), # CNTKCTL (MRC)
-    }
-
-    def __init__(self, mu: 'Uc'):
+    def __init__(self, mu: 'Uc', registers: 'RegistersMapping'):
         self._mu = mu
-        pass
+        self._registers = registers
 
     def _enable_vfp32(self):
         # MRC p15, #0, r1, c1, c0, #2
@@ -72,12 +59,14 @@ class CPU_Utils:
 
         try:
             self._mu.mem_write(address, code_bytes)
-            self._mu.reg_write(UC_ARM_REG_SP, address + mem_size)
+            # self._mu.reg_write(UC_ARM_REG_SP, address + mem_size)
+            self._registers.v_sp = address + mem_size
             
             self._mu.emu_start(address | 1, address + len(code_bytes))
         finally:
             self._mu.mem_write(address, b'\x00' * len(code_bytes))
-            self._mu.reg_write(UC_ARM_REG_SP, old_sp)
+            # self._mu.reg_write(UC_ARM_REG_SP, old_sp)
+            self._registers.v_sp = old_sp
         
     #arm64
     '''
@@ -93,9 +82,8 @@ class CPU_Utils:
         x |= 0x300000; # set FPEN bit
         self._mu.reg_write(UC_ARM64_REG_CPACR_EL1, x)
 
-    def __encode_64(self, reg_id, is_write: bool):
-        params = self.REGS_64.get(reg_id)
-        if not params: raise ValueError(f"Unknown ARM64 reg: {hex(reg_id)}")
+    def __encode_64(self, reg_instruction: 'dict', is_write: bool):
+        params = reg_instruction
         
         op0, op1, crn, crm, op2 = params
         insn = self.MSR_BASE_64 if is_write else self.MRS_BASE_64
@@ -108,9 +96,8 @@ class CPU_Utils:
         insn |= 0 # Rt = X0
         return struct.pack('<I', insn), True
 
-    def __encode_32(self, reg_id, is_write: bool):
-        params = self.REGS_32.get(reg_id)
-        if not params: raise ValueError(f"Unknown ARM32 reg: {hex(reg_id)}")
+    def __encode_32(self, reg_instruction, is_write: bool):
+        params = reg_instruction
         
         is_64bit_reg, coproc, op1, op2, crn, crm = params
 
@@ -139,7 +126,8 @@ class CPU_Utils:
             self._mu.mem_write(address, code_bytes)
             
             stop_addr = address + 0x10 
-            self._mu.reg_write(UC_ARM64_REG_X30 if is_64 else UC_ARM_REG_LR, stop_addr)
+            # self._mu.reg_write(UC_ARM64_REG_X30 if is_64 else UC_ARM_REG_LR, stop_addr)
+            self._registers.v_lr = stop_addr
 
             self._mu.emu_start(address, address + 4, count=1)
         finally:
@@ -153,11 +141,14 @@ class CPU_Utils:
         self.__emulate(code_bytes, is_64)
 
         if is_64:
-            return self._mu.reg_read(UC_ARM64_REG_X0)
+            # return self._mu.reg_read(UC_ARM64_REG_X0)
+            return self._registers.v_reg_0
         
-        res_low = self._mu.reg_read(UC_ARM_REG_R0)
+        # res_low = self._mu.reg_read(UC_ARM_REG_R0)
+        res_low = self._registers.v_reg_0
         if is_res_64:
-            res_high = self._mu.reg_read(UC_ARM_REG_R1)
+            # res_high = self._mu.reg_read(UC_ARM_REG_R1)
+            res_high = self._registers.v_reg_1
             return (res_high << 32) | res_low
         return res_low
 
@@ -167,9 +158,11 @@ class CPU_Utils:
                                 self.__encode_32(register_id, True)
 
         if is_64:
-            self._mu.reg_write(UC_ARM64_REG_X0, value)
+            # self._mu.reg_write(UC_ARM64_REG_X0, value)
+            self._registers.v_reg_0 = value
         else:
-            self._mu.reg_write(UC_ARM_REG_R0, value & 0xFFFFFFFF)
+            # self._mu.reg_write(UC_ARM_REG_R0, value & 0xFFFFFFFF)
+            self._registers.v_reg_0 = value & 0xFFFFFFFF
             if is_val_64:
                 self._mu.reg_write(UC_ARM_REG_R1, value >> 32)
 
