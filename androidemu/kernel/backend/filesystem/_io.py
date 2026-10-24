@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING
 
-from ....const.linux import AT_FDCWD, EINVAL, EFAULT
+from ....const.linux import AT_FDCWD, EINVAL, EFAULT, EBADF
 from ....types import ptr_t
 from ....utils.memory import helpers as memory_helpers
 
@@ -101,3 +101,20 @@ class FileSystemIO:
 
     def _ppoll(self, emu: 'Emulator', pollfd_ptr: int, nfds: int, timeout_ts_ptr: int, sigmask_ptr: int) -> int:
         return self._poll(emu, pollfd_ptr, nfds, 0)
+
+    def _pread64_arm32(self, emu: 'Emulator', fd: int, buf_addr: int, count: int, dummy: int, pos_lo: int, pos_hi: int) -> int:
+        offset = (pos_hi << 32) | (pos_lo & 0xFFFFFFFF)
+        return self._pread64(emu, fd, buf_addr, count, offset)
+
+    def _pread64(self, emu: 'Emulator', fd: int, buf_addr: int, count: int, offset: int) -> int:
+        handle = emu.vfs.get_handle(fd)
+        if not handle:
+            return -EBADF
+
+        data = handle.node.read(offset, count)
+        if not data:
+            return 0
+
+        read_len = len(data)
+        emu.mu.mem_write(buf_addr, data)
+        return read_len
