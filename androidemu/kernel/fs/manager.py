@@ -86,6 +86,11 @@ class VFSManager:
 
         for i, part in enumerate(parts[:-1]):
             nxt = curr.lookup(part)
+            if nxt and nxt.is_symlink:
+                target = nxt.readlink()
+                if target:
+                    nxt = curr.lookup(target) if not target.startswith("/") else self.get_node(target)
+
             if nxt is None or not nxt.is_dir:
                 new_dir = VirtualDirNode(name="/" + "/".join(parts[:i + 1]))
                 if isinstance(curr, VirtualDirNode):
