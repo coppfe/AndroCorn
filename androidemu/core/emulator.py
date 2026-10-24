@@ -119,7 +119,7 @@ class Emulator:
         self.registers = RegistersMapping(self.mu, self.arch)
         self.time_manager = TimeManager(start_timestamp=self.config.pkg.start_timestamp)
         self.tls_utils = BionicTLSUtils(self.mu, self.registers)
-        self._cpu_utils = CPU_Utils(self.mu)
+        self._cpu_utils = CPU_Utils(self.mu, self.registers)
 
     def _init_memory_layout(self, vfp_inst_set: bool) -> None:
         self.memory = MemoryMap(
