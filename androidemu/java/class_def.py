@@ -1,155 +1,149 @@
-import inspect
 import logging
-from .jvm.id_counter import *
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Any
+from .jvm.id_counter import next_cls_id
 
-from typing import TYPE_CHECKING, Dict
 if TYPE_CHECKING:
-    from .class_def import JavaClassDef
     from .method_def import JavaMethodDef
     from .field_def import JavaFieldDef
 
 logger = logging.getLogger(__name__)
 
+
 class JavaClassDef(type):
-    """
-    Class Function Implementation Guidelines:
+    def __new__(cls, name: str, bases: Tuple[type, ...], ns: Dict[str, Any], **kwargs: Any):
+        return type.__new__(cls, name, bases, ns)
 
-    Python functions (including __init__): Use native Python types (e.g., str, int) for all inputs and outputs.
+    def __init__(
+        cls,
+        name: str,
+        bases: Tuple[type, ...],
+        ns: Dict[str, Any],
+        jvm_name: Optional[str] = None,
+        jvm_fields: Optional[List['JavaFieldDef']] = None,
+        jvm_ignore: bool = False,
+        jvm_super: Optional['JavaClassDef'] = None,
+        jvm_interfaces: Optional[List['JavaClassDef']] = None,
+        **kwargs: Any,
+    ):
+        cls.jvm_id: int = next_cls_id()
+        cls.jvm_name: str = jvm_name or name.replace('.', '/')
+        cls.jvm_methods: Dict[int, 'JavaMethodDef'] = {}
+        cls.jvm_fields: Dict[int, 'JavaFieldDef'] = {}
+        cls.jvm_ignore: bool = jvm_ignore
+        cls.class_object: Any = None
+        cls.jvm_interfaces: List['JavaClassDef'] = jvm_interfaces or []
 
-    Simulated Java functions (@java_method_def): Use Java types (e.g., String, Integer) for all inputs and outputs, except for the 8 primitive types. Note: Distinguish Integer (object) from int (primitive).
+        if jvm_super is not None:
+            cls.jvm_super = jvm_super
+        else:
+            cls.jvm_super = None
+            for b in bases:
+                if isinstance(b, JavaClassDef) and getattr(b, 'jvm_name', '') != 'java/lang/Object':
+                    cls.jvm_super = b
+                    break
+            if cls.jvm_super is None and cls.jvm_name != 'java/lang/Object':
+                for b in bases:
+                    if isinstance(b, JavaClassDef) and getattr(b, 'jvm_name', '') == 'java/lang/Object':
+                        cls.jvm_super = b
+                        break
 
-    Primitive return types: Map Java integers to Python int, and Java float/double to Python float.
-    """
-    
-    def __init__(cls, name, base, ns, jvm_name=None, jvm_fields=None, jvm_ignore=False, jvm_super=None):
-        cls.jvm_id:         int                         = next_cls_id()
-        cls.jvm_name:       str                         = jvm_name
-        cls.jvm_methods:    Dict[int, 'JavaMethodDef']  = dict()
-        cls.jvm_fields:     Dict[int, 'JavaFieldDef']   = dict()
-        cls.jvm_ignore:     bool                        = jvm_ignore
-        cls.jvm_super:      'JavaClassDef'              = jvm_super
-        cls.class_object:   'JavaClassDef'              = None
+        cls._name_sig_cache: Dict[Tuple[str, str], 'JavaMethodDef'] = {}
 
-        cls._name_sig_cache = {}
-
-        # Register all defined Java methods.
-        for member_name, member_obj in inspect.getmembers(cls):
+        for member_name, member_obj in ns.items():
             real_obj = member_obj
             if isinstance(member_obj, staticmethod):
                 real_obj = member_obj.__func__
-                
+
             if hasattr(real_obj, 'jvm_method'):
-                method = real_obj.jvm_method
+                method: 'JavaMethodDef' = real_obj.jvm_method
                 cls.jvm_methods[method.jvm_id] = method
                 cls._name_sig_cache[(method.name, method.signature)] = method
 
-        # Register all defined Java fields.
         if jvm_fields is not None:
             for jvm_field in jvm_fields:
                 cls.jvm_fields[jvm_field.jvm_id] = jvm_field
-        type.__init__(cls, name, base, ns)
 
-    def __new__(cls, name, base, ns, **kargs):
-        return type.__new__(cls, name, base, ns)
+        type.__init__(cls, name, bases, ns)
 
-    # def register_native(cls, name, signature, ptr_func) -> None:
-    #     found = False
-
-    #     # Search for a defined jvm method.
-    #     for method in cls.jvm_methods.values():
-    #         if method.name == name and method.signature == signature:
-    #             method.native_addr = ptr_func
-    #             found = True
-    #             break
-            
-    #     if not found:
-    #         raise RuntimeError("Register native ('%s', '%s') failed on class %s. Not found method" % (name, signature, cls.__name__))
-    
-    def register_native(cls, name, signature, ptr_func) -> None:
-        found = False
-
+    def register_native(cls, name: str, signature: str, ptr_func: int) -> None:
         for method in cls.jvm_methods.values():
             if method.name == name and method.signature == signature:
                 method.native_addr = ptr_func
-                found = True
-                break
-            
-        if not found:
-            from .method_def import JavaMethodDef
-            method = JavaMethodDef(name, None, name, signature, native=True)
-            method.native_addr = ptr_func
-            cls.jvm_methods[method.jvm_id] = method
-            cls._name_sig_cache[(name, signature)] = method
+                return
 
-    def find_method(cls, name: str, signature: str) -> 'JavaMethodDef':
-        """
-        Find a PyMethod by its name and signature
+        from .method_def import JavaMethodDef
+        method = JavaMethodDef(name, None, name, signature, native=True)
+        method.native_addr = ptr_func
+        cls.jvm_methods[method.jvm_id] = method
+        cls._name_sig_cache[(name, signature)] = method
 
-        :param name: Name
-        :param signature: Signature
-        :return: PyMethod
-        """
+    def find_method(cls, name: str, signature: str) -> Optional['JavaMethodDef']:
         method = cls._name_sig_cache.get((name, signature))
-        if method:
+        if method is not None:
             return method
+
         if cls.jvm_super is not None:
-            return cls.jvm_super.find_method(name, signature)
+            m = cls.jvm_super.find_method(name, signature)
+            if m is not None:
+                return m
+
+        for iface in cls.jvm_interfaces:
+            m = iface.find_method(name, signature)
+            if m is not None:
+                return m
+
         return None
-    
-    def find_method_sig_with_no_ret(cls, name, signature_no_ret) -> None:
-        """
-        Used to support Java reflection; Java reflection signatures have no return values.
-        @param signature_no_ret: something like (ILjava/lang/String;).
-        """
-        assert signature_no_ret[0] == "(" and signature_no_ret[len(signature_no_ret)-1] == ")", "signature_no_ret error"
+
+    def find_method_sig_with_no_ret(cls, name: str, signature_no_ret: str) -> Optional['JavaMethodDef']:
+        assert signature_no_ret.startswith("(") and signature_no_ret.endswith(")"), "signature_no_ret error"
         for method in cls.jvm_methods.values():
             if method.name == name and method.signature.startswith(signature_no_ret):
                 return method
 
-        if (cls.jvm_super is not None):
-            return cls.jvm_super.find_method_sig_with_no_ret(name, signature_no_ret)
-        return None
-
-
-    def find_method_by_id(cls, jvm_id: int) -> 'JavaMethodDef':
-        """
-        Find a PyMethod by its ID
-
-        :param jvm_id: ID
-        :return: PyMethod
-        """
-        if (jvm_id in cls.jvm_methods):
-            return cls.jvm_methods[jvm_id]
         if cls.jvm_super is not None:
-            return cls.jvm_super.find_method_by_id(jvm_id)
+            m = cls.jvm_super.find_method_sig_with_no_ret(name, signature_no_ret)
+            if m is not None:
+                return m
+
+        for iface in cls.jvm_interfaces:
+            m = iface.find_method_sig_with_no_ret(name, signature_no_ret)
+            if m is not None:
+                return m
+
         return None
 
-    def find_field(cls, name: str, signature: str, is_static: bool) -> 'JavaFieldDef':
-        """
-        Find a PyField by its name and signature
+    def find_method_by_id(cls, jvm_id: int) -> Optional['JavaMethodDef']:
+        if jvm_id in cls.jvm_methods:
+            return cls.jvm_methods[jvm_id]
 
-        :param name: Name
-        :param signature: Signature
-        :return: PyField
-        """
+        if cls.jvm_super is not None:
+            m = cls.jvm_super.find_method_by_id(jvm_id)
+            if m is not None:
+                return m
+
+        for iface in cls.jvm_interfaces:
+            m = iface.find_method_by_id(jvm_id)
+            if m is not None:
+                return m
+
+        return None
+
+    def find_field(cls, name: str, signature: str, is_static: bool) -> Optional['JavaFieldDef']:
         for field in cls.jvm_fields.values():
-            if field.name == name and field.signature == signature and field.is_static == is_static:
-                return field
+            if field.name == name and field.is_static == is_static:
+                if not signature or field.signature == signature:
+                    return field
 
-        if (cls.jvm_super is not None):
+        if cls.jvm_super is not None:
             return cls.jvm_super.find_field(name, signature, is_static)
 
         return None
 
-    def find_field_by_id(cls, jvm_id: int) -> 'JavaFieldDef':
-        """
-        Find a PyField by its ID
-
-        :param jvm_id: ID
-        :return: PyField
-        """
-        if (jvm_id in cls.jvm_fields):
+    def find_field_by_id(cls, jvm_id: int) -> Optional['JavaFieldDef']:
+        if jvm_id in cls.jvm_fields:
             return cls.jvm_fields[jvm_id]
+
         if cls.jvm_super is not None:
             return cls.jvm_super.find_field_by_id(jvm_id)
+
         return None
