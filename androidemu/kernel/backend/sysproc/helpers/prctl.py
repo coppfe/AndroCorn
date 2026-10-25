@@ -12,10 +12,9 @@ from .....const.android import (
     PR_TASK_PERF_EVENTS_ENABLE,
     PR_TASK_PERF_EVENTS_DISABLE,
     PR_SET_SECCOMP,
-    PR_SET_NO_NEW_PRIVS
+    PR_SET_NO_NEW_PRIVS,
 )
 from .....const.linux import EINVAL
-from .....utils.memory import helpers
 
 if TYPE_CHECKING:
     from androidemu import Emulator
@@ -69,14 +68,15 @@ class PrctlHandler:
     @staticmethod
     def _set_name(emu: 'Emulator', arg2: int, *args) -> int:
         if arg2 != 0:
-            emu.pcb.process_name = helpers.read_utf8(emu.mu, arg2).split('\0')[0]
+            name = emu.memory.read_utf8(arg2)
+            emu.pcb.process_name = name.split('\0')[0]
         return 0
 
     @staticmethod
     def _get_name(emu: 'Emulator', arg2: int, *args) -> int:
         if arg2 != 0:
             name = (emu.pcb.process_name[:15] + '\0').encode('utf-8')
-            emu.mu.mem_write(arg2, name)
+            emu.memory.write_bytes(arg2, name)
         return 0
 
     @staticmethod

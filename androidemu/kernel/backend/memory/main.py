@@ -1,12 +1,10 @@
 import logging
 from typing import TYPE_CHECKING
-from unicorn import UC_PROT_READ, UC_PROT_WRITE
 
 from ....const.flags import MAP_ANONYMOUS
 from ....const.linux import EBADF
 from ....data import layout as config
 from ....types import ptr_t
-from ....utils.memory import helpers
 
 if TYPE_CHECKING:
     from androidemu import Emulator
@@ -40,33 +38,42 @@ class MemorySyscalls:
         if pid != emu.pcb.pid:
             raise NotImplementedError("__process_vm_readv for other process is not supported")
 
-        mu = emu.mu
+        mem = emu.memory
         ptr_sz = ptr_t.size
+        vec_sz = 2 * ptr_sz
 
-        off_r = remote_iov
         b = bytearray()
+        off_r = remote_iov
         for _ in range(riovcnt):
-            rbase = helpers.read_ptr_sz(mu, off_r)
-            iov_len = helpers.read_ptr_sz(mu, off_r + ptr_sz)
-            b.extend(helpers.read_byte_array(mu, rbase, iov_len))
-            off_r += 2 * ptr_sz
+            rbase = mem.read_ptr(off_r)
+            iov_len = mem.read_ptr(off_r + ptr_sz)
+            if iov_len > 0:
+                b.extend(mem.read_bytes(rbase, iov_len))
+            off_r += vec_sz
 
-        off_l = local_iov
-        has_read = 0
         total_len = len(b)
+        if total_len == 0:
+            return 0
+
+        mv = memoryview(b)
+        off_l = local_iov
+        has_written = 0
+
         for _ in range(liovcnt):
-            lbase = helpers.read_ptr_sz(mu, off_l)
-            liov_len = helpers.read_ptr_sz(mu, off_l + ptr_sz)
+            lbase = mem.read_ptr(off_l)
+            liov_len = mem.read_ptr(off_l + ptr_sz)
 
-            chunk = b[has_read : has_read + liov_len]
-            mu.mem_write(lbase, bytes(chunk))
-            has_read += len(chunk)
-            off_l += 2 * ptr_sz
+            write_sz = min(liov_len, total_len - has_written)
+            if write_sz > 0:
+                mem.write_bytes(lbase, mv[has_written : has_written + write_sz])
+                has_written += write_sz
 
-            if has_read >= total_len:
+            off_l += vec_sz
+
+            if has_written >= total_len:
                 break
 
-        return has_read
+        return has_written
 
     def _handle_mmap2(
         self, emu: 'Emulator', addr: int, length: int, prot: int, flags: int, fd: int, pgoffset: int

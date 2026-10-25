@@ -1,24 +1,18 @@
 import logging
 import os
 import random
-import struct
-
-from unicorn import Uc
+from typing import TYPE_CHECKING
 
 from ....const.android import *
 from ....const.linux import *
 from ....const import emu_const
-from ....utils.memory import helpers
-
 from .helpers.prctl import PrctlHandler
-
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from androidemu import Emulator
-    from androidemu.core.pcb import ProcessControlBlock
     from androidemu.data.config import Config
     from androidemu.core.state.time_manager import TimeManager
+
 
 class SystemSyscalls:
 
@@ -37,36 +31,38 @@ class SystemSyscalls:
     # PRCTL
     # =========================================================
 
-    def _prctl(self, emu: 'Emulator', option, arg2, arg3, arg4, arg5):
+    def _prctl(self, emu: 'Emulator', option: int, arg2: int, arg3: int, arg4: int, arg5: int) -> int:
         return self._prctl_cb.handle(emu, option, arg2, arg3, arg4, arg5)
 
     # =========================================================
     # GETTERS
     # =========================================================
 
-    def _getcpu(self, emu: 'Emulator', cpu_ptr, node_ptr, cache):
+    def _getcpu(self, emu: 'Emulator', cpu_ptr: int, node_ptr: int, cache: int) -> int:
         if cpu_ptr:
-            emu.mu.mem_write(cpu_ptr, (1).to_bytes(4, "little"))
+            # CPU #1 по умолчанию
+            emu.memory.write_u32(cpu_ptr, 1)
         return 0
 
-    def _getrandom(self, emu: 'Emulator', buf, count, flags):
+    def _getrandom(self, emu: 'Emulator', buf: int, count: int, flags: int) -> int:
         try:
             data = os.urandom(count)
-            emu.mu.mem_write(buf, data)
+            emu.memory.write_bytes(buf, data)
             logging.debug("getrandom n=%d flags=%x", count, flags)
             return count
         except Exception as e:
             logging.error("getrandom failed: %s", e)
             return -EPERM
-        
-    def _getrlimit(self, emu: 'Emulator', resource, rlim_ptr):
-        # int getrlimit(int resource, struct rlimit *rlim);
-        # struct rlimit {
-        #     rlim_t rlim_cur;  // soft limit
-        #     rlim_t rlim_max;  // hard limit
-        # };
 
-        # resource 7 = RLIMIT_STACK
+    def _getrlimit(self, emu: 'Emulator', resource: int, rlim_ptr: int) -> int:
+        # struct rlimit {
+        #     rlim_t rlim_cur;
+        #     rlim_t rlim_max;
+        # };
+        mem = emu.memory
+        ptr_sz = mem._ptr_sz
+
+        # RLIMIT_STACK = 7
         if resource == 7:
             rlim_cur = 8 * 1024 * 1024  # 8MB
             rlim_max = 8 * 1024 * 1024
@@ -74,18 +70,17 @@ class SystemSyscalls:
             rlim_cur = 1024
             rlim_max = 1024
 
-        data = struct.pack("<II", rlim_cur, rlim_max)
-
-        emu.mu.mem_write(rlim_ptr, data)
+        mem.write_ptr(rlim_ptr, rlim_cur)
+        mem.write_ptr(rlim_ptr + ptr_sz, rlim_max)
         return 0
-
 
     # =========================================================
     # UNAME
     # =========================================================
 
-    def _uname(self, emu: 'Emulator', buf):
-        is32 = emu.arch == emu_const.ARCH_ARM32
+    def _uname(self, emu: 'Emulator', buf: int) -> int:
+        is32 = (emu.arch == emu_const.ARCH_ARM32)
+        mem = emu.memory
 
         fields = [
             self._kernel.sysname,
@@ -99,7 +94,7 @@ class SystemSyscalls:
         offsets = [0, 65, 130, 195, 260, 325]
 
         for off, val in zip(offsets, fields):
-            helpers.write_utf8(emu.mu, buf + off, val)
+            mem.write_bytes(buf + off, val.encode("utf-8") + b"\x00")
 
         return 0
 
@@ -149,68 +144,68 @@ class SystemSyscalls:
     # SYSINFO SERIALIZER
     # =========================================================
 
-    def _sysinfo(self, emu: 'Emulator', ptr):
+    def _sysinfo(self, emu: 'Emulator', ptr: int) -> int:
         m = self._build_sysinfo_model(emu.time_manager)
-        arch32 = emu.arch == emu_const.ARCH_ARM32
-
-        def w(off, val, size):
-            emu.mu.mem_write(ptr + off, int(val).to_bytes(size, "little", signed=False))
+        mem = emu.memory
+        arch32 = (emu.arch == emu_const.ARCH_ARM32)
 
         if arch32:
-            w(0, m["uptime"], 4)
+            mem.write_u32(ptr, m["uptime"])
 
             for i, v in enumerate(m["loads"]):
-                w(4 + i * 4, v, 4)
+                mem.write_u32(ptr + 4 + i * 4, v)
 
-            w(16, self._u32(m["total"] // 1024), 4)
-            w(20, self._u32(m["free"] // 1024), 4)
-            w(24, self._u32(m["shared"]), 4)
-            w(28, self._u32(m["buffer"] // 1024), 4)
+            mem.write_u32(ptr + 16, self._u32(m["total"] // 1024))
+            mem.write_u32(ptr + 20, self._u32(m["free"] // 1024))
+            mem.write_u32(ptr + 24, self._u32(m["shared"]))
+            mem.write_u32(ptr + 28, self._u32(m["buffer"] // 1024))
 
-            w(32, self._u32(m["swap_total"]), 4)
-            w(36, self._u32(m["swap_free"]), 4)
+            mem.write_u32(ptr + 32, self._u32(m["swap_total"]))
+            mem.write_u32(ptr + 36, self._u32(m["swap_free"]))
 
-            w(40, self._u16(m["procs"]), 2)
+            mem.write_u16(ptr + 40, self._u16(m["procs"]))
 
-            w(44, self._u32(m["high_total"] // 1024), 4)
-            w(48, self._u32(m["high_total"] // 2048), 4)
+            mem.write_u32(ptr + 44, self._u32(m["high_total"] // 1024))
+            mem.write_u32(ptr + 48, self._u32(m["high_total"] // 2048))
 
-            w(52, self._u32(m["mem_unit"]), 4)
+            mem.write_u32(ptr + 52, self._u32(m["mem_unit"]))
 
         else:
-            w(0, m["uptime"], 8)
+            mem.write_u64(ptr, m["uptime"])
 
             for i, v in enumerate(m["loads"]):
-                w(8 + i * 8, v, 8)
+                mem.write_u64(ptr + 8 + i * 8, v)
 
-            w(32, m["total"], 8)
-            w(40, m["free"], 8)
-            w(48, m["shared"], 8)
-            w(56, m["buffer"], 8)
+            mem.write_u64(ptr + 32, m["total"])
+            mem.write_u64(ptr + 40, m["free"])
+            mem.write_u64(ptr + 48, m["shared"])
+            mem.write_u64(ptr + 56, m["buffer"])
 
-            w(64, m["swap_total"], 8)
-            w(72, m["swap_free"], 8)
+            mem.write_u64(ptr + 64, m["swap_total"])
+            mem.write_u64(ptr + 72, m["swap_free"])
 
-            w(80, self._u16(m["procs"]), 2)
+            mem.write_u16(ptr + 80, self._u16(m["procs"]))
 
-            w(104, m["mem_unit"], 4)
+            mem.write_u32(ptr + 104, m["mem_unit"])
 
         return 0
-    
-    def _swapoff(self, emu: 'Emulator', path_ptr):
+
+    def _swapoff(self, emu: 'Emulator', path_ptr: int) -> int:
         try:
-            swap_path = helpers.read_utf8(emu.mu, path_ptr) if path_ptr else "NULL"
+            swap_path = emu.memory.read_utf8(path_ptr) if path_ptr else "NULL"
             logging.debug("[sys_swapoff] App tried to disable swap on: %s", swap_path)
         except Exception:
             return -EFAULT
 
         return -EPERM
-    
+
     # =========================================================
     # UTILS
     # =========================================================
-    def _u32(self, v):
+    @staticmethod
+    def _u32(v: int) -> int:
         return min(v, 0xFFFFFFFF)
 
-    def _u16(self, v):
+    @staticmethod
+    def _u16(v: int) -> int:
         return min(v, 0xFFFF)
