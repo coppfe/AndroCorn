@@ -1,5 +1,4 @@
 import logging
-
 from typing import TYPE_CHECKING
 
 from ...types.alias import ptr_t
@@ -7,15 +6,15 @@ from ...types.alias import ptr_t
 if TYPE_CHECKING:
     from androidemu.internal.bionic.tls.init import BionicTLSInitialization
     from androidemu.utils.memory.map import MemoryMap
-    from unicorn import Uc
 
 logger = logging.getLogger(__name__)
+
 
 class DTVBuilder:
     """
     Dumb & Fast DTV (Dynamic Thread Vector) Builder.
     Matches ARM64 layout for consistency.
-    
+
     Layout:
       dtv[0] : Generation
       dtv[1] : Module Count
@@ -24,8 +23,7 @@ class DTVBuilder:
 
     MAX_MODULES = 256
 
-    def __init__(self, memory: 'MemoryMap', mu: 'Uc', tls: 'BionicTLSInitialization') -> None:
-        self.mu = mu
+    def __init__(self, memory: 'MemoryMap', tls: 'BionicTLSInitialization') -> None:
         self.memory = memory
         self.tls = tls
 
@@ -34,19 +32,18 @@ class DTVBuilder:
         self.module_count = 0
 
         self.ptr_sz = ptr_t.size
-
         self.state = tls
 
     def build(self) -> int:
         """Allocate the entire DTV table once."""
         # (2 header slots + MAX_MODULES) * sizeof(ptr_t) bytes
         size = (2 + self.MAX_MODULES) * self.ptr_sz
-        
+
         self.base = self.memory.static_alloc(size, align=0x10)
 
         self._write_ptr(self.base, self.dtv_generation)              # dtv[0]
         self._write_ptr(self.base + self.ptr_sz, 0)                  # dtv[1] (count)
-        
+
         self.state.dtv = self.base
         logger.debug("[DTV] Built at %#x", self.base)
         return self.base
@@ -78,8 +75,8 @@ class DTVBuilder:
         addr = self.base + (module_id + 1) * self.ptr_sz
         return self._read_ptr(addr)
 
-    def _write_ptr(self, addr: int, val: int):
-        self.mu.mem_write(addr, val.to_bytes(self.ptr_sz, 'little'))
+    def _write_ptr(self, addr: int, val: int) -> None:
+        self.memory.write_ptr(addr, val)
 
     def _read_ptr(self, addr: int) -> int:
-        return int.from_bytes(self.mu.mem_read(addr, self.ptr_sz), 'little')
+        return self.memory.read_ptr(addr)

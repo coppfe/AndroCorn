@@ -14,9 +14,9 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from androidemu.utils.memory.map import MemoryMap
     from androidemu.core.registers import RegistersMapping
-    from unicorn import Uc
 
 logger = logging.getLogger(__name__)
+
 
 class BionicTLSInitialization:
     """
@@ -24,30 +24,29 @@ class BionicTLSInitialization:
     """
 
     ENVIRONMENT = (
-            "PATH=/sbin:/vendor/bin:/system/sbin:/system/bin:/system/xbin",
-            "ANDROID_DATA=/data",
-            "MKSH=/system/bin/sh",
-            "HOME=/data",
-            "USER=shell",
-            "ANDROID_ROOT=/system",
-            "SHELL=/system/bin/sh",
-            "ANDROID_BOOTLOGO=1",
-            "TMPDIR=/data/local/tmp",
-            "ANDROID_ASSETS=/system/app",
-            "HOSTNAME=bullhead",
-            "EXTERNAL_STORAGE=/sdcard",
-            "ANDROID_STORAGE=/storage"
-        )
+        "PATH=/sbin:/vendor/bin:/system/sbin:/system/bin:/system/xbin",
+        "ANDROID_DATA=/data",
+        "MKSH=/system/bin/sh",
+        "HOME=/data",
+        "USER=shell",
+        "ANDROID_ROOT=/system",
+        "SHELL=/system/bin/sh",
+        "ANDROID_BOOTLOGO=1",
+        "TMPDIR=/data/local/tmp",
+        "ANDROID_ASSETS=/system/app",
+        "HOSTNAME=bullhead",
+        "EXTERNAL_STORAGE=/sdcard",
+        "ANDROID_STORAGE=/storage"
+    )
 
-    def __init__(self, memory: 'MemoryMap', mu: 'Uc', registers: 'RegistersMapping'):
+    def __init__(self, memory: 'MemoryMap', registers: 'RegistersMapping'):
         self.ptr_size = ptr_t.size
         self.counter_memory = TLS_BASE
-        
-        self.mu = mu
+
         self.memory = memory
         self.registers = registers
 
-        self.dtv_builder = DTVBuilder(memory, mu, self)
+        self.dtv_builder = DTVBuilder(memory, self)
         self.pthread_builder = PThreadBuilder(memory)
 
         if self.ptr_size == 4:
@@ -56,7 +55,7 @@ class BionicTLSInitialization:
             self._struct_ptr = struct.Struct("<I")
             self._kab_size = 16
             self._tls_packer = struct.Struct("<IIII")
-            self._kab_packer = self._tls_packer # same
+            self._kab_packer = self._tls_packer
         else:
             self._phent = 56
             self._hwcap = 0xFF
@@ -68,7 +67,7 @@ class BionicTLSInitialization:
         self._rand = b'\42' * (self.ptr_size - 1) + b'\x00'
         self._rand_int = self._struct_ptr.unpack(self._rand)[0]
 
-    def bootstrap(self, phdr_addr, phnum, entry_point):
+    def bootstrap(self, phdr_addr: int, phnum: int, entry_point: int) -> None:
         logger.info("[TLS-7.1] Bootstrapping Legacy Layout")
 
         self.tp = self.memory.static_alloc(PAGE_SIZE, addr=self.counter_memory, align=PAGE_SIZE)
@@ -83,66 +82,62 @@ class BionicTLSInitialization:
             # 0x4: pthread
             # 0x8: errno (0)
             # 0xC: KAB
-
             tls_bytes = self._tls_packer.pack(
-                self.tp,                     # 0x0
-                self.pthread_internal,       # 0x4
-                0,                           # 0x8
-                self.kernel_args_base        # 0xC
+                self.tp,
+                self.pthread_internal,
+                0,
+                self.kernel_args_base
             )
-            
-            self.mu.mem_write(self.tp, tls_bytes)
+            self.memory.write_bytes(self.tp, tls_bytes)
             self.registers.v_reg_9 = self.tp
         else:
-            # 0x0:  Self
-            # 0x8:  pthread
-            # 0x10: errno (0)
+            # 0x0: Self
+            # 0x8: pthread
+            # 0x10: errno
             # 0x18: KAB
-            # 0x20: reserved (0)
+            # 0x20: res
             # 0x28: Canary
 
             tls_bytes = self._tls_packer.pack(
-                self.tp,                     # 0x0
-                self.pthread_internal,       # 0x8
-                0,                           # 0x10
-                self.kernel_args_base,       # 0x18
-                0,                           # 0x20
-                self._rand_int               # 0x28
+                self.tp,
+                self.pthread_internal,
+                0,
+                self.kernel_args_base,
+                0,
+                self._rand_int
             )
+            self.memory.write_bytes(self.tp, tls_bytes)
 
-            self.mu.mem_write(self.tp, tls_bytes)
-
-        self.mu.reg_write(self.registers.tls, self.tp)
+        self.registers.v_tls = self.tp
         logger.info("TLS 7.1 Ready. TP: %#x DTV: %#x, Pthread: %#x", self.tp, self.dtv, self.pthread_internal)
 
-    def setup_static_tls(self, reader, bias):
-        loader = TLSModuleLoader(self.memory, self.mu, self)
+    def setup_static_tls(self, reader, bias: int) -> int:
+        loader = TLSModuleLoader(self.memory, self)
         module_id = loader.register_module(reader)
         if module_id == 0:
             return 0
         return self.dtv_builder.get_tls_block(module_id) - self.tp
 
-    def _init_kernel_args(self, phdr_addr, phnum, entry_point):
+    def _init_kernel_args(self, phdr_addr: int, phnum: int, entry_point: int) -> int:
         reserver = self.memory
         addr = reserver.static_alloc(0x4000, addr=self.counter_memory)
         self.counter_memory = addr + 0x4000
 
-        writer = StructWriter(self.mu, self.memory)
+        writer = StructWriter(self.memory)
         bin_name_ptr = writer.write_utf8("/system/bin/app_process")
 
         # AT_RANDOM
         rand_ptr = reserver.dynamic_alloc(self.ptr_size, is_ptr_array=True)
-        self.mu.mem_write(rand_ptr, self._rand)
+        self.memory.write_bytes(rand_ptr, self._rand)
 
-        # argv (2 fields  + NULL)
+        # argv (2 fields + NULL)
         argv_ptr = reserver.dynamic_alloc(self.ptr_size * 2)
-        self.mu.mem_write(argv_ptr, self._struct_ptr.pack(bin_name_ptr) + self._struct_ptr.pack(0))
-        
+        self.memory.write_bytes(argv_ptr, self._struct_ptr.pack(bin_name_ptr) + self._struct_ptr.pack(0))
+
         # env
         env_ptrs_bytes = b"".join(self._struct_ptr.pack(writer.write_utf8(s)) for s in self.ENVIRONMENT)
-        
         envp_ptr = reserver.dynamic_alloc(len(env_ptrs_bytes) + self.ptr_size)
-        self.mu.mem_write(envp_ptr, env_ptrs_bytes + self._struct_ptr.pack(0))
+        self.memory.write_bytes(envp_ptr, env_ptrs_bytes + self._struct_ptr.pack(0))
 
         auxv = (
             (linux.AT_PHDR, phdr_addr),
@@ -154,13 +149,13 @@ class BionicTLSInitialization:
             (linux.AT_RANDOM, rand_ptr),
             (linux.AT_NULL, 0)
         )
-        
+
         auxv_bytes = b"".join(self._struct_ptr.pack(k) + self._struct_ptr.pack(v) for k, v in auxv)
         auxv_ptr = reserver.static_alloc(len(auxv_bytes))
-        self.mu.mem_write(auxv_ptr, auxv_bytes)
+        self.memory.write_bytes(auxv_ptr, auxv_bytes)
 
         kab_bytes = self._kab_packer.pack(1, argv_ptr, envp_ptr, auxv_ptr)
         kab_base = reserver.dynamic_alloc(self._kab_size)
-        self.mu.mem_write(kab_base, kab_bytes)
+        self.memory.write_bytes(kab_base, kab_bytes)
 
         return kab_base

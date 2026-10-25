@@ -11,8 +11,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 class TLSModuleLoader:
-    def __init__(self, memory: 'MemoryMap', mu: 'Uc', state: 'BionicTLSInitialization'):
-        self.mu = mu
+    def __init__(self, memory: 'MemoryMap', state: 'BionicTLSInitialization'):
         self.memory = memory
 
         self.state = state
@@ -22,7 +21,6 @@ class TLSModuleLoader:
         Finds TLS segment, allocates memory, and registers it in DTV.
         """
         tls_seg = reader.tls_segment
-        
         if not tls_seg or tls_seg.virtual_size == 0:
             return 0
 
@@ -31,11 +29,7 @@ class TLSModuleLoader:
 
         content = bytes(tls_seg.content)
         if content:
-            self.mu.mem_write(tls_addr, content)
+            self.memory.write_bytes(tls_addr, content)
 
         module_id = self.state.dtv_builder.register_module(tls_addr)
-        
-        logger.debug("[TLS] Loaded module_id=%d: addr=%#x, size=%#x", 
-                     module_id, tls_addr, memsz)
-        
         return module_id

@@ -12,4 +12,4 @@ logger = logging.getLogger(__name__)
 
 def create_tls_backend(memory: 'MemoryMap', mu: 'Uc', registers: 'RegistersMapping'):
     logger.debug("[*] Creating TLS backend...")
-    return BionicTLSInitialization(memory, mu, registers)
+    return BionicTLSInitialization(memory, registers)
