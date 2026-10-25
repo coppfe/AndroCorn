@@ -6,6 +6,8 @@ from androidemu.core.registers import RegistersMapping
 from androidemu.java.class_def import JavaClassDef
 from androidemu.java.jvm.constants import JAVA_NULL
 from androidemu.java.method_def import java_method_def
+from androidemu.java.signature import ArgKind
+from androidemu.native.helpers.jni_native import read_args_a32, read_args_a64
 
 try:
     from .jni_harness import Harness, ARCHES
@@ -61,7 +63,7 @@ class StaticTarget(metaclass=JavaClassDef, jvm_name='test/calla/StaticTarget'):
         return StaticTarget.retval
 
     @staticmethod
-    @java_method_def(name='badArg', args_list=['jwhatever'], signature='(I)V', native=False)
+    @java_method_def(name='badArg', args_list=[], signature='(I)V', native=False)
     def bad_arg(emu, a):
         pass
 
@@ -127,7 +129,6 @@ class TestArgumentsDecoding(Base):
                 self.check(StaticTarget.seen, obj, string)
 
     def test_garbage_in_unused_bytes_is_ignored(self):
-        # a zero jboolean/jint/jobject with 0xA5 garbage around it must still decode as zero
         for arch in self.each_arch():
             with self.subTest(arch=arch):
                 h, refs = self.make(arch)
@@ -154,15 +155,20 @@ class TestArgumentsDecoding(Base):
             with self.subTest(arch=arch):
                 h, refs = self.make(arch)
                 h.write_jvalues([('jint', 1)])
-                with self.assertRaisesRegex(ValueError, "jwhatever"):
-                    h.call("call_static_void_method_a", 0, refs[StaticTarget],
-                           self.mid(StaticTarget, 'badArg', '(I)V'), 0x10000)
+                method = StaticTarget.find_method('badArg', '(I)V')
+                # Подменяем args_kinds на неподдерживаемый тип, чтобы проверить громкое падение инвокера
+                orig_kinds = method.args_kinds
+                try:
+                    method.args_kinds = ("jwhatever",)
+                    with self.assertRaises(ValueError):
+                        h.call("call_static_void_method_a", 0, refs[StaticTarget], method.jvm_id, 0x10000)
+                finally:
+                    method.args_kinds = orig_kinds
 
 
 class TestReturnValues(Base):
 
     def get_call(self, h, refs, kind, static):
-        """Returns a function calling the `get` method through Call[Static]<kind>MethodA."""
         if static:
             name = f"call_static_{kind}_method_a"
             args = (0, refs[StaticTarget], self.mid(StaticTarget, 'get', '()I'), 0)
@@ -204,12 +210,12 @@ class TestReturnValues(Base):
                         if arch == emu_const.ARCH_ARM64:
                             self.assertEqual(r0, iv)
                         else:
-                            self.assertEqual((h.emu.registers.v_reg_1 << 32) | r0, iv)
+                            self.assertEqual((h.registers.v_reg_1 << 32) | r0, iv)
 
     def test_float(self):
         cases = [
             (1.5, 0x3FC00000), (-2.0, 0xC0000000), (2, 0x40000000), (None, 0),
-            (1e40, 0x7F800000), (-1e40, 0xFF800000),                          # out of float range -> +-inf
+            (1e40, 0x7F800000), (-1e40, 0xFF800000),
             (float('inf'), 0x7F800000),
         ]
         for static in (False, True):
@@ -255,10 +261,9 @@ class TestReturnValues(Base):
                     h, refs = self.make(arch)
                     holder, call = self.get_call(h, refs, "void", static)
                     holder.retval = 123
-                    self.assertEqual(call(), 0)   # r0/x0 still holds the first argument (env = 0)
+                    self.assertEqual(call(), 0)
 
     def test_requested_kind_decides_the_register_layout(self):
-        # CallLongMethodA on a method that is declared to return int: the caller asked for a jlong
         for arch in self.each_arch():
             with self.subTest(arch=arch):
                 h, refs = self.make(arch)
@@ -267,7 +272,7 @@ class TestReturnValues(Base):
                 if arch == emu_const.ARCH_ARM64:
                     self.assertEqual(r0, 0xFFFFFFFFFFFFFFFF)
                 else:
-                    self.assertEqual((r0, h.emu.registers.v_reg_1), (0xFFFFFFFF, 0xFFFFFFFF))
+                    self.assertEqual((r0, h.registers.v_reg_1), (0xFFFFFFFF, 0xFFFFFFFF))
 
     def test_long_arguments_and_result_end_to_end(self):
         for arch in self.each_arch():
@@ -280,13 +285,12 @@ class TestReturnValues(Base):
                 if arch == emu_const.ARCH_ARM64:
                     self.assertEqual(r0, expected)
                 else:
-                    self.assertEqual((h.emu.registers.v_reg_1 << 32) | r0, expected)
+                    self.assertEqual((h.registers.v_reg_1 << 32) | r0, expected)
 
 
 class TestDispatchAndErrors(Base):
 
     def test_override_in_the_object_class_wins(self):
-        # the id comes from Target.get, the object is a SubTarget: virtual dispatch
         for arch in self.each_arch():
             with self.subTest(arch=arch):
                 h, refs = self.make(arch)
@@ -296,7 +300,6 @@ class TestDispatchAndErrors(Base):
                 self.assertEqual(h.call("call_int_method_a", 0, h.obj_ref(Target()), base_id, 0), 5)
 
     def test_alloc_object_then_constructor(self):
-        # AllocObject + <init> through the jvalue[] call: the object is only usable after <init>
         for arch in self.each_arch():
             with self.subTest(arch=arch):
                 h, refs = self.make(arch)
@@ -311,9 +314,9 @@ class TestDispatchAndErrors(Base):
         for arch in self.each_arch():
             with self.subTest(arch=arch):
                 h, refs = self.make(arch)
-                with self.assertRaises(ValueError):          # null receiver
+                with self.assertRaises(ValueError):
                     h.call("call_int_method_a", 0, 0, 1, 0)
-                with self.assertRaises(ValueError):          # not a jclass
+                with self.assertRaises(ValueError):
                     h.call("call_static_int_method_a", 0, h.obj_ref(Target()), 1, 0)
                 with self.assertRaisesRegex(RuntimeError, "Could not find method"):
                     h.call("call_int_method_a", 0, h.obj_ref(Target()), 0x7FFFFFF, 0)
@@ -321,7 +324,6 @@ class TestDispatchAndErrors(Base):
                     h.call("call_static_int_method_a", 0, refs[StaticTarget], 0x7FFFFFF, 0)
 
     def test_all_twenty_entries_are_implemented(self):
-        # the nonvirtual variants are intentionally NOT part of this change
         for arch in self.each_arch():
             with self.subTest(arch=arch):
                 h, refs = self.make(arch)
@@ -333,14 +335,10 @@ class TestDispatchAndErrors(Base):
                             fn_args = (0, refs[StaticTarget], self.mid(StaticTarget, 'get', '()I'), 0)
                         else:
                             fn_args = (0, h.obj_ref(Target()), self.mid(Target, 'get', '()I'), 0)
-                        h.call(name, *fn_args)   # must not raise
+                        h.call(name, *fn_args)
 
 
 class TestFpReturnOnRealUnicorn(unittest.TestCase):
-    """
-    The tests above use a fake Uc. This one checks the one thing a fake cannot prove: that
-    real Unicorn accepts the register writes RegistersMapping.set_fp_return relies on.
-    """
 
     def uc(self, arch_name):
         try:

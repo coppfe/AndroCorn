@@ -1,10 +1,12 @@
 import struct
 import unittest
 
+from androidemu.const import emu_const
 from androidemu.java.class_def import JavaClassDef
 from androidemu.java.jvm.constants import JAVA_NULL
+from androidemu.java.signature import ArgKind
 from androidemu.native.helpers.jni_native import (
-    _arg_kind, read_args32, read_args64, read_args_v32, read_args_v64,
+    read_args32, read_args64, read_args_v32, read_args_v64,
 )
 
 try:
@@ -12,28 +14,19 @@ try:
 except ImportError:  # run as a plain script
     from jni_harness import Harness, MEM_BASE
 
-from androidemu.const import emu_const
-
 
 class Dummy(metaclass=JavaClassDef, jvm_name='test/readers/Dummy'):
     pass
 
 
-TYPES = ['jshort', 'jstring', 'jclass', 'jchar', 'jbyteArray', 'jint']
-
-
-class TestArgKind(unittest.TestCase):
-
-    def test_known_names_are_matched_in_full(self):
-        expected = {
-            'jlong': 'l', 'jdouble': 'd', 'jfloat': 'f',
-            'jboolean': 'i', 'jbyte': 'i', 'jchar': 'i', 'jshort': 'i', 'jint': 'i',   # jshort used to be 's'
-            'jobject': 'o', 'jstring': 'o', 'jclass': 'o', 'jthrowable': 'o', 'jarray': 'o',
-            'jbyteArray': 'o', 'jlongArray': 'o', 'jobjectArray': 'o', 'jintArray': 'o',  # jlongArray used to be 'l'
-        }
-        for name, kind in expected.items():
-            with self.subTest(name=name):
-                self.assertEqual(_arg_kind(name), kind)
+TYPES = (
+    ArgKind.SHORT,
+    ArgKind.OBJECT,
+    ArgKind.OBJECT,
+    ArgKind.CHAR,
+    ArgKind.OBJECT,
+    ArgKind.INT,
+)
 
 
 class TestReaders(unittest.TestCase):
@@ -56,41 +49,40 @@ class TestReaders(unittest.TestCase):
         self.expected = [5, self.string, self.cls_obj, 0xFFFF, self.array, 7]
 
     def test_read_args32(self):
-        self.assertEqual(read_args32(self.h.env, self.h.mu, self.raw, TYPES), self.expected)
+        self.assertEqual(read_args32(self.h.env, self.h.registers, self.raw, TYPES), self.expected)
 
     def test_read_args64(self):
-        self.assertEqual(read_args64(self.h.env, self.h.mu, self.raw, TYPES), self.expected)
+        self.assertEqual(read_args64(self.h.env, self.h.registers, self.raw, TYPES), self.expected)
 
     def test_read_args_v32(self):
-        self.h.mu.mem_write(MEM_BASE, struct.pack("<6I", *self.raw))
-        self.assertEqual(read_args_v32(self.h.env, self.h.mu, MEM_BASE, TYPES), self.expected)
+        self.h.memory.write_bytes(MEM_BASE, struct.pack("<6I", *self.raw))
+        self.assertEqual(read_args_v32(self.h.env, self.h.memory, MEM_BASE, TYPES), self.expected)
 
     def test_read_args_v64(self):
         # AAPCS64 va_list: __stack, __gr_top, __vr_top, __gr_offs, __vr_offs
         gr_top = MEM_BASE + 0x100
         gr_offs = -8 * len(self.raw)
-        self.h.mu.mem_write(MEM_BASE, struct.pack("<QQQii", MEM_BASE + 0x200, gr_top, MEM_BASE + 0x180, gr_offs, 0))
-        self.h.mu.mem_write(gr_top + gr_offs, struct.pack("<6Q", *self.raw))
-        self.assertEqual(read_args_v64(self.h.env, self.h.mu, MEM_BASE, TYPES), self.expected)
+        self.h.memory.write_bytes(MEM_BASE, struct.pack("<QQQii", MEM_BASE + 0x200, gr_top, MEM_BASE + 0x180, gr_offs, 0))
+        self.h.memory.write_bytes(gr_top + gr_offs, struct.pack("<6Q", *self.raw))
+        self.assertEqual(read_args_v64(self.h.env, self.h.memory, MEM_BASE, TYPES), self.expected)
 
     def test_null_references_still_give_java_null(self):
         raw = [0, 0, 0]
-        types = ['jstring', 'jclass', 'jbyteArray']
-        self.assertEqual(read_args64(self.h.env, self.h.mu, raw, types), [JAVA_NULL] * 3)
-        self.assertEqual(read_args32(self.h.env, self.h.mu, raw, types), [JAVA_NULL] * 3)
+        types = (ArgKind.OBJECT, ArgKind.OBJECT, ArgKind.OBJECT)
+        self.assertEqual(read_args64(self.h.env, self.h.registers, raw, types), [JAVA_NULL] * 3)
+        self.assertEqual(read_args32(self.h.env, self.h.registers, raw, types), [JAVA_NULL] * 3)
 
     def test_long_arrays_are_not_wide_arguments(self):
-        # 'jlongArray'[1] is 'l': the 32 bit readers used to treat it as a 64 bit jlong
         raw = [self.array_ref, 7]
-        got = read_args32(self.h.env, self.h.mu, raw, ['jlongArray', 'jint'])
+        got = read_args32(self.h.env, self.h.registers, raw, (ArgKind.OBJECT, ArgKind.INT))
         self.assertEqual(got, [self.array, 7])
 
     def test_existing_argument_kinds_are_unchanged(self):
-        raw = [3, self.string_ref]          # jint, jstring
-        self.assertEqual(read_args64(self.h.env, self.h.mu, raw, ['jint', 'jstring']), [3, self.string])
+        raw = [3, self.string_ref]
+        self.assertEqual(read_args64(self.h.env, self.h.registers, raw, (ArgKind.INT, ArgKind.OBJECT)), [3, self.string])
         # jlong in two 32 bit registers (r3 is the first one here: the pair starts on an even register)
         raw = [0, 0x89ABCDEF, 0x01234567]
-        got = read_args32(self.h.env, self.h.mu, raw, ['jint', 'jlong'])
+        got = read_args32(self.h.env, self.h.registers, raw, (ArgKind.INT, ArgKind.LONG))
         self.assertEqual(got, [0, 0x0123456789ABCDEF])
 
 
@@ -99,44 +91,37 @@ class TestNarrowArguments(unittest.TestCase):
 
     def setUp(self):
         self.h = Harness(emu_const.ARCH_ARM64)
+        self.types32 = (ArgKind.BYTE, ArgKind.SHORT, ArgKind.INT, ArgKind.CHAR, ArgKind.BOOLEAN)
+        self.types64 = (ArgKind.BYTE, ArgKind.SHORT, ArgKind.INT, ArgKind.CHAR, ArgKind.BOOLEAN, ArgKind.LONG)
 
     def test_read_args32_narrow_types(self):
         raw = [0xFFFFFFFB, 0xFFFFFFFE, 0xFFFFFFFF, 0x1FFFE, 2]
-        got = read_args32(
-            self.h.env, self.h.mu, raw,
-            ['jbyte', 'jshort', 'jint', 'jchar', 'jboolean'],
-        )
+        got = read_args32(self.h.env, self.h.registers, raw, self.types32)
         self.assertEqual(got, [-5, -2, -1, 0xFFFE, 1])
 
     def test_read_args32_negative_long(self):
         raw = [0, 0xFFFFFFFF, 0xFFFFFFFF]
         self.assertEqual(
-            read_args32(self.h.env, self.h.mu, raw, ['jint', 'jlong']),
+            read_args32(self.h.env, self.h.registers, raw, (ArgKind.INT, ArgKind.LONG)),
             [0, -1],
         )
 
     def test_read_args64_narrow_types(self):
         raw = [0xFFFFFFFB, 0xFFFFFFFE, 0xFFFFFFFF, 0x1FFFE, 2, 0xFFFFFFFFFFFFFFFE]
-        got = read_args64(
-            self.h.env, self.h.mu, raw,
-            ['jbyte', 'jshort', 'jint', 'jchar', 'jboolean', 'jlong'],
-        )
+        got = read_args64(self.h.env, self.h.registers, raw, self.types64)
         self.assertEqual(got, [-5, -2, -1, 0xFFFE, 1, -2])
 
     def test_read_args_v32_narrow_types(self):
         raw = [0xFFFFFFFB, 0xFFFFFFFE, 0xFFFFFFFF, 0x1FFFE, 2]
-        self.h.mu.mem_write(MEM_BASE, struct.pack("<5I", *raw))
-        got = read_args_v32(
-            self.h.env, self.h.mu, MEM_BASE,
-            ['jbyte', 'jshort', 'jint', 'jchar', 'jboolean'],
-        )
+        self.h.memory.write_bytes(MEM_BASE, struct.pack("<5I", *raw))
+        got = read_args_v32(self.h.env, self.h.memory, MEM_BASE, self.types32)
         self.assertEqual(got, [-5, -2, -1, 0xFFFE, 1])
 
     def test_read_args_v32_negative_long(self):
         # 4 bytes of jint, 4 bytes of alignment padding, then the signed 64 bit jlong
-        self.h.mu.mem_write(MEM_BASE, struct.pack("<I4xq", 0, -2))
+        self.h.memory.write_bytes(MEM_BASE, struct.pack("<I4xq", 0, -2))
         self.assertEqual(
-            read_args_v32(self.h.env, self.h.mu, MEM_BASE, ['jint', 'jlong']),
+            read_args_v32(self.h.env, self.h.memory, MEM_BASE, (ArgKind.INT, ArgKind.LONG)),
             [0, -2],
         )
 
@@ -144,15 +129,12 @@ class TestNarrowArguments(unittest.TestCase):
         raw = [0xFFFFFFFB, 0xFFFFFFFE, 0xFFFFFFFF, 0x1FFFE, 2, 0xFFFFFFFFFFFFFFFE]
         gr_top = MEM_BASE + 0x100
         gr_offs = -8 * len(raw)
-        self.h.mu.mem_write(
+        self.h.memory.write_bytes(
             MEM_BASE,
             struct.pack("<QQQii", MEM_BASE + 0x200, gr_top, MEM_BASE + 0x180, gr_offs, 0),
         )
-        self.h.mu.mem_write(gr_top + gr_offs, struct.pack("<6Q", *raw))
-        got = read_args_v64(
-            self.h.env, self.h.mu, MEM_BASE,
-            ['jbyte', 'jshort', 'jint', 'jchar', 'jboolean', 'jlong'],
-        )
+        self.h.memory.write_bytes(gr_top + gr_offs, struct.pack("<6Q", *raw))
+        got = read_args_v64(self.h.env, self.h.memory, MEM_BASE, self.types64)
         self.assertEqual(got, [-5, -2, -1, 0xFFFE, 1, -2])
 
 
