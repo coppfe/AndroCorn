@@ -38,7 +38,7 @@ class LibDLSymbolHooks:
                 return main_mod.soinfo_ptr
             return 0
 
-        path = helpers.read_utf8(emu.mu, path_str)
+        path = helpers.read_utf8(emu.memory, path_str)
         logger.debug("[+] dlopen('%s', flags=0x%x)", path, flags)
 
         requested_basename = os.path.basename(path)
@@ -74,7 +74,7 @@ class LibDLSymbolHooks:
             if mod.base <= addr < mod.base + mod.size:
                 fname_ptr = mod.filename_ptr 
                 
-                helpers.write_uints(emu.mu, info_ptr, 
+                helpers.write_uints(emu.memory, info_ptr, 
                                             [fname_ptr, mod.base, 0, 0], 
                                    )
                 return 1
@@ -82,7 +82,7 @@ class LibDLSymbolHooks:
     
     @native_method
     def dlsym(self, emu: 'Emulator', handle, symbol_ptr):
-        symbol_name = helpers.read_utf8(emu.mu, symbol_ptr)
+        symbol_name = helpers.read_utf8(emu.memory, symbol_ptr)
         
         is_64 = (ptr_t.size == 8)
         rtld_default = 0 if is_64 else 0xffffffff
