@@ -1,20 +1,16 @@
-from typing import TYPE_CHECKING
 import struct
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from unicorn import Uc
+    from ..memory.map import MemoryMap
     from ...kernel.fs.vdstat import VirtualDeviceStat
 
-# def _calc_blocks(file_size):
-#     if file_size == 0:
-#         return 0
-#     return ((file_size + 4095) // 4096) * 8
 
-def stat_to_memory2(uc: 'Uc', buf_ptr: int, stat: 'VirtualDeviceStat'):
-    '''
+def stat_to_memory2(mem: 'MemoryMap', buf_ptr: int, stat: 'VirtualDeviceStat') -> None:
+    """
     ARM32 (ARMv7a / EABI) struct stat64 Layout
-    Total Size: строго 104 байта
-    '''
+    Total Size: 104 bytes
+    """
     data = struct.pack(
         "<Q IIIIII Q I 4x Q I 4x Q II II II Q",
         stat.st_dev,
@@ -32,14 +28,14 @@ def stat_to_memory2(uc: 'Uc', buf_ptr: int, stat: 'VirtualDeviceStat'):
         stat.st_ino
     )
     assert len(data) == 104, f"Invalid ARM32 stat64 size: {len(data)} (expected 104)"
-    uc.mem_write(buf_ptr, data)
+    mem.write_bytes(buf_ptr, data)
 
-def stat_to_memory64(uc: 'Uc', buf_ptr: int, stat: 'VirtualDeviceStat'):
-    '''
+
+def stat_to_memory64(mem: 'MemoryMap', buf_ptr: int, stat: 'VirtualDeviceStat') -> None:
+    """
     ARM64 (AArch64 struct stat) Layout
     Total Size: 128 bytes
-    '''
-
+    """
     data = struct.pack(
         "< QQ IIII QQ Q II Q QQQQQQ Q",
         stat.st_dev, stat.st_ino,
@@ -53,4 +49,5 @@ def stat_to_memory64(uc: 'Uc', buf_ptr: int, stat: 'VirtualDeviceStat'):
         stat.st_ctime, stat.st_ctime_nsec,
         0
     )
-    uc.mem_write(buf_ptr, data)
+    assert len(data) == 128, f"Invalid ARM64 stat size: {len(data)} (expected 128)"
+    mem.write_bytes(buf_ptr, data)

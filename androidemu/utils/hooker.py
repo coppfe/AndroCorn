@@ -1,113 +1,91 @@
-import os
-import traceback
 import logging
+from typing import TYPE_CHECKING, Callable, Dict, List, Tuple
 
-from unicorn import *
-from unicorn.arm_const import *
-from unicorn.arm64_const import *
+from unicorn import UC_HOOK_CODE
 
 from ..const import emu_const
-
 from ..types import ptr_t
 
-from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from unicorn import Uc
     from ..core.emulator import Emulator
 
+logger = logging.getLogger(__name__)
+
+
 class Hooker:
-    """
-    Utility class to create a bridge between ARM and Python.
-    """
-    def __init__(self, emu: 'Emulator', mu: 'Uc', base_addr: int, size: int):
-        
+
+    def __init__(self, emu: "Emulator", mu: "Uc", base_addr: int, size: int):
         self._emu = emu
         self._mu = mu
-        self._ptr_size = ptr_t.size
+        self._memory = emu.memory
+        self._ptr_sz = ptr_t.size
+        self._is_64 = (emu.arch == emu_const.ARCH_ARM64)
 
-        self._size = size
-        self._current_id = 0xFF00
+        half = size // 2
+        self._code_base = base_addr
+        self._code_current = self._code_base
+        self._code_limit = base_addr + half
 
-        self._hooks = dict()
-        self._addr_to_hook = dict()
+        self._data_base = base_addr + half
+        self._data_current = self._data_base
 
-        _hook_start = base_addr + self._ptr_size
-        self._hook_current = _hook_start
+        # bx lr (ARM32) или ret (ARM64)
+        self._stub_insn = b"\xC0\x03\x5F\xD6" if self._is_64 else b"\x1E\xFF\x2F\xE1"
 
-        self._mu.hook_add(UC_HOOK_CODE, self._hook, None, _hook_start, _hook_start + size)
+        self._funcs_list: List[Callable] = []
 
-    def _get_next_id(self):
-        idx = self._current_id
-        self._current_id += 1
-        return idx
+        self._mu.hook_add(
+            UC_HOOK_CODE,
+            self._fast_hook_dispatch,
+            None,
+            self._code_base,
+            self._code_limit
+        )
 
-    #Returns the address of the function's starting point; if it's a thumb instruction, it's automatically incremented by 1.
-    def write_function(self, func: callable):
+    def write_function(self, func: Callable) -> int:
         """
-        Write a function to the emulator.
-
-        In armv7a it will be bx lr
-        In armv8a it will be ret
+        Allocates a clean 4-byte return trampoline and binds the Python callback.
         """
-        # Get the hook id.
-        hook_id = self._get_next_id()
-        self._hooks[hook_id] = func
-        #the the hook_id to header
-        self._mu.mem_write(self._hook_current, int(hook_id).to_bytes(4, byteorder='little', signed=False))
-        self._hook_current+=4
-        
-        hook_addr = self._hook_current
-        self._addr_to_hook[hook_addr] = func
-        if (self._mu._arch == emu_const.ARCH_ARM32):
-            # Create the ARM assembly code.
-            # 注意，这里不要改sp，因为后面hook code会靠sp来定位参数
-            # Write assembly code to the emulator.
+        hook_addr = self._code_current
+        self._funcs_list.append(func)
 
-            self._mu.mem_write(self._hook_current, b"\x1E\xFF\x2F\xE1")  #bx lr
-            self._hook_current += 4
-        else:
-            self._mu.mem_write(self._hook_current, b"\xC0\x03\x5F\xD6")  #ret
-            self._hook_current += 4
+        self._memory.write_bytes(hook_addr, self._stub_insn)
+        self._code_current += 4
+
         return hook_addr
 
-    def write_function_table(self, table: dict):
+    def write_function_table(self, table: Dict[int, Callable]) -> Tuple[int, int]:
         """
-        Write a function table to the emulator.
-
-        Use when you have a lot of functions.        
+        Writes function table pointers and returns (table_ptr_address, table_address).
         """
+        max_idx = int(max(table, key=int)) + 1 if table else 0
+        hook_map = {idx: self.write_function(cb) for idx, cb in table.items()}
 
-        index_max = int(max(table, key=int)) + 1
-        # First, we write every function and store its result address.
-        hook_map = dict()
+        ptr_sz = self._ptr_sz
+        table_bytes = bytearray(max_idx * ptr_sz)
 
-        for index, func in table.items():
-            hook_map[index] = self.write_function(func)
+        typecode = 'I' if ptr_sz == 4 else 'Q'
+        mv = memoryview(table_bytes).cast(typecode)
+        for idx, addr in hook_map.items():
+            mv[idx] = addr
 
-        # Then we write the function table.
-        table_bytes = b""
-        table_address = self._hook_current
-        ptr_size = self._ptr_size
-        for index in range(0, index_max):
-            address = hook_map[index] if index in hook_map else 0
-            table_bytes += int(address).to_bytes(ptr_size, byteorder='little')  # Write each function pointer into the pointer table.
+        table_addr = self._data_current
+        self._memory.write_bytes(table_addr, table_bytes)
+        self._data_current += len(table_bytes)
 
-        self._mu.mem_write(table_address, table_bytes)
-        self._hook_current += len(table_bytes)
+        ptr_addr = self._data_current
+        self._memory.write_ptr(ptr_addr, table_addr)
+        self._data_current += ptr_sz
 
-        # Then we write the a pointer to the table.
-        ptr_address = self._hook_current
-        self._mu.mem_write(ptr_address, table_address.to_bytes(ptr_size, byteorder='little'))
-        self._hook_current += ptr_size
-        return ptr_address, table_address
+        return ptr_addr, table_addr
 
-    def _hook(self, mu: 'Uc', address, size, user_data):
-        hook_func = self._addr_to_hook[address & ~1]
+    def _fast_hook_dispatch(self, mu: "Uc", address: int, size: int, user_data: None) -> None:
+        idx = (address - self._code_base) >> 2
 
         try:
-            hook_func(self._emu)
-        except Exception as e:
+            self._funcs_list[idx](self._emu)
+        except Exception:
             mu.emu_stop()
-            traceback.print_exc()
-            logging.exception("catch error on _hook")
+            logger.exception("Error inside native hook dispatch at %#x (index %d)", address, idx)
             raise

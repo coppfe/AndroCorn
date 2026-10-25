@@ -1,38 +1,48 @@
-from ..const.offsets.arm32 import *
-from ..const.offsets.arm64 import *
-from ..const.emu_const import *
+from typing import TYPE_CHECKING, Optional, Union
 
-from .memory import helpers
+from ..const.emu_const import ARCH_ARM32
+from ..const.offsets.arm32 import ARM32_TLS_ERRNO
+from ..const.offsets.arm64 import ARM64_TLS_ERRNO
 
-from ..types import ptr_t
-
-from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from unicorn.unicorn import Uc
-    from androidemu.core.registers import RegistersMapping
+    from ..core.registers import RegistersMapping
+    from .memory.map import MemoryMap
+
 
 class BionicTLSUtils:
+    __slots__ = ("_memory", "_registers", "_errno_offset")
 
-    __slots__ = ("_mu", "_registers", "_errno_offset", "_ptr_size")
-
-    def __init__(self, mu: 'Uc', registers: 'RegistersMapping'):
-        
-        self._mu = mu
+    def __init__(
+        self,
+        memory: "MemoryMap",
+        registers: "RegistersMapping"
+    ):
+        self._memory = memory
         self._registers = registers
-        self._ptr_size = ptr_t.size
 
-        if mu._arch == ARCH_ARM32:
-            self._errno_offset = ARM32_TLS_ERRNO
-        else:
-            self._errno_offset = ARM64_TLS_ERRNO
-    
-    def set_errno(self, errno):
-        tls = self._mu.reg_read(self._registers.tls)
+        target_arch = registers._arch
+        self._errno_offset = ARM32_TLS_ERRNO if target_arch == ARCH_ARM32 else ARM64_TLS_ERRNO
+
+    def set_errno(self, errno: int) -> int:
+        tls = self._registers.v_tls
+        if not tls:
+            return -1
+
         slot = tls + self._errno_offset
+        self._memory.write_u32(slot, errno & 0xFFFFFFFF)
+        return 0
 
-        helpers.write_uints(self._mu, slot, errno)
+    def get_errno(self) -> int:
+        tls = self._registers.v_tls
+        if not tls:
+            return 0
+
+        slot = tls + self._errno_offset
+        return self._memory.read_u32(slot)
+
+    def set_tls(self, tls_ptr: int) -> int:
+        self._registers.v_tls = tls_ptr
         return 0
-    
-    def set_tls(self, tls_ptr):
-        self._mu.reg_write(self._registers.tls, tls_ptr)
-        return 0
+
+    def get_tls(self) -> int:
+        return self._registers.v_tls
