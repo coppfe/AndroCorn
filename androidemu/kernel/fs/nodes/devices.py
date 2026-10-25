@@ -93,9 +93,9 @@ class BinderNode(VfsNode):
             rdev=(10 << 8) | 54
         )
 
-    def ioctl(self, cmd: int, arg: int, mu) -> int:
+    def ioctl(self, cmd: int, arg: int, mem) -> int:
         if cmd == IOCTL_BINDER_VERSION:
-            mu.mem_write(arg, (8).to_bytes(4, 'little'))
+            mem.write_u32(arg, 8)
             return 0
         return -EINVAL
 
@@ -228,9 +228,9 @@ class PtmxNode(VfsNode):
     def check_permission(self, ctx: 'ProcessControlBlock', flags: int) -> int:
         return 0
 
-    def ioctl(self, cmd: int, arg: int, mu) -> int:
+    def ioctl(self, cmd: int, arg: int, mem) -> int:
         if cmd == IOCTL_TIOCGPTN:
-            mu.mem_write(arg, (0).to_bytes(4, 'little'))
+            mem.write_u32(arg, 0)
             return 0
         if cmd == IOCTL_TIOCSPTLCK:
             return 0
