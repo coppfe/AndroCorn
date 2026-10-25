@@ -12,11 +12,9 @@ from .jvm.constants import JAVA_NULL
 if TYPE_CHECKING:
     from ..core.emulator import Emulator
 
-class JavaMethodDef:
-    """
-    Define a java method
-    """
+from .signature import parse_signature
 
+class JavaMethodDef:
     __slots__ = (
         "jvm_id",
         "func_name",
@@ -25,7 +23,8 @@ class JavaMethodDef:
         "signature",
         "native",
         "native_addr",
-        "args_list",
+        "args_kinds",
+        "ret_kind",
         "modifier",
         "ignore",
     )
@@ -37,7 +36,6 @@ class JavaMethodDef:
         name: str,
         signature: str,
         native: bool,
-        args_list: Optional[List[str]] = None,
         modifier: Optional[int] = None,
         ignore: bool = False,
     ):
@@ -48,11 +46,18 @@ class JavaMethodDef:
         self.signature = signature
         self.native = native
         self.native_addr = None
-        self.args_list = args_list
         self.modifier = modifier
         self.ignore = ignore
 
-def java_method_def(name: str, signature: str, native: bool=False, args_list: List=None, modifier: int=None, ignore: bool=False) -> callable:
+        self.args_kinds, self.ret_kind = parse_signature(signature)
+
+def java_method_def(name: str,
+                    signature: str,
+                    native: bool=False,
+                    args_list: List=None,
+                    modifier: int=None,
+                    ignore: bool=False
+                    ) -> callable:
     """
     Decorator!
     
@@ -153,7 +158,6 @@ def java_method_def(name: str, signature: str, native: bool=False, args_list: Li
 
         wrapper = native_wrapper if native else normal_wrapper
         wrapper.jvm_method = JavaMethodDef(func.__name__, wrapper, name, signature, native,
-                                           args_list=args_list,
                                            modifier=modifier,
                                            ignore=ignore)
         return wrapper

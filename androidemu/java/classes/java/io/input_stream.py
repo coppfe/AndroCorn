@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import logging
 from typing import TYPE_CHECKING, Any, Optional
 
@@ -20,23 +18,23 @@ class InputStream(metaclass=JavaClassDef, jvm_name='java/io/InputStream'):
         pass
 
     @java_method_def(name='read', signature='()I', native=False)
-    def read_one(self, emu: Emulator) -> int:
+    def read_one(self, emu: 'Emulator') -> int:
         return -1
 
     @java_method_def(name='read', args_list=["jobject"], signature='([B)I', native=False)
-    def read_buf(self, emu: Emulator, b: ByteArray) -> int:
+    def read_buf(self, emu: 'Emulator', b: ByteArray) -> int:
         return -1
 
     @java_method_def(name='read', args_list=["jobject", "jint", "jint"], signature='([BII)I', native=False)
-    def read_buf_range(self, emu: Emulator, b: ByteArray, off: int, length: int) -> int:
+    def read_buf_range(self, emu: 'Emulator', b: ByteArray, off: int, length: int) -> int:
         return -1
 
     @java_method_def(name='close', signature='()V', native=False)
-    def close(self, emu: Emulator) -> None:
+    def close(self, emu: 'Emulator') -> None:
         pass
 
     @java_method_def(name='available', signature='()I', native=False)
-    def available(self, emu: Emulator) -> int:
+    def available(self, emu: 'Emulator') -> int:
         return 0
 
 
@@ -64,7 +62,7 @@ class ByteArrayInputStream(InputStream, metaclass=JavaClassDef, jvm_name='java/i
         signature='([B)V',
         native=False
     )
-    def ctor_buf(self, emu: Emulator, barr: ByteArray) -> None:
+    def ctor_buf(self, emu: 'Emulator', barr: ByteArray) -> None:
         if barr and barr != JAVA_NULL:
             items = barr.get_py_items()
             self._buf = bytearray(items)
@@ -81,7 +79,7 @@ class ByteArrayInputStream(InputStream, metaclass=JavaClassDef, jvm_name='java/i
         signature='([BII)V',
         native=False
     )
-    def ctor_buf_offset(self, emu: Emulator, barr: ByteArray, offset: int, length: int) -> None:
+    def ctor_buf_offset(self, emu: 'Emulator', barr: ByteArray, offset: int, length: int) -> None:
         if barr and barr != JAVA_NULL:
             items = barr.get_py_items()
             raw = bytes(items)

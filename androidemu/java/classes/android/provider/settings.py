@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import logging
 from typing import TYPE_CHECKING, Any, Dict, Optional
 
@@ -31,7 +29,7 @@ class _SettingsProviderHelper:
     }
 
     @classmethod
-    def get_setting_raw(cls, emu: Emulator, key: str) -> Optional[Any]:
+    def get_setting_raw(cls, emu: 'Emulator', key: str) -> Optional[Any]:
         secure_cfg = getattr(emu.config.pkg.device, "secure", None)
         
         if secure_cfg is not None:
@@ -47,14 +45,14 @@ class _SettingsProviderHelper:
         return None
 
     @classmethod
-    def get_as_string(cls, emu: Emulator, key: str) -> Any:
+    def get_as_string(cls, emu: 'Emulator', key: str) -> Any:
         val = cls.get_setting_raw(emu, key)
         if val is None:
             return JAVA_NULL
         return String(str(val))
 
     @classmethod
-    def get_as_int(cls, emu: Emulator, key: str, default: int) -> int:
+    def get_as_int(cls, emu: 'Emulator', key: str, default: int) -> int:
         val = cls.get_setting_raw(emu, key)
         if val is None:
             return default
@@ -64,7 +62,7 @@ class _SettingsProviderHelper:
             return default
 
     @classmethod
-    def get_as_long(cls, emu: Emulator, key: str, default: int) -> int:
+    def get_as_long(cls, emu: 'Emulator', key: str, default: int) -> int:
         val = cls.get_setting_raw(emu, key)
         if val is None:
             return default
@@ -74,7 +72,7 @@ class _SettingsProviderHelper:
             return default
 
     @classmethod
-    def get_as_float(cls, emu: Emulator, key: str, default: float) -> float:
+    def get_as_float(cls, emu: 'Emulator', key: str, default: float) -> float:
         val = cls.get_setting_raw(emu, key)
         if val is None:
             return default
@@ -101,7 +99,7 @@ class Secure(metaclass=JavaClassDef, jvm_name='android/provider/Settings$Secure'
         signature='(Landroid/content/ContentResolver;Ljava/lang/String;)Ljava/lang/String;',
         native=False
     )
-    def getString(emu: Emulator, resolver: Any, name: Optional[String]) -> Any:
+    def getString(emu: 'Emulator', resolver: Any, name: Optional[String]) -> Any:
         if not name:
             return JAVA_NULL
         return _SettingsProviderHelper.get_as_string(emu, name.get_py_string())
@@ -113,7 +111,7 @@ class Secure(metaclass=JavaClassDef, jvm_name='android/provider/Settings$Secure'
         signature='(Landroid/content/ContentResolver;Ljava/lang/String;I)I',
         native=False
     )
-    def getIntWithDefault(emu: Emulator, resolver: Any, name: Optional[String], default: int) -> int:
+    def getIntWithDefault(emu: 'Emulator', resolver: Any, name: Optional[String], default: int) -> int:
         if not name:
             return default
         return _SettingsProviderHelper.get_as_int(emu, name.get_py_string(), default)
@@ -125,7 +123,7 @@ class Secure(metaclass=JavaClassDef, jvm_name='android/provider/Settings$Secure'
         signature='(Landroid/content/ContentResolver;Ljava/lang/String;)I',
         native=False
     )
-    def getInt(emu: Emulator, resolver: Any, name: Optional[String]) -> int:
+    def getInt(emu: 'Emulator', resolver: Any, name: Optional[String]) -> int:
         return Secure.getIntWithDefault(emu, resolver, name, 0)
 
     @staticmethod
@@ -135,7 +133,7 @@ class Secure(metaclass=JavaClassDef, jvm_name='android/provider/Settings$Secure'
         signature='(Landroid/content/ContentResolver;Ljava/lang/String;J)J',
         native=False
     )
-    def getLongWithDefault(emu: Emulator, resolver: Any, name: Optional[String], default: int) -> int:
+    def getLongWithDefault(emu: 'Emulator', resolver: Any, name: Optional[String], default: int) -> int:
         if not name:
             return default
         return _SettingsProviderHelper.get_as_long(emu, name.get_py_string(), default)
@@ -147,7 +145,7 @@ class Secure(metaclass=JavaClassDef, jvm_name='android/provider/Settings$Secure'
         signature='(Landroid/content/ContentResolver;Ljava/lang/String;)J',
         native=False
     )
-    def getLong(emu: Emulator, resolver: Any, name: Optional[String]) -> int:
+    def getLong(emu: 'Emulator', resolver: Any, name: Optional[String]) -> int:
         return Secure.getLongWithDefault(emu, resolver, name, 0)
 
     @staticmethod
@@ -157,7 +155,7 @@ class Secure(metaclass=JavaClassDef, jvm_name='android/provider/Settings$Secure'
         signature='(Landroid/content/ContentResolver;Ljava/lang/String;F)F',
         native=False
     )
-    def getFloatWithDefault(emu: Emulator, resolver: Any, name: Optional[String], default: float) -> float:
+    def getFloatWithDefault(emu: 'Emulator', resolver: Any, name: Optional[String], default: float) -> float:
         if not name:
             return default
         return _SettingsProviderHelper.get_as_float(emu, name.get_py_string(), default)
@@ -175,17 +173,17 @@ class Global(metaclass=JavaClassDef, jvm_name='android/provider/Settings$Global'
 
     @staticmethod
     @java_method_def(name='getString', args_list=["jobject", "jstring"], signature='(Landroid/content/ContentResolver;Ljava/lang/String;)Ljava/lang/String;', native=False)
-    def getString(emu: Emulator, resolver: Any, name: Optional[String]) -> Any:
+    def getString(emu: 'Emulator', resolver: Any, name: Optional[String]) -> Any:
         return Secure.getString(emu, resolver, name)
 
     @staticmethod
     @java_method_def(name='getInt', args_list=["jobject", "jstring", "jint"], signature='(Landroid/content/ContentResolver;Ljava/lang/String;I)I', native=False)
-    def getIntWithDefault(emu: Emulator, resolver: Any, name: Optional[String], default: int) -> int:
+    def getIntWithDefault(emu: 'Emulator', resolver: Any, name: Optional[String], default: int) -> int:
         return Secure.getIntWithDefault(emu, resolver, name, default)
 
     @staticmethod
     @java_method_def(name='getInt', args_list=["jobject", "jstring"], signature='(Landroid/content/ContentResolver;Ljava/lang/String;)I', native=False)
-    def getInt(emu: Emulator, resolver: Any, name: Optional[String]) -> int:
+    def getInt(emu: 'Emulator', resolver: Any, name: Optional[String]) -> int:
         return Secure.getInt(emu, resolver, name)
 
 
@@ -196,12 +194,12 @@ class System(metaclass=JavaClassDef, jvm_name='android/provider/Settings$System'
 
     @staticmethod
     @java_method_def(name='getString', args_list=["jobject", "jstring"], signature='(Landroid/content/ContentResolver;Ljava/lang/String;)Ljava/lang/String;', native=False)
-    def getString(emu: Emulator, resolver: Any, name: Optional[String]) -> Any:
+    def getString(emu: 'Emulator', resolver: Any, name: Optional[String]) -> Any:
         return Secure.getString(emu, resolver, name)
 
     @staticmethod
     @java_method_def(name='getInt', args_list=["jobject", "jstring", "jint"], signature='(Landroid/content/ContentResolver;Ljava/lang/String;I)I', native=False)
-    def getIntWithDefault(emu: Emulator, resolver: Any, name: Optional[String], default: int) -> int:
+    def getIntWithDefault(emu: 'Emulator', resolver: Any, name: Optional[String], default: int) -> int:
         return Secure.getIntWithDefault(emu, resolver, name, default)
 
 

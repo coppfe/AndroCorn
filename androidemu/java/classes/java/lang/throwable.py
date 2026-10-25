@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from typing import TYPE_CHECKING, Optional
 from androidemu.java.class_def import JavaClassDef
 from androidemu.java.method_def import java_method_def
@@ -10,25 +8,35 @@ if TYPE_CHECKING:
     from androidemu.core.emulator import Emulator
 
 
-class Throwable(Object, metaclass=JavaClassDef, jvm_name='java/lang/Throwable', jvm_super=Object):
+class JavaThrowable(Exception):
+    """
+    Pythonic Compability for Exceptions
+    """
+    def __init__(self, message: str = ""):
+        super().__init__(message)
+        self.message = message
+
+
+class Throwable(Object, JavaThrowable, metaclass=JavaClassDef, jvm_name='java/lang/Throwable', jvm_super=Object):
     def __init__(self, message: str = "") -> None:
-        super().__init__()
+        Object.__init__(self)
+        JavaThrowable.__init__(self, message)
         self.detail_message: str = message
 
     @java_method_def(name='<init>', signature='()V', native=False)
-    def ctor_void(self, emu: Emulator) -> None:
+    def ctor_void(self, emu: 'Emulator') -> None:
         self.detail_message = ""
 
     @java_method_def(name='<init>', args_list=["jstring"], signature='(Ljava/lang/String;)V', native=False)
-    def ctor_msg(self, emu: Emulator, msg: String) -> None:
+    def ctor_msg(self, emu: 'Emulator', msg: String) -> None:
         self.detail_message = msg.get_py_string() if msg else ""
 
     @java_method_def(name='getMessage', signature='()Ljava/lang/String;', native=False)
-    def getMessage(self, emu: Emulator) -> String:
+    def getMessage(self, emu: 'Emulator') -> String:
         return String(self.detail_message)
 
     @java_method_def(name='toString', signature='()Ljava/lang/String;', native=False)
-    def toString(self, emu: Emulator) -> String:
+    def toString(self, emu: 'Emulator') -> String:
         cls_name = getattr(self.__class__, 'jvm_name', 'java/lang/Throwable').replace('/', '.')
         if self.detail_message:
             return String(f"{cls_name}: {self.detail_message}")

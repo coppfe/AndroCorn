@@ -21,3 +21,14 @@ JNI_InvalidRefType = 0      # invalid ref type
 JNI_LocalRefType = 1        # local ref
 JNI_GlobalRefType = 2       # global ref
 JNI_WeakGlobalRefType = 3   # weak global ref
+
+# Primitive arrays (everything but byte[], which keeps its bytearray code):
+# JNI type letter -> (struct format to read a native element, format to write it, bytes per element)
+JNI_PRIM_ELEMENT = {
+    "Z": ("B", "B", 1), "C": ("H", "H", 2), "S": ("h", "H", 2), "I": ("i", "I", 4),
+    "J": ("q", "Q", 8), "F": ("f", "f", 4), "D": ("d", "d", 8),
+}
+JNI_PRIM_NAME = {"Z": "Boolean", "C": "Char", "S": "Short", "I": "Int", "J": "Long", "F": "Float", "D": "Double"}
+
+# JNI return kinds that are not returned like an int: jlong, jfloat, jdouble (see wide_or_fp_return)
+JNI_WIDE_OR_FP_KINDS = ("J", "F", "D")

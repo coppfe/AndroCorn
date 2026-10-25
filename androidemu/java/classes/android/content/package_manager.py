@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import logging
 from typing import TYPE_CHECKING, Optional
 
@@ -20,7 +18,7 @@ class Signature(metaclass=JavaClassDef, jvm_name='android/content/pm/Signature')
         self.__sign_hex = sign_hex
 
     @java_method_def(name='toByteArray', signature='()[B', native=False)
-    def toByteArray(self, emu: Emulator) -> ByteArray:
+    def toByteArray(self, emu: 'Emulator') -> ByteArray:
         if self.__sign_hex:
             try:
                 bs = bytes.fromhex(self.__sign_hex)
@@ -30,11 +28,11 @@ class Signature(metaclass=JavaClassDef, jvm_name='android/content/pm/Signature')
         return ByteArray(bytearray(b"\x30\x82\x01\x00"))
 
     @java_method_def(name='toCharsString', signature='()Ljava/lang/String;', native=False)
-    def toCharsString(self, emu: Emulator) -> String:
+    def toCharsString(self, emu: 'Emulator') -> String:
         return String(self.__sign_hex)
 
     @java_method_def(name='hashCode', signature='()I', native=False)
-    def hashCode(self, emu: Emulator) -> int:
+    def hashCode(self, emu: 'Emulator') -> int:
         if self.__sign_hex:
             import zlib
             return zlib.crc32(self.__sign_hex.encode()) & 0x7FFFFFFF
@@ -65,15 +63,15 @@ class SigningInfo(metaclass=JavaClassDef, jvm_name='android/content/pm/SigningIn
         self.mSignatures = signatures
 
     @java_method_def(name='hasMultipleSigners', signature='()Z', native=False)
-    def hasMultipleSigners(self, emu: Emulator) -> bool:
+    def hasMultipleSigners(self, emu: 'Emulator') -> bool:
         return False
 
     @java_method_def(name='getApkContentsSigners', signature='()[Landroid/content/pm/Signature;', native=False)
-    def getApkContentsSigners(self, emu: Emulator) -> ObjectArray:
+    def getApkContentsSigners(self, emu: 'Emulator') -> ObjectArray:
         return self.mSignatures
 
     @java_method_def(name='getSigningCertificateHistory', signature='()[Landroid/content/pm/Signature;', native=False)
-    def getSigningCertificateHistory(self, emu: Emulator) -> ObjectArray:
+    def getSigningCertificateHistory(self, emu: 'Emulator') -> ObjectArray:
         return self.mSignatures
 
 
@@ -122,7 +120,7 @@ class PackageManager(metaclass=JavaClassDef, jvm_name='android/content/pm/Packag
 
     @java_method_def(name='getPackageInfo', args_list=["jstring", "jint"], 
                      signature='(Ljava/lang/String;I)Landroid/content/pm/PackageInfo;', native=False)
-    def getPackageInfo(self, emu: Emulator, package_name: String, flags: int) -> PackageInfo:
+    def getPackageInfo(self, emu: 'Emulator', package_name: String, flags: int) -> PackageInfo:
         req_pkg = package_name.get_py_string() if package_name else self.__pyPkgName
         
         pkg_cfg = emu.config.pkg
@@ -144,5 +142,5 @@ class PackageManager(metaclass=JavaClassDef, jvm_name='android/content/pm/Packag
 
     @java_method_def(name='checkPermission', args_list=["jstring", "jstring"], 
                      signature='(Ljava/lang/String;Ljava/lang/String;)I', native=False)
-    def checkPermission(self, emu: Emulator, perm: String, pkg: String) -> int:
+    def checkPermission(self, emu: 'Emulator', perm: String, pkg: String) -> int:
         return 0  # PERMISSION_GRANTED

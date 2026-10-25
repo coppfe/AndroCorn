@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import logging
 import warnings
 
@@ -22,15 +20,15 @@ class Key(metaclass=JavaClassDef, jvm_name='java/security/Key'):
         self.algorithm = algorithm
 
     @java_method_def(name='getAlgorithm', signature='()Ljava/lang/String;', native=False)
-    def getAlgorithm(self, emu: Emulator) -> String:
+    def getAlgorithm(self, emu: 'Emulator') -> 'String':
         return String(self.algorithm)
 
     @java_method_def(name='getFormat', signature='()Ljava/lang/String;', native=False)
-    def getFormat(self, emu: Emulator) -> String:
+    def getFormat(self, emu: 'Emulator') -> 'String':
         return String("X.509")
 
     @java_method_def(name='getEncoded', signature='()[B', native=False)
-    def getEncoded(self, emu: Emulator) -> ByteArray:
+    def getEncoded(self, emu: 'Emulator') -> 'ByteArray':
         return ByteArray(bytearray(self.raw_encoded))
 
 
@@ -43,7 +41,7 @@ class Certificate(metaclass=JavaClassDef, jvm_name='java/security/cert/Certifica
         self.raw_data = raw_data
         self._public_key = self._extract_public_key(raw_data)
 
-    def _extract_public_key(self, raw_data: bytes) -> PublicKey:
+    def _extract_public_key(self, raw_data: bytes) -> 'PublicKey':
         if raw_data:
             try:
                 from cryptography import x509
@@ -69,16 +67,16 @@ class Certificate(metaclass=JavaClassDef, jvm_name='java/security/cert/Certifica
         return PublicKey(raw_encoded=raw_data[:256] if raw_data else b"\x30\x82\x01\x00")
 
     @java_method_def(name='getPublicKey', signature='()Ljava/security/PublicKey;', native=False)
-    def getPublicKey(self, emu: Emulator) -> PublicKey:
+    def getPublicKey(self, emu: 'Emulator') -> PublicKey:
         logger.debug("[Certificate] getPublicKey() requested")
         return self._public_key
 
     @java_method_def(name='getEncoded', signature='()[B', native=False)
-    def getEncoded(self, emu: Emulator) -> ByteArray:
+    def getEncoded(self, emu: 'Emulator') -> ByteArray:
         return ByteArray(bytearray(self.raw_data))
 
     @java_method_def(name='getType', signature='()Ljava/lang/String;', native=False)
-    def getType(self, emu: Emulator) -> String:
+    def getType(self, emu: 'Emulator') -> String:
         return String("X.509")
 
 

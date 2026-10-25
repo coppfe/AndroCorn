@@ -68,15 +68,12 @@ class Class(metaclass=JavaClassDef, jvm_name='java/lang/Class'):
             return JAVA_NULL
 
         clz_name: str = name.get_py_string().replace(".", "/")
-
         clz_obj = emu.java_classloader.find_class_by_name(clz_name)
-        if clz_obj is not None:
-            return getattr(clz_obj, 'class_object', Class(clz_obj, emu.java_classloader))
+        
+        if clz_obj is None:
+            raise ClassNotFoundException(f"Class not found: {clz_name}")
 
-        logger.info("[Class.forName] Class '%s' NOT FOUND -> throwing ClassNotFoundException", clz_name)
-    
-        emu.java_vm.throw_exception(ClassNotFoundException())
-        return JAVA_NULL
+        return getattr(clz_obj, 'class_object', Class(clz_obj, emu.java_classloader))
     
     @java_method_def(
         name='getDeclaredMethods',

@@ -29,11 +29,21 @@ class JavaFieldDef:
         if self.is_static and self._static_value is None and self._getter is None:
             raise ValueError(f"Field '{name}' is static but has neither static_value nor getter.")
 
+    @property
+    def static_value(self) -> Any:
+        return self._static_value
+
+    @static_value.setter
+    def static_value(self, val: Any) -> None:
+        self._static_value = val
+
     def get_value(self, emu: 'Emulator', instance: Any = None) -> Any:
         if self._getter is not None:
             return self._getter(emu, instance) if not self.is_static else self._getter(emu)
 
         if self.is_static:
+            if instance is not None and hasattr(instance, self.name):
+                return getattr(instance, self.name)
             if callable(self._static_value):
                 return self._static_value(emu)
             return self._static_value

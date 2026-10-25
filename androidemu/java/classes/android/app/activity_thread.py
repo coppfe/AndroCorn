@@ -161,7 +161,7 @@ class ActivityManagerNative(metaclass=JavaClassDef, jvm_name='android/app/Activi
     #
 
     @staticmethod
-    @java_method_def(name='getDefault', signature='()android/app/IActivityManager;', native=False)
+    @java_method_def(name='getDefault', signature='()Landroid/app/IActivityManager;', native=False)
     def getDefault(emu):
         return IActivityManager()
 

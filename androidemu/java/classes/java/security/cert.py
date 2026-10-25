@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import warnings
 import logging
 from typing import TYPE_CHECKING, Any, Optional
@@ -23,11 +21,11 @@ class Principal(Object, metaclass=JavaClassDef, jvm_name='java/security/Principa
         self.principal_name: str = name
 
     @java_method_def(name='getName', signature='()Ljava/lang/String;', native=False)
-    def getName(self, emu: Emulator) -> String:
+    def getName(self, emu: 'Emulator') -> String:
         return String(self.principal_name)
 
     @java_method_def(name='toString', signature='()Ljava/lang/String;', native=False)
-    def toString(self, emu: Emulator) -> String:
+    def toString(self, emu: 'Emulator') -> String:
         return String(self.principal_name)
 
 
@@ -38,12 +36,12 @@ class X500Principal(Principal, metaclass=JavaClassDef, jvm_name='javax/security/
         self.encoded_der: bytes = encoded_der
 
     @java_method_def(name='<init>', args_list=["jstring"], signature='(Ljava/lang/String;)V', native=False)
-    def ctor_str(self, emu: Emulator, name_str: String) -> None:
+    def ctor_str(self, emu: 'Emulator', name_str: String) -> None:
         self.principal_name = name_str.get_py_string() if name_str else ""
         self.encoded_der = self.principal_name.encode("utf-8")
 
     @java_method_def(name='<init>', args_list=["jobject"], signature='([B)V', native=False)
-    def ctor_bytes(self, emu: Emulator, b_arr: ByteArray) -> None:
+    def ctor_bytes(self, emu: 'Emulator', b_arr: ByteArray) -> None:
         if b_arr and b_arr != JAVA_NULL:
             self.encoded_der = bytes(b_arr.get_py_items())
             self.principal_name = self.encoded_der.decode("utf-8", errors="ignore")
@@ -52,11 +50,11 @@ class X500Principal(Principal, metaclass=JavaClassDef, jvm_name='javax/security/
             self.principal_name = ""
 
     @java_method_def(name='getEncoded', signature='()[B', native=False)
-    def getEncoded(self, emu: Emulator) -> ByteArray:
+    def getEncoded(self, emu: 'Emulator') -> ByteArray:
         return ByteArray(bytearray(self.encoded_der))
 
     @java_method_def(name='getName', args_list=["jstring"], signature='(Ljava/lang/String;)Ljava/lang/String;', native=False)
-    def getNameFormat(self, emu: Emulator, format_str: String) -> String:
+    def getNameFormat(self, emu: 'Emulator', format_str: String) -> String:
         # RFC1779, RFC2253 or CANONICAL
         return String(self.principal_name)
 
@@ -69,15 +67,15 @@ class Key(Object, metaclass=JavaClassDef, jvm_name='java/security/Key', jvm_supe
         self.algorithm: str = algorithm
 
     @java_method_def(name='getAlgorithm', signature='()Ljava/lang/String;', native=False)
-    def getAlgorithm(self, emu: Emulator) -> String:
+    def getAlgorithm(self, emu: 'Emulator') -> String:
         return String(self.algorithm)
 
     @java_method_def(name='getFormat', signature='()Ljava/lang/String;', native=False)
-    def getFormat(self, emu: Emulator) -> String:
+    def getFormat(self, emu: 'Emulator') -> String:
         return String("X.509")
 
     @java_method_def(name='getEncoded', signature='()[B', native=False)
-    def getEncoded(self, emu: Emulator) -> ByteArray:
+    def getEncoded(self, emu: 'Emulator') -> ByteArray:
         return ByteArray(bytearray(self.raw_encoded))
 
 
@@ -135,17 +133,17 @@ class Certificate(Object, metaclass=JavaClassDef, jvm_name='java/security/cert/C
             self._public_key = PublicKey(raw_encoded=self.raw_data[:256] if self.raw_data else b"", algorithm="RSA")
 
     @java_method_def(name='getPublicKey', signature='()Ljava/security/PublicKey;', native=False)
-    def getPublicKey(self, emu: Emulator) -> Any:
+    def getPublicKey(self, emu: 'Emulator') -> Any:
         if self._public_key is None:
             self._init_crypto_metadata()
         return self._public_key if self._public_key is not None else JAVA_NULL
 
     @java_method_def(name='getEncoded', signature='()[B', native=False)
-    def getEncoded(self, emu: Emulator) -> ByteArray:
+    def getEncoded(self, emu: 'Emulator') -> ByteArray:
         return ByteArray(bytearray(self.raw_data))
 
     @java_method_def(name='getType', signature='()Ljava/lang/String;', native=False)
-    def getType(self, emu: Emulator) -> String:
+    def getType(self, emu: 'Emulator') -> String:
         return String("X.509")
 
 
@@ -191,32 +189,32 @@ class X509Certificate(Certificate, metaclass=JavaClassDef, jvm_name='java/securi
             self._init_x509_fields()
 
     @java_method_def(name='getSubjectDN', signature='()Ljava/security/Principal;', native=False)
-    def getSubjectDN(self, emu: Emulator) -> Any:
+    def getSubjectDN(self, emu: 'Emulator') -> Any:
         self._ensure_initialized()
         return self._subject_principal if self._subject_principal is not None else JAVA_NULL
 
     @java_method_def(name='getIssuerDN', signature='()Ljava/security/Principal;', native=False)
-    def getIssuerDN(self, emu: Emulator) -> Any:
+    def getIssuerDN(self, emu: 'Emulator') -> Any:
         self._ensure_initialized()
         return self._issuer_principal if self._issuer_principal is not None else JAVA_NULL
 
     @java_method_def(name='getSubjectX500Principal', signature='()Ljavax/security/auth/x500/X500Principal;', native=False)
-    def getSubjectX500Principal(self, emu: Emulator) -> Any:
+    def getSubjectX500Principal(self, emu: 'Emulator') -> Any:
         self._ensure_initialized()
         return self._subject_x500 if self._subject_x500 is not None else JAVA_NULL
 
     @java_method_def(name='getIssuerX500Principal', signature='()Ljavax/security/auth/x500/X500Principal;', native=False)
-    def getIssuerX500Principal(self, emu: Emulator) -> Any:
+    def getIssuerX500Principal(self, emu: 'Emulator') -> Any:
         self._ensure_initialized()
         return self._issuer_x500 if self._issuer_x500 is not None else JAVA_NULL
 
     @java_method_def(name='checkValidity', signature='()V', native=False)
-    def checkValidity(self, emu: Emulator) -> None:
+    def checkValidity(self, emu: 'Emulator') -> None:
         pass # Raising error in real android but... we not real android
              # TODO
 
     @java_method_def(name='getSigAlgName', signature='()Ljava/lang/String;', native=False)
-    def getSigAlgName(self, emu: Emulator) -> String:
+    def getSigAlgName(self, emu: 'Emulator') -> String:
         return String("SHA256withRSA")
 
 class CertificateFactory(Object, metaclass=JavaClassDef, jvm_name='java/security/cert/CertificateFactory', jvm_super=Object):
@@ -232,7 +230,7 @@ class CertificateFactory(Object, metaclass=JavaClassDef, jvm_name='java/security
         signature='(Ljava/lang/String;)Ljava/security/cert/CertificateFactory;',
         native=False
     )
-    def getInstance(emu: Emulator, type_str: String) -> CertificateFactory:
+    def getInstance(emu: 'Emulator', type_str: 'String') -> 'CertificateFactory':
         py_type = type_str.get_py_string() if type_str else "X.509"
         logger.debug("[CertificateFactory] getInstance(%s)", py_type)
         return CertificateFactory(cert_type=py_type)
@@ -243,7 +241,7 @@ class CertificateFactory(Object, metaclass=JavaClassDef, jvm_name='java/security
         signature='(Ljava/io/InputStream;)Ljava/security/cert/Certificate;',
         native=False
     )
-    def generateCertificate(self, emu: Emulator, input_stream: Any) -> Any:
+    def generateCertificate(self, emu: 'Emulator', input_stream: Any) -> Any:
         raw_bytes = b""
         
         if input_stream and input_stream != JAVA_NULL:
@@ -278,7 +276,7 @@ class KeyStore(Object, metaclass=JavaClassDef, jvm_name='java/security/KeyStore'
         signature='(Ljava/lang/String;)Ljava/security/KeyStore;',
         native=False
     )
-    def getInstance(emu: Emulator, type_str: String) -> KeyStore:
+    def getInstance(emu: 'Emulator', type_str: 'String') -> 'KeyStore':
         py_type = type_str.get_py_string() if type_str else "BKS"
         logger.debug("[KeyStore] getInstance(%s)", py_type)
         return KeyStore(store_type=py_type)
@@ -289,7 +287,7 @@ class KeyStore(Object, metaclass=JavaClassDef, jvm_name='java/security/KeyStore'
         signature='(Ljava/io/InputStream;[C)V',
         native=False
     )
-    def load(self, emu: Emulator, stream: Any, password: Any) -> None:
+    def load(self, emu: 'Emulator', stream: Any, password: Any) -> None:
         logger.debug("[KeyStore] load() called successfully")
 
     @java_method_def(
@@ -298,7 +296,7 @@ class KeyStore(Object, metaclass=JavaClassDef, jvm_name='java/security/KeyStore'
         signature='(Ljava/lang/String;Ljava/security/cert/Certificate;)V',
         native=False
     )
-    def setCertificateEntry(self, emu: Emulator, alias: String, cert: Certificate) -> None:
+    def setCertificateEntry(self, emu: 'Emulator', alias: String, cert: Certificate) -> None:
         alias_str = alias.get_py_string() if alias and alias != JAVA_NULL else "default"
         logger.info("[KeyStore] Registered cert entry for alias '%s'", alias_str)
         self.entries[alias_str] = cert
@@ -309,6 +307,6 @@ class KeyStore(Object, metaclass=JavaClassDef, jvm_name='java/security/KeyStore'
         signature='(Ljava/lang/String;)Ljava/security/cert/Certificate;',
         native=False
     )
-    def getCertificate(self, emu: Emulator, alias: String) -> Any:
+    def getCertificate(self, emu: 'Emulator', alias: String) -> Any:
         alias_str = alias.get_py_string() if alias and alias != JAVA_NULL else "default"
         return self.entries.get(alias_str, JAVA_NULL)
