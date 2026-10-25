@@ -132,7 +132,8 @@ class Scheduler:
         start_read = max(p_stack_base, parent_sp - 0x1000)
         used_stack_size = (p_stack_end + 1) - start_read
 
-        stack_data = bytearray(self._mu.mem_read(start_read, used_stack_size))
+        stack_data = bytearray(used_stack_size)
+        self._memory.read_into(start_read, stack_data, used_stack_size)
 
         stack_size = (used_stack_size + 0xFFF) & ~0xFFF
         stack_size = max(0x100000, stack_size)
@@ -154,13 +155,13 @@ class Scheduler:
             if p_stack_base <= val <= p_stack_end:
                 mv[i] = val + stack_offset
 
-        self._mu.mem_write(child_stack_top - used_stack_size, bytes(stack_data))
+        self._memory.write_bytes(child_stack_top - used_stack_size, stack_data)
         regs.v_sp = child_sp
 
         for reg_id in regs.default:
-            val = self._mu.reg_read(reg_id)
+            val = regs._read_reg_fast(reg_id)
             if p_stack_base <= val <= p_stack_end:
-                self._mu.reg_write(reg_id, val + stack_offset)
+                regs._write_reg_fast(reg_id, val + stack_offset)
 
         regs.v_ret = 0
         child_ctx = self._mu.context_save()
@@ -228,7 +229,7 @@ class Scheduler:
                 if wstatus_ptr != 0:
                     status_val = (exit_code & 0xFF) << 8
                     try:
-                        self._mu.mem_write(wstatus_ptr, status_val.to_bytes(4, "little"))
+                        self._memory.write_u32(wstatus_ptr, status_val)
                     except Exception:
                         pass
                 del self._zombie_tasks[z_tid]
@@ -252,7 +253,7 @@ class Scheduler:
             if wstatus_ptr != 0:
                 status_val = (exit_code & 0xFF) << 8
                 try:
-                    self._mu.mem_write(wstatus_ptr, status_val.to_bytes(4, "little"))
+                    self._memory.write_u32(wstatus_ptr, status_val)
                 except Exception:
                     pass
             del self._zombie_tasks[target_tid]
@@ -476,7 +477,7 @@ class Scheduler:
             if wstatus_ptr != 0:
                 status_val = (exit_code & 0xFF) << 8
                 try:
-                    self._mu.mem_write(wstatus_ptr, status_val.to_bytes(4, "little"))
+                    self._memory.write_u32(wstatus_ptr, status_val)
                 except Exception:
                     pass
             if parent_tid in self._tasks_map:
