@@ -9,16 +9,16 @@ from .contentresolver import ContentResolver
 
 from ...java.io.file import File
 from ...java.lang.string import String
+from ...java.lang.object import Object
 
-class Context(metaclass=JavaClassDef, jvm_name='android/content/Context',
+class Context(Object, metaclass=JavaClassDef, jvm_name='android/content/Context', jvm_super=Object,
                  jvm_fields=[
                     JavaFieldDef('WIFI_SERVICE', 'Ljava/lang/String;', True, String("wifi")),
                     JavaFieldDef('TELEPHONY_SERVICE', 'Ljava/lang/String;', True, String("phone")),
                     JavaFieldDef('CONNECTIVITY_SERVICE', 'Ljava/lang/String;', True, String("connectivity"))
                  ]):
     def __init__(self):
-        pass
-    #
+        super().__init__()
 
     @java_method_def(name='getPackageManager', signature='()Landroid/content/pm/PackageManager;', native=False)
     def getPackageManager(self, emu):
@@ -112,19 +112,18 @@ class ContextImpl(Context, metaclass=JavaClassDef, jvm_name='android/app/Context
 
     @java_method_def(name='getSystemService', args_list=["jstring"], signature='(Ljava/lang/String;)Ljava/lang/Object;', native=False)
     def getSystemService(self, emu, s1):
-        # print(s1)
         stype = s1.get_py_string()
         if stype == "phone":
             return TelephonyManager()
-        #
         elif stype == "wifi":
             return WifiManager()
-        #
         elif stype == "connectivity":
             return ConnectivityManager()
-        #
-        raise NotImplementedError()
-    #
+        elif stype == "location":
+            from ..location import LocationManager
+            return LocationManager()
+
+        raise NotImplementedError(f"getSystemService for '{stype}' not implemented")
 
     @java_method_def(name='getApplicationInfo', signature='()Landroid/content/pm/ApplicationInfo;', native=False)
     def getApplicationInfo(self, emu):

@@ -1,6 +1,8 @@
 from androidemu.java.class_def import JavaClassDef
 from androidemu.java.field_def import JavaFieldDef
 from androidemu.java.method_def import java_method_def, JavaMethodDef
+from androidemu.java.jvm.constants import JAVA_NULL
+
 import logging
 
 from ..string import String
@@ -28,11 +30,12 @@ class Field(AccessibleObject, metaclass=JavaClassDef, jvm_name='java/lang/reflec
 
     @java_method_def(name='get', args_list=["jobject"], signature='(Ljava/lang/Object;)Ljava/lang/Object;', native=False)
     def get(self, emu, obj):
-        logging.debug("Field.get(%r)"%obj)
-
-        v = getattr(obj, self.__fieldName)
-        return v
-
+        pyclazz = self.declaringClass
+        field_def = pyclazz.find_field(self.__fieldName, "", is_static=(obj == JAVA_NULL or obj is None))
+        if field_def:
+            return field_def.get_value(emu, instance=obj)
+        return getattr(obj, self.__fieldName, JAVA_NULL)
+    
     @java_method_def(name='getDeclaringClass', signature='()Ljava/lang/Class;', native=False)
     def getDeclaringClass(self, emu):
         return getattr(self.declaringClass, 'class_object', self.declaringClass)

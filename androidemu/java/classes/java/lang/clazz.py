@@ -5,10 +5,11 @@ from .string import *
 from .reflect.method import *
 from .reflect.field import *
 from .array import ObjectArray
+from .throwable import ClassNotFoundException
 
 import io
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from androidemu.core import Emulator
     from androidemu.java.classloader import JavaClassLoader
@@ -55,6 +56,28 @@ class Class(metaclass=JavaClassDef, jvm_name='java/lang/Class'):
         return self.class_loader
     #
 
+    @staticmethod
+    @java_method_def(
+        name='forName',
+        args_list=["jstring", "jboolean", "jobject"],
+        signature='(Ljava/lang/String;ZLjava/lang/ClassLoader;)Ljava/lang/Class;',
+        native=False
+    )
+    def forName3(emu: 'Emulator', name: 'String', initialize: bool, loader: Any):
+        if not name or name == JAVA_NULL:
+            return JAVA_NULL
+
+        clz_name: str = name.get_py_string().replace(".", "/")
+
+        clz_obj = emu.java_classloader.find_class_by_name(clz_name)
+        if clz_obj is not None:
+            return getattr(clz_obj, 'class_object', Class(clz_obj, emu.java_classloader))
+
+        logger.info("[Class.forName] Class '%s' NOT FOUND -> throwing ClassNotFoundException", clz_name)
+    
+        emu.java_vm.throw_exception(ClassNotFoundException())
+        return JAVA_NULL
+    
     @java_method_def(
         name='getDeclaredMethods',
         signature='()[Ljava/lang/reflect/Method;',
