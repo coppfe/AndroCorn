@@ -1,92 +1,58 @@
-# Release v2.0.0 — Major Architecture & Runtime Overhaul (2026-09-18)
+## [Unreleased] - 2026-11-23
 
-This is a **monumental milestone release** featuring a ground-up architectural redesign of the Execution Pipeline, Virtual File System, Memory Management, JNI Dispatcher, and Hooking Engine. Legacy subsystems, leaky abstractions, and god-object patterns have been eliminated in favor of a clean, deterministic, Linux-like hypervisor layer.
+### 🤝 Contributors & Acknowledgements
+Special thanks to the contributors who helped make this release possible:
+- Huge thanks to [@UserN0tAdmin](https://github.com/UserN0tAdmin) for contributing the new JNI methods, comprehensive test suite, and the floating-point argument passing implementation!
 
----
-
-### 💥 Breaking Changes & Architectural Refactoring
-
-* **Context-Driven Syscall Pipeline (`emu`-first)**:
-  * Eradicated the raw `(mu, *args)` signature across the entire kernel subsystem. All interrupt and syscall callbacks now strictly accept `(emu: Emulator, *args)`.
-  * Syscall handlers (`FileSystemIO`, `FileSystemManager`, `MemorySyscalls`, `SELinuxHandler`, `ARMSyscalls`, `SignalSyscalls`, `TimeSyscalls`) are now completely **stateless**. Removed redundant internal references (`self._mu`, `self._vfs`, `self._pcb`).
-* **Calling Convention & Register Mapping Consolidation**:
-  * Deleted `androidemu/native/helpers/args.py`. All calling convention logic (`read_args`, `write_args`, `read_syscall_args`, `set_return_val`) is now consolidated directly into `RegistersMapping`.
-  * Dynamic virtual register access: Read via `regs.v_reg_x`, `regs.v_sp`, `regs.v_pc`, `regs.v_lr`, `regs.v_flags`, `regs.v_ret`. Write via property assignment (`regs.v_sp = new_sp`).
-  * Fail-fast typing: Uninitialized `DynType` architecture defaults to `_current_arch = 0` to immediately prevent undefined bitwidth behaviors.
-  * Corrected ARMv7 Thumb-mode detection and switching logic (`is_thumb()`, `set_thumb()`, `clear_thumb()`).
-* **Memory Layout & True Heap Isolation**:
-  * Separated emulator-internal allocations from the target process heap.
-  * `0x60000000` (`EMU_HEAP_BASE`): Reserved exclusively for internal runtime data structures (DTV, TLS blocks, linker strings, arguments).
-  * `0x70000000` (`BRK_BASE`): Strict 8MB deterministic Linux `[heap]` managed via `sys_brk`. Eliminates random allocations and matches `/proc/self/maps` bit-for-bit.
-  * `0x80000000` (`MMAP_BASE`): Target memory area for dynamic anonymous mappings via `mmap` / `mmap2`.
-* **Legacy VFS Purge**:
-  * Completely removed `VirtualFile`, `VirtualFileTable`, and `vf_table` from `ProcessControlBlock`.
-  * Removed legacy directories: `androidemu/objects/`, `androidemu/runtime/`, and `androidemu/kernel/backend/filesystem/helpers/`.
-  * Virtual FD mapping now starts at standard POSIX ranges, dropping the `>= 1000` legacy restriction.
-  * Renamed `config_path` to `environment` in `Emulator.__init__`.
+### ⚠️ Breaking Changes
+- **core/registers**: Complete overhaul of CPU register mapping and access semantics (`androidemu/core/registers.py`). Added native support for SIMD/FP vector registers (`Q0-Q7`, `D0-D7`). Completely redesigned register read/write subsystems for higher performance and safety.
+- **core/memory**: Replaced direct Unicorn memory operations across the entire kernel backend with `MemoryMap` abstractions (covers `sysproc`, `filesystem`, `selinux`, and `memory`).
+- **java/jni**: Massive JNI subsystem refactoring:
+  - Extracted dispatch and invocation logic into dedicated `invoker.py`.
+  - Added native signature parsing (`signature.py`) and explicit Java exception propagation.
+  - Rewrote argument passing and floating-point calling convention handling.
+- **internal/linker**: Decomposed monolithic `linker.py` into a modular package architecture (`androidemu/internal/linker/`): `elfmap`, `factory`, `libres`, `runtime`, and `soinfo`.
 
 ---
 
-### 🚀 New Features & Enhancements
+### 🚀 Features
 
-#### 1. JNI Dynamic Arity Engine (`androidemu.java.jni`)
-* **Auto-Arity Dispatcher (`__dyncall`)**:
-  * Eradicated the hardcoded `(arg1, arg2, arg3, arg4)` limitation across all `Call<Type>Method` and `CallStatic<Type>Method` handlers.
-  * Method signatures (`method.args_list`) are now dynamically inspected at invocation time. Arguments are read directly from CPU registers and the stack according to AAPCS/AAPCS64 conventions.
-  * Cleaned up and restructured `JNIEnv` into clear, functional domains (Call Dispatcher, Object Lifecycle, Field Access, Strings/Arrays, Reflection, VM Control).
+#### Android Runtime & Java Layer
+- **Classes & Framework Stubs**:
+  - Added Android OS services and IPC primitives: `Binder`, `Parcel`, `ServiceManager`.
+  - Added crypto/security stubs: `X509Certificate`, `Key`, and certificate chain handling.
+  - Added core system classes: `LocationManager`, `Settings.Secure`, `Build`, `InputStream`, `File`, and `Objects`.
+  - Implemented missing package manager methods (`PackageManager`).
+- **Field & Class Definition**:
+  - Implemented dynamic field inheritance and fixed MRO/Python inheritance edge-cases.
+  - Added support for lambda resolvers in field descriptors with direct emulator context binding.
 
-#### 2. Next-Gen Hooking Engine (`androidemu.native.hook`)
-* **Modular `HookManager`**:
-  * Unified public interface for all interception mechanisms via `emu.hook_manager`.
-* **`InlineHook` Engine** (formerly `AddressHooker`):
-  * Low-overhead function prologue/epilogue hooks with argument inspection, return value overriding, and execution replacement.
-* **`MemoryWatchpoint` Engine**:
-  * Granular memory read/write monitors with caller context inspection (`PC`, calling module, symbol name/offset). Designed specifically for reverse-engineering integrity checks, cryptographic key derivation, and unpackers.
-* **`CrossModuleTracer`**:
-  * High-performance execution tracer using `UC_HOOK_BLOCK`. Intercepts boundary transitions between user libraries and system libraries (`libc.so`) without instruction-level slowdown.
+#### Native & Linker
+- **Bionic / Linker**:
+  - Added system 64-bit dynamic linker binary (`vfs/system/bin/linker64`).
+  - Improved TLS initialization, DTV builder, and Bionic module descriptors.
+  - Implemented basic native function calling convention protocols in `androidemu/native/helpers/method.py`.
 
-#### 3. Memory Forensics & Snapshot Engine (`androidemu.utils.memory`)
-* **Zero-Copy Memory Snapshots (`create_snapshot` / `restore_snapshot`)**:
-  * Instant state rollback for fuzzing and iterative function invocation. Captures CPU context, `brk` position, and writable (RW) memory pages without wasting cycles on immutable code segments.
-* **Forensic Debugging Utilities**:
-  * `hexdump(mu, addr, size)`: Formatted memory dumps with ASCII sidebars.
-  * `telescope(emu, addr, depth)`: Multi-level pointer dereferencing engine (pwndbg/GEF style) with symbol and string auto-resolution.
-  * `read_string_auto(mu, addr)`: Heuristic string decoder supporting UTF-8 and UTF-16LE auto-detection.
-  * `find_bytes(mu, pattern, start, end)`: Chunked memory scanner for byte signatures.
-
-#### 4. Extended Device Profiling System (`androidemu.data.models`)
-* **Dataclass-Driven Hardware Models**:
-  * Extensible, strictly typed models for `CPUInfo`, `GPUInfo`, `DisplayInfo`, `BatteryInfo`, `TelephonyInfo`, `BuildInfo`, and `SettingsSecure`.
-* **Dynamic Environment Emulation**:
-  * Integrated dynamic `am get-config` generator inside `cli/builtins.py` computed directly from `DisplayInfo` attributes.
-  * Real-world telemetry resolution for `TelephonyManager` (`IMEI`, `IMSI`, network operator) and `Settings$Secure` (`android_id`, `GAID`).
-
-#### 5. Unified Linux-like VFS Engine (`androidemu.kernel.fs`)
-* **`VFSManager` Core**:
-  * Object-oriented virtual node architecture (`HostFileNode`, `HostDirNode`, virtual nodes, character devices).
-  * Built-in support for `/dev/null`, `/dev/zero`, `/dev/urandom`, `/dev/binder`, `/dev/tty`, `/dev/ptmx`, `/dev/pts`.
-  * Zero-deadlock in-memory `VirtualPipe` implementation.
-  * SELinux extended attribute (`xattr`) labeling across virtual nodes.
-
-#### 6. Next-Gen Device Profiling Engine (`androidemu.data`)
-* **Dataclass-Driven Schemas**: Eradicated unstructured dictionaries in favor of strongly-typed models: `BuildInfo`, `CPUInfo`, `GPUInfo`, `DisplayInfo`, `BatteryInfo`, `TelephonyInfo`, `Net`, `Memory`, `Kernel`, and `SettingsSecure`.
-* **Dynamic Environment Computation**:
-  * Removed the hardcoded `"config"` string from configurations. The `am get-config` CLI response is now dynamically generated in real time from `DisplayInfo` (screen resolution, density, scaling factor, and locale).
-  * Native telemetry for `TelephonyManager` (`IMEI`, `IMSI`, network operator name/codes) and `Settings.Secure` (`android_id`, Google Advertising ID `GAID`) is now fully configurable per profile.
-* **Declarative Hardware Profiles**: Device profiles now accurately match real-world devices down to CPU architecture parts/revisions, OpenGL ES vendor/renderer strings, and battery/charge sensors.
+#### Kernel Backend & Syscalls
+- **Syscalls**:
+  - Implemented `pread64` syscall handler for both ARM32 and ARM64 architectures.
+  - Added support for new `prctl` control options.
+- **Filesystem & SElinux**:
+  - Added `/proc/self` directory node support for SELinux process context lookup.
 
 ---
 
-### 🛠️ Bug Fixes & Stability Improvements
+### 🛠️ Improvements & Optimizations
+- **Hooking & Tooling**: Pruned unused hook engines and utility proxies from `HookManager`; advanced instrumentation utilities migrated into `androcorn_native_tools`.
+- **Boot Chain**: Streamlined and cleaned up emulator lifecycle initialization in `Emulator`.
+- **Memory & Structs**: Optimized memory map utilities, struct serialization (`struct_writer.py`), and TLS helper layouts.
+- **CPU Utils**: Removed redundant dictionary allocations for custom registers in favor of tuple constants.
 
-* **Thumb Mode Execution**: Fixed CPU CPSR flag evaluations preventing incorrect ARM/Thumb transitions during sub-task execution.
-* **System Call Alignment & Corrections**:
-  * Resolved double sign-extension bugs in `normalize_dirfd` across filesystem I/O operations.
-  * Corrected time structure packing and timing parameter passing in `sys_clock_gettime` and `sys_gettimeofday`.
-  * Hardened `sys_prctl` dispatching with modular option routing.
-* **Memory Map Alignment**:
-  * Fixed page boundary computations in `MemoryMap.map()` using proper `align_up` mechanics.
-  * Optimized `/proc/self/maps` rendering with generation-based caching and binary search lookup (`bisect`).
-* **Bionic Dynamic Linker**:
-  * Fixed internal Nougat (API 25) `soinfo` list linking (`__dl__ZL6solist`).
-  * Optimized symbol cache resolution to $O(1)$ first-definition lookup.
+---
+
+### 🐛 Bug Fixes
+- **sysproc**: Fixed NULL-pointer dereference vulnerability in `futex` when handling invalid `uaddr`.
+- **vfs**: Fixed mount point path resolution in filesystem manager.
+- **cpu/scheduler**: Fixed target address and register corruption issues during function invocations.
+- **native/dl**: Corrected symbol lookup resolution in `libdl_sym.py`.
+- **tests**: Fixed harness breaking changes and aligned test suite with new JNI/FP argument readers.

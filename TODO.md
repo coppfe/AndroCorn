@@ -1,11 +1,12 @@
-1. execve -1 and -2 implementation
-   In real Linux, if the path is not found, it returns -2 and doesn't kill current process. Maybe
+* Collect offsets to offset_cfg.py
 
-2. Collect offsets to offset_cfg.py
+* Type syscall functions by own `types`
 
-3. Type syscall functions by own `types`
+* Implement Android 8+ Property Dir Support.
 
-4. Implement Android 8+ Property Dir Support.
+CHECKOUT:
+* Float types
+* Stack Arg Write
 
 ~~More flexability in VFS and Kernel: SELinux, ContentGenerator, Device File Properties.~~
 
