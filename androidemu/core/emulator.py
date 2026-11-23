@@ -31,6 +31,8 @@ from ..utils.tls import BionicTLSUtils
 from .pcb import ProcessControlBlock
 from .state.time_manager import TimeManager
 
+from ..utils.java.loader import load_mocks
+
 if TYPE_CHECKING:
     from ..internal.module import Module
 
@@ -67,25 +69,32 @@ class Emulator:
         # 3. Memory Subsystem
         self._init_memory_layout(vfp_inst_set)
 
-        # 4. TLS & Linker
-        self._init_linker()
+        self.tls_utils = BionicTLSUtils(self.memory, self.registers)
+
+        # 4. TLS Backend State
+        self.tls_state = create_tls_backend(
+            self.memory, self.mu, self.registers
+        )
 
         # 5. VFS Engine
         self.vfs = VFSManager(self)
 
-        # 6. Process Context & Base Environment (PCB, app_process, vectors)
+        # 6. Process Context & Base Environment (загружает app_process, vectors и linker в память)
         self._init_process_and_vfs()
 
-        # 7. Execution Subsystem (Scheduler, Syscalls, SysInit)
+        # 7. Linker
+        self.linker = AndroidLinker(self, self.vfs_root)
+
+        # 8. Execution Subsystem (Scheduler, Syscalls, SysInit)
         self._init_execution_subsystem()
 
-        # 8. Hooks
+        # 9. Hooks
         self._init_hooks()
 
-        # 9. Java Runtime
+        # 10. Java Runtime
         self._init_java_runtime()
 
-        # 10. System Libraries
+        # 11. System Libraries
         if init_sys_libs:
             self._init_syslibs()
 
@@ -118,7 +127,6 @@ class Emulator:
         
         self.registers = RegistersMapping(self.mu, self.arch)
         self.time_manager = TimeManager(start_timestamp=self.config.pkg.start_timestamp)
-        self.tls_utils = BionicTLSUtils(self.mu, self.registers)
         self._cpu_utils = CPU_Utils(self.mu, self.registers)
 
     def _init_memory_layout(self, vfp_inst_set: bool) -> None:
@@ -174,8 +182,8 @@ class Emulator:
 
         node_linker = self.vfs.get_node(linker_bin)
         if node_linker:
-            sz = node_linker.get_size()
-            self.memory.map(config.LINKER_BASE, sz, UC_PROT_EXEC | UC_PROT_READ, node=node_linker, offset=0)
+            sz = max(node_linker.get_size() + 0x200000, 0x400000)
+            self.memory.map(config.LINKER_BASE, sz, UC_PROT_READ | UC_PROT_WRITE | UC_PROT_EXEC, node=node_linker, offset=0)
             logging.debug(f"[+] Loaded {linker_bin} into memory at 0x{config.LINKER_BASE:08X}")
 
     def _init_execution_subsystem(self) -> None:
@@ -202,39 +210,8 @@ class Emulator:
         self.java_vm = JavaVM(self, self.java_classloader, self._hooker)
 
     def _init_base_java_classes(self) -> None:
-        from ..java.classes.java.lang.clazz import Class
-        from ..java.classes.java.lang.object import Object
-        from ..java.classes.java.lang.string import String
-        from ..java.classes.java.lang.system import System
-        from ..java.classes.java.lang.types import (
-            Boolean, Byte, Character, Double, Float, Integer, Long, Short
-        )
-        from ..java.classes.java.lang.array import (
-            Array, ByteArray, ObjectArray, ClassArray, StringArray, IntArray,
-            BooleanArray, CharArray, ShortArray, LongArray, FloatArray, DoubleArray,
-        )
-        from ..java.classes.java.lang.reflect.constructor import Constructor
-        from ..java.classes.java.lang.reflect.executable import Executable
-        from ..java.classes.java.lang.reflect.field import Field, AccessibleObject
-        from ..java.classes.java.lang.reflect.method import Method
-        from ..java.classes.java.lang.reflect.proxy import Proxy
-        from ..java.classes.java.io.file import File
-        from ..java.classes.java.util.list import List as JavaList
-        from ..java.classes.java.util.map import HashMap
-        from ..java.classes.java.util.set_list import Set as JavaSet
-        from ..java.classes.java.util.time_unit import TimeUnit
-
-        base_classes = [
-            Class, Object, String, System,
-            Boolean, Byte, Character, Double, Float, Integer, Long, Short,
-            Array, ByteArray, ObjectArray, ClassArray, StringArray, IntArray,
-            BooleanArray, CharArray, ShortArray, LongArray, FloatArray, DoubleArray,
-            AccessibleObject, Executable, Constructor, Field, Method, Proxy,
-            File, JavaList, HashMap, JavaSet, TimeUnit,
-        ]
-
-        for clz in base_classes:
-            self.java_classloader.add_class(clz)
+        load_mocks(self.java_classloader, dir_name='java')
+        self.java_classloader.add_class(JavaClassLoader) # Self-adding
 
     def _init_syslibs(self) -> None:
         self.load_library("libc.so")
