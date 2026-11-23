@@ -31,7 +31,7 @@ class TestGetSign(unittest.TestCase):
             
             emulator.call_symbol(libcm, '__system_property_get', name_ptr, val_ptr)
 
-            result_bytes = helpers.read_utf8(emulator.mu, val_ptr)
+            result_bytes = helpers.read_utf8(emulator.memory, val_ptr)
             return result_bytes
         
         finally:
@@ -54,7 +54,7 @@ class TestGetSign(unittest.TestCase):
             
             emulator.call_symbol(libcm, '__system_property_get', name_ptr, val_ptr)
 
-            result_bytes = helpers.read_utf8(emulator.mu, val_ptr)
+            result_bytes = helpers.read_utf8(emulator.memory, val_ptr)
 
             sysconf = emulator.call_symbol(libcm, 'sysconf', 100)
             print(f"[*] sysconf: {sysconf}")
