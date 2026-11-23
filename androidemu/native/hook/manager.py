@@ -2,8 +2,6 @@ from typing import TYPE_CHECKING, Callable, Optional
 import logging
 
 from .hooks.inline import InlineHook
-from .hooks.watchpoint import MemoryWatchpoint
-
 if TYPE_CHECKING:
     from ...core import Emulator
 
@@ -14,7 +12,6 @@ class HookManager:
     def __init__(self, emu: 'Emulator'):
         self._emu = emu
         self._inline_engine = InlineHook(emu)
-        self._watchpoint_engine = MemoryWatchpoint(emu)
 
     def stub(self, symname: str, callback: Callable):
         """Replaces an exported or imported function with a Python callback."""
@@ -48,14 +45,3 @@ class HookManager:
         if addr is None:
             raise RuntimeError(f"Symbol '{symbol_name}' not found in '{module_name}'!")
         self.inline(addr, num_args, cb_before, cb_after)
-
-    def watch(
-        self,
-        addr: int,
-        size: int,
-        tag: str = "WATCH",
-        on_read: Optional[Callable] = None,
-        on_write: Optional[Callable] = None
-    ):
-        """Watches memory reads/writes in a given range."""
-        self._watchpoint_engine.add(addr, size, tag, on_read, on_write)
